@@ -8,9 +8,45 @@ on:
   workflow_dispatch:  # Allows manual triggering
 
 jobs:
-  build:
+  lint:
     runs-on: ubuntu-latest
+    continue-on-error: true  # Make linting optional for now
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
+      - name: Install linting tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format cppcheck
+
+      - name: Run clang-format check
+        continue-on-error: true  # Don't fail on formatting differences
+        run: |
+          # Ensure the Peripherals directory exists before running clang-format
+          if [ -d "Peripherals/" ]; then
+            python3 tools/run-clang-format.py --recursive --extensions=c,h Peripherals/ || true
+          else
+            echo "Directory 'Peripherals/' does not exist. Skipping clang-format check."
+          fi
+
+      - name: Run cppcheck static analysis
+        run: |
+          # Ensure the peripheral directory exists before running cppcheck
+          if [ -d "Peripherals/" ]; then
+            find Peripherals/ -name "*.c" -o -name "*.h" | grep -v "startup.c" | xargs \
+              cppcheck --enable=warning,performance,portability --suppress=missingIncludeSystem --error-exitcode=1 \
+                --std=c99 --language=c --inline-suppr \
+                -I Peripherals/
+          else
+            echo "Directory 'Peripherals/' does not exist. Skipping cppcheck."
+          fi
+
+  build:
+    runs-on: ubuntu-latest  # Correct the platform to a valid runner
+    needs: lint
+    env:
+      CI: true  # Set CI environment variable for CMake to detect
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -38,19 +74,20 @@ jobs:
           cmake --build .
 
       - name: Upload firmware artifact
+        if: ${{ !env.ACT }}  # Only run if the token is available
         uses: actions/upload-artifact@v3
         with:
           name: firmware
           path: |
-            build/*.elf
-            build/*.hex
-            build/*.bin
+            build/**/*.elf  # Dynamically find any .elf file in the build directory
 
-      - name: Check build status
+      - name: Display build summary for local runs
+        if: ${{ env.ACT }}
         run: |
-          if [ $? -eq 0 ]; then
-            echo "Build successful! ✅"
-          else
-            echo "Build failed! ❌"
-            exit 1
-          fi
+          echo "==== Build completed successfully ===="
+          ELF_FILE=$(find build -type f -name "*.elf")
+          echo "Build successful! ✅"
+          echo "ELF File: $ELF_FILE"
+          ls -la "$ELF_FILE"
+          echo "Binary size:"
+          arm-none-eabi-size "$ELF_FILE"
