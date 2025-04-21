@@ -1,0 +1,8 @@
+# Check the include directories used by GCC
+# arm-none-eabi-gcc -xc -E -v - < /dev/null 2>&1 | grep -A 20 "include <...>"
+
+CompileFlags:
+  Add:
+    - "-I/usr/lib/gcc/arm-none-eabi/13.2.1/include"
+    - "-I/usr/lib/gcc/arm-none-eabi/13.2.1/include-fixed"
+    - "-I/usr/lib/gcc/arm-none-eabi/13.2.1/../../../arm-none-eabi/include"

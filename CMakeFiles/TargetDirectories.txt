@@ -1,0 +1,8 @@
+/home/mahonri/Desktop/BareMetal/project/CMakeFiles/project.dir
+/home/mahonri/Desktop/BareMetal/project/CMakeFiles/edit_cache.dir
+/home/mahonri/Desktop/BareMetal/project/CMakeFiles/rebuild_cache.dir
+/home/mahonri/Desktop/BareMetal/project/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir
+/home/mahonri/Desktop/BareMetal/project/cmake/stm32cubemx/CMakeFiles/FreeRTOS.dir
+/home/mahonri/Desktop/BareMetal/project/cmake/stm32cubemx/CMakeFiles/USB_Host_Library.dir
+/home/mahonri/Desktop/BareMetal/project/cmake/stm32cubemx/CMakeFiles/edit_cache.dir
+/home/mahonri/Desktop/BareMetal/project/cmake/stm32cubemx/CMakeFiles/rebuild_cache.dir

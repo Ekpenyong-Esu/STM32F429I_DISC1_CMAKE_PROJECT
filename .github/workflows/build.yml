@@ -1,0 +1,56 @@
+name: STM32F429I DISC1
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch:  # Allows manual triggering
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install ARM GCC toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi
+          arm-none-eabi-gcc --version
+
+      - name: Install CMake
+        run: |
+          sudo apt-get install -y cmake
+          cmake --version
+
+      - name: Configure CMake
+        run: |
+          mkdir -p build
+          cd build
+          cmake .. -DCMAKE_TOOLCHAIN_FILE=../cmake/gcc-arm-none-eabi.cmake
+
+      - name: Build project
+        run: |
+          cd build
+          cmake --build .
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: firmware
+          path: |
+            build/*.elf
+            build/*.hex
+            build/*.bin
+
+      - name: Check build status
+        run: |
+          if [ $? -eq 0 ]; then
+            echo "Build successful! ✅"
+          else
+            echo "Build failed! ❌"
+            exit 1
+          fi
