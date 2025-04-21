@@ -49,7 +49,7 @@ jobs:
       CI: true  # Set CI environment variable for CMake to detect
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install ARM GCC toolchain
         run: |
@@ -75,7 +75,7 @@ jobs:
 
       - name: Upload firmware artifact
         if: ${{ !env.ACT }}  # Only run if the token is available
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: firmware
           path: |
