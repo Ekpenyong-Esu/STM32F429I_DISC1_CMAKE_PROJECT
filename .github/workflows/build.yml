@@ -75,30 +75,17 @@ jobs:
 
       - name: Upload firmware artifact
         if: ${{ !env.ACT }}  # Only run if the token is available
-          run: |
-            ELF_FILE=$(find build -type f -name "*.elf")
-            if [ -z "$ELF_FILE" ]; then
-              echo "No .elf files found. Skipping artifact upload."
-              exit 0
-            fi
-            echo "Uploading firmware artifact: $ELF_FILE"
-            echo "$ELF_FILE" > elf_file_list.txt
-
-      - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
-            name: firmware
-            path: elf_file_list.txt
+          name: firmware
+          path: |
+            build/Debug/*.elf  # Dynamically find any .elf file in the build directory
 
       - name: Display build summary for local runs
         if: ${{ env.ACT }}
         run: |
           echo "==== Build completed successfully ===="
           ELF_FILE=$(find build -type f -name "*.elf")
-          if [ -z "$ELF_FILE" ]; then
-            echo "No .elf files found. Skipping summary."
-            exit 0
-          fi
           echo "Build successful! ✅"
           echo "ELF File: $ELF_FILE"
           ls -la "$ELF_FILE"
