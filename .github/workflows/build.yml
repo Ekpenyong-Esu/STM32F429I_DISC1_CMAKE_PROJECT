@@ -73,13 +73,23 @@ jobs:
           cd build
           cmake --build .
 
+      - name: Prepare firmware artifact
+        if: ${{ !env.ACT }}  # Only run if the token is available
+        run: |
+          ELF_FILE=$(find build -type f -name "*.elf")
+          if [ -z "$ELF_FILE" ]; then
+            echo "No .elf files found. Skipping artifact upload."
+            exit 0
+          fi
+          echo "Uploading firmware artifact: $ELF_FILE"
+          echo "$ELF_FILE" > elf_file_list.txt
+
       - name: Upload firmware artifact
         if: ${{ !env.ACT }}  # Only run if the token is available
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: firmware
-          path: |
-            build/Debug/*.elf  # Dynamically find any .elf file in the build directory
+          path: elf_file_list.txt
 
       - name: Display build summary for local runs
         if: ${{ env.ACT }}
