@@ -59,6 +59,10 @@ extern HCD_HandleTypeDef hhcd_USB_OTG_HS;
 extern DMA2D_HandleTypeDef hdma2d;
 extern LTDC_HandleTypeDef hltdc;
 extern TIM_HandleTypeDef htim6;
+extern UART_HandleTypeDef huart;
+/* DMA handles */
+extern DMA_HandleTypeDef hdma_uart1_tx;  /* UART TX DMA handle */
+extern DMA_HandleTypeDef hdma_uart1_rx;  /* UART RX DMA handle */
 
 /* USER CODE BEGIN EV */
 
@@ -218,6 +222,48 @@ void DMA2D_IRQHandler(void)
   /* USER CODE END DMA2D_IRQn 1 */
 }
 
+/**
+  * @brief This function handles EXTI line[15:10] interrupts.
+  */
+void EXTI15_10_IRQHandler(void)
+{
+  HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_13);
+}
+
+/**
+  * @brief This function handles EXTI line0 interrupt.
+  */
+void EXTI0_IRQHandler(void)
+{
+  HAL_GPIO_EXTI_IRQHandler(B1_Pin);
+
+}
+
+/**
+  * @brief  DMA stream interrupt handlers
+  */
+void DMA2_Stream7_IRQHandler(void)
+{
+    HAL_DMA_IRQHandler(&hdma_uart1_tx);
+}
+
+
 /* USER CODE BEGIN 1 */
 
 /* USER CODE END 1 */
+
+/**
+  * @brief This function handles USART1 global interrupt.
+  */
+void USART1_IRQHandler(void)
+{
+  HAL_UART_IRQHandler(&huart);
+}
+
+/**
+  * @brief This function handles DMA2 Stream5 global interrupt (UART1 RX).
+  */
+void DMA2_Stream5_IRQHandler(void)
+{
+  HAL_DMA_IRQHandler(&hdma_uart1_rx);
+}

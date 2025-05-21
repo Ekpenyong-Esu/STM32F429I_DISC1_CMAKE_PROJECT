@@ -1,46 +1,100 @@
 /**
-  ******************************************************************************
-  * @file    uart.h
-  * @brief   UART module main header
-  * @details Header file for UART configuration and operations
-  * @version 1.0
-  * @date    2025-04-19
-  ******************************************************************************
-  */
+ * @file uart.h
+ * @brief Main UART interface for STM32F429I-DISC1
+ */
 
-/* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef __UART_H
-#define __UART_H
+#ifndef UART_H
+#define UART_H
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* Includes ------------------------------------------------------------------*/
 #include "stm32f4xx_hal.h"
-#include <stdarg.h>
 #include <stdint.h>
+#include <stdbool.h>
 
+/**
+ * @brief UART transfer mode enumeration
+ */
+typedef enum {
+    UART_MODE_BLOCKING,    /*!< Blocking mode */
+    UART_MODE_INTERRUPT,   /*!< Interrupt mode */
+    UART_MODE_DMA         /*!< DMA mode */
+} UART_Mode_t;
 
-/* Defines -------------------------------------------------------------------*/
-#define UART_RX_BUFFER_SIZE     256
+/**
+ * @brief UART status enumeration
+ */
+typedef enum {
+    UART_OK = 0,          /*!< Operation successful */
+    UART_ERROR,           /*!< Generic error */
+    UART_BUSY,           /*!< UART is busy */
+    UART_TIMEOUT_ERROR        /*!< Operation timed out */
+} UART_Status_t;
 
-/* Public function prototypes -------------------------------------------------------*/
-/* Initialization Functions */
-void UART_Init(void);
+/**
+ * @brief UART configuration structure
+ */
+typedef struct {
+    USART_TypeDef* instance;  /*!< UART instance (USART1, USART2, etc.) */
+    uint32_t baudRate;     /*!< Baud rate */
+    uint8_t wordLength;    /*!< Word length (8 or 9 bits) */
+    uint8_t stopBits;      /*!< Number of stop bits */
+    uint8_t parity;        /*!< Parity mode */
+    UART_Mode_t mode;      /*!< Transfer mode */
+} UART_Config_t;
 
-/* Input/Output Functions */
-void UART_SendString(char *str);
-void UART_SendByte(uint8_t byte);
-uint8_t UART_IsDataAvailable(void);
-uint16_t UART_ReadString(char *buffer, uint16_t max_size, uint32_t timeout_ms);
-void UART_printf(const char *format, ...);
+/**
+ * @brief UART handle structure
+ */
+typedef struct {
+    UART_HandleTypeDef* huart;     /*!< HAL UART handle */
+    UART_Config_t config;          /*!< UART configuration */
+    uint8_t* rxBuffer;            /*!< Receive buffer */
+    uint8_t* txBuffer;            /*!< Transmit buffer */
+    uint16_t rxSize;              /*!< Size of receive buffer */
+    uint16_t txSize;              /*!< Size of transmit buffer */
+    bool isInitialized;           /*!< Initialization status */
+} UART_Handle_t;
 
-/* Public Variables */
-extern UART_HandleTypeDef huart1;
+/**
+ * @brief Initialize UART peripheral
+ * @param handle UART handle pointer
+ * @param config UART configuration structure
+ * @return UART_Status_t Status of operation
+ */
+UART_Status_t UART_Init(UART_Handle_t* handle, const UART_Config_t* config);
+
+/**
+ * @brief Deinitialize UART peripheral
+ * @param handle UART handle pointer
+ * @return UART_Status_t Status of operation
+ */
+UART_Status_t UART_DeInit(UART_Handle_t* handle);
+
+/**
+ * @brief Transmit data over UART
+ * @param handle UART handle pointer
+ * @param data Pointer to data buffer
+ * @param size Size of data to transmit
+ * @param timeout Timeout duration in milliseconds
+ * @return UART_Status_t Status of operation
+ */
+UART_Status_t UART_Transmit(UART_Handle_t* handle, uint8_t* data, uint16_t size, uint32_t timeout);
+
+/**
+ * @brief Receive data over UART
+ * @param handle UART handle pointer
+ * @param data Pointer to data buffer
+ * @param size Size of data to receive
+ * @param timeout Timeout duration in milliseconds
+ * @return UART_Status_t Status of operation
+ */
+UART_Status_t UART_Receive(UART_Handle_t* handle, uint8_t* data, uint16_t size, uint32_t timeout);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* __UART_H */
+#endif /* UART_H */

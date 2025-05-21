@@ -17,14 +17,6 @@
   */
 /* USER CODE END Header */
 
-/* Includes ------------------------------------------------------------------*/
-#include "main.h"
-#include "stm32f429xx.h"
-
-#include <stdio.h>
-
-/* Private includes ----------------------------------------------------------*/
-/* USER CODE BEGIN Includes */
 /* Include modular peripheral headers */
 #include "../../Peripherals/SYS/sys.h"
 #include "../../Peripherals/RTOS/rtos.h"
@@ -36,7 +28,13 @@
 #include "../../Peripherals/LTDC/ltdc.h"
 #include "../../Peripherals/SPI/spi.h"
 #include "../../Peripherals/TIM/tim.h"
-#include "../../Peripherals/UART/uart.h"
+#include "../../Peripherals/UART/uart_example.h"
+
+
+#define UART_POLLING_DELAY_MS 100
+
+/* Private includes ----------------------------------------------------------*/
+/* USER CODE BEGIN Includes */
 
 /* USER CODE END Includes */
 
@@ -66,32 +64,26 @@ int main(void)
   LTDC_Init();
   SPI_Init();
   TIM_Init();
-  UART_Init();
-
-  /* USER CODE BEGIN 2 */
-
-  /* USER CODE END 2 */
 
   /* Initialize and start RTOS */
   RTOS_Init();
   //RTOS_Start();
 
-
-
-  /* Infinite loop - should never get here */
+  /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    printf("Hello from main.c!\n");
-    /* USER CODE END WHILE */
-    HAL_GPIO_TogglePin(GPIOG, LD3_Pin|LD4_Pin);
-    HAL_Delay(100);
-    HAL_GPIO_LockPin(GPIOG, LD3_Pin|LD4_Pin);
-
     /* USER CODE BEGIN 3 */
+    UART_Example_MainLoop();
+
+    /* Add other tasks here */
+    HAL_Delay(UART_POLLING_DELAY_MS);
+
   }
   /* USER CODE END 3 */
 }
+
+
 
 #ifdef  USE_FULL_ASSERT
 /**
