@@ -71,16 +71,8 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
-    /* USER CODE BEGIN 3 */
+ /* USER CODE BEGIN 3 */
     UART_Example_MainLoop();
-
-    /* Add other tasks here */
-    HAL_Delay(UART_POLLING_DELAY_MS);
-
-  }
-  /* USER CODE END 3 */
 }
 
 

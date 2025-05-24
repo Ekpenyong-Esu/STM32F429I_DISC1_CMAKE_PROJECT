@@ -12,6 +12,7 @@ extern "C" {
 
 #include "stm32f4xx_hal.h"
 #include "uart.h"
+#include "uart_ring_buffer.h"
 
 /* Default UART configuration */
 #define UART_DEFAULT_BAUDRATE     115200
@@ -21,11 +22,11 @@ extern "C" {
 #define UART_DEFAULT_MODE         UART_MODE_TX_RX
 
 /* Default timeout value in milliseconds */
-#define UART_TIMEOUT         1000
+#define UART_TIMEOUT         5000
 
 /* Buffer sizes */
-#define UART_RX_BUFFER_SIZE      256
-#define UART_TX_BUFFER_SIZE      256
+#define UART_RX_BUFFER_SIZE      512   /* Must match RING_BUFFER_SIZE */
+#define UART_TX_BUFFER_SIZE      512   /* Keep TX buffer same size */
 
 /* DMA configuration */
 #define UART_DMA_TX_CHANNEL      DMA_CHANNEL_4

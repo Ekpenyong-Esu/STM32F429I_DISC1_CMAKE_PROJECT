@@ -11,6 +11,7 @@ extern "C" {
 #endif
 
 #include "uart.h"
+#include "uart_config.h"
 
 /**
  * @brief Initialize UART DMA mode
@@ -39,17 +40,6 @@ UART_Status_t UART_DMA_Transmit(UART_Handle_t* handle, uint8_t* data, uint16_t s
  */
 UART_Status_t UART_DMA_Receive(UART_Handle_t* handle, uint8_t* data, uint16_t size, uint32_t timeout);
 
-/**
- * @brief DMA transmission complete callback
- * @param handle UART handle pointer
- */
-void UART_DMA_TxCpltCallback(UART_Handle_t* handle);
-
-/**
- * @brief DMA reception complete callback
- * @param handle UART handle pointer
- */
-void UART_DMA_RxCpltCallback(UART_Handle_t* handle);
 
 #ifdef __cplusplus
 }

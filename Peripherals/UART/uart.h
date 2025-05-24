@@ -13,6 +13,21 @@ extern "C" {
 #include "stm32f4xx_hal.h"
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdio.h>
+
+#define ENABLE_DEBUG 1
+
+#if ENABLE_DEBUG
+    #define DEBUG_PRINT(fmt, ...) \
+        printf("[FILE: %s, LINE: %d] " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__)
+#else
+    #define DEBUG_PRINT(fmt, ...) \
+        ((void)0)  // Does nothing
+#endif
+
+/* Ensure txComplete and rxComplete are declared globally */
+extern volatile uint8_t txComplete;
+extern volatile uint8_t rxComplete;
 
 /**
  * @brief UART transfer mode enumeration

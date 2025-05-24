@@ -39,17 +39,6 @@ UART_Status_t UART_IT_Transmit(UART_Handle_t* handle, uint8_t* data, uint16_t si
  */
 UART_Status_t UART_IT_Receive(UART_Handle_t* handle, uint8_t* data, uint16_t size, uint32_t timeout);
 
-/**
- * @brief UART transmission complete callback
- * @param handle UART handle pointer
- */
-void UART_IT_TxCpltCallback(UART_Handle_t* handle);
-
-/**
- * @brief UART reception complete callback
- * @param handle UART handle pointer
- */
-void UART_IT_RxCpltCallback(UART_Handle_t* handle);
 
 #ifdef __cplusplus
 }

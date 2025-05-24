@@ -18,8 +18,8 @@
 #define ANSI_COLOR_RESET   "\x1b[0m"
 
 /* Buffer sizes */
-#define RX_BUFFER_SIZE     256
-#define TX_BUFFER_SIZE     256
+#define RX_BUFFER_SIZE     512  /* Match UART_RX_BUFFER_SIZE */
+#define TX_BUFFER_SIZE     512  /* Match UART_TX_BUFFER_SIZE */
 
 /* Command definitions */
 #define CMD_HELP           "help"
@@ -28,6 +28,11 @@
 #define CMD_INTERRUPT      "int"
 #define CMD_BLOCKING       "block"
 #define CMD_ECHO          "echo"      /* New echo command */
+
+/* Timing and buffer management constants */
+#define UART_CHAR_TIMEOUT     100  /* Character receive timeout in ms */
+#define PROCESS_INTERVAL_MS    10  /* Process interval in milliseconds */
+#define RING_BUFFER_HIGH_MARK  (RING_BUFFER_SIZE * 3/4)  /* Buffer high water mark */
 
 /**
  * @brief Initialize the UART example
@@ -71,9 +76,18 @@ UART_Status_t UART_Example_BlockingMode(const char* data);
 UART_Status_t UART_Example_SendMessage(const char* msg);
 
 /**
+ * @brief Preprocess received UART data
+ * @param handle UART handle pointer
+ */
+void UART_Example_PreProcess(UART_Handle_t* handle);
+
+/**
  * @brief Main loop for UART example
  * This function should be called in the main loop to handle UART operations
  */
 void UART_Example_MainLoop(void);
+
+/* Declare the missing function */
+void UART_ProcessReceivedData(const uint8_t* buffer, uint16_t* index);
 
 #endif /* UART_EXAMPLE_H */

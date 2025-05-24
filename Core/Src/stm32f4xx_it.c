@@ -20,6 +20,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "stm32f4xx_it.h"
+#include "uart.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 /* USER CODE END Includes */
@@ -59,7 +60,7 @@ extern HCD_HandleTypeDef hhcd_USB_OTG_HS;
 extern DMA2D_HandleTypeDef hdma2d;
 extern LTDC_HandleTypeDef hltdc;
 extern TIM_HandleTypeDef htim6;
-extern UART_HandleTypeDef huart;
+extern UART_Handle_t uartHandle;
 /* DMA handles */
 extern DMA_HandleTypeDef hdma_uart1_tx;  /* UART TX DMA handle */
 extern DMA_HandleTypeDef hdma_uart1_rx;  /* UART RX DMA handle */
@@ -257,7 +258,7 @@ void DMA2_Stream7_IRQHandler(void)
   */
 void USART1_IRQHandler(void)
 {
-  HAL_UART_IRQHandler(&huart);
+  HAL_UART_IRQHandler(uartHandle.huart);
 }
 
 /**
