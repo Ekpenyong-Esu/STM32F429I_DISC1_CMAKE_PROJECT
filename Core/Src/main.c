@@ -56,14 +56,14 @@ int main(void)
   /* USER CODE END SysInit */
 
   /* Initialize all peripherals using the modular architecture */
-  GPIO_Init();
-  CRC_Init();
-  DMA2D_Init();
-  FMC_Init();
-  I2C_Init();
-  LTDC_Init();
-  SPI_Init();
-  TIM_Init();
+//   GPIO_Init();
+//   CRC_Init();
+//   DMA2D_Init();
+//   FMC_Init();
+//   I2C_Init();
+//   LTDC_Init();
+//   SPI_Init();
+//   TIM_Init();
 
   /* Initialize and start RTOS */
   RTOS_Init();

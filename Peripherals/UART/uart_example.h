@@ -20,6 +20,7 @@
 /* Buffer sizes */
 #define RX_BUFFER_SIZE     512  /* Match UART_RX_BUFFER_SIZE */
 #define TX_BUFFER_SIZE     512  /* Match UART_TX_BUFFER_SIZE */
+#define SINGLE_CHAR_BUFFER_SIZE  1   /* For single character operations */
 
 /* Command definitions */
 #define CMD_HELP           "help"
@@ -36,9 +37,10 @@
 
 /**
  * @brief Initialize the UART example
+ * @param mode UART mode to initialize (DMA, Interrupt, or Blocking)
  * @return UART_Status_t Status of initialization
  */
-UART_Status_t UART_Example_Init(void);
+UART_Status_t UART_Example_Init(UART_Mode_t mode);
 
 /**
  * @brief Process received command
@@ -86,8 +88,5 @@ void UART_Example_PreProcess(UART_Handle_t* handle);
  * This function should be called in the main loop to handle UART operations
  */
 void UART_Example_MainLoop(void);
-
-/* Declare the missing function */
-void UART_ProcessReceivedData(const uint8_t* buffer, uint16_t* index);
 
 #endif /* UART_EXAMPLE_H */

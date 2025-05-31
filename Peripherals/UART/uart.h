@@ -13,21 +13,19 @@ extern "C" {
 #include "stm32f4xx_hal.h"
 #include <stdint.h>
 #include <stdbool.h>
-#include <stdio.h>
+#include <string.h>
 
-#define ENABLE_DEBUG 1
+#define ENABLE_DEBUG 0
 
 #if ENABLE_DEBUG
+    /* Forward declaration for printf */
+    int printf(const char *format, ...);
     #define DEBUG_PRINT(fmt, ...) \
         printf("[FILE: %s, LINE: %d] " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__)
 #else
     #define DEBUG_PRINT(fmt, ...) \
         ((void)0)  // Does nothing
 #endif
-
-/* Ensure txComplete and rxComplete are declared globally */
-extern volatile uint8_t txComplete;
-extern volatile uint8_t rxComplete;
 
 /**
  * @brief UART transfer mode enumeration
@@ -96,7 +94,7 @@ UART_Status_t UART_DeInit(UART_Handle_t* handle);
  * @param timeout Timeout duration in milliseconds
  * @return UART_Status_t Status of operation
  */
-UART_Status_t UART_Transmit(UART_Handle_t* handle, uint8_t* data, uint16_t size, uint32_t timeout);
+UART_Status_t UART_Transmit(UART_Handle_t* handle, const uint8_t* data, uint16_t size, uint32_t timeout);
 
 /**
  * @brief Receive data over UART
@@ -107,6 +105,7 @@ UART_Status_t UART_Transmit(UART_Handle_t* handle, uint8_t* data, uint16_t size,
  * @return UART_Status_t Status of operation
  */
 UART_Status_t UART_Receive(UART_Handle_t* handle, uint8_t* data, uint16_t size, uint32_t timeout);
+
 
 #ifdef __cplusplus
 }

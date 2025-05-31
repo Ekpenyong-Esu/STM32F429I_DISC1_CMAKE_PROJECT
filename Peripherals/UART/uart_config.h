@@ -11,8 +11,11 @@ extern "C" {
 #endif
 
 #include "stm32f4xx_hal.h"
-#include "uart.h"
 #include "uart_ring_buffer.h"
+
+/* Global completion flags - declared in uart.c */
+extern volatile uint8_t txComplete;
+extern volatile uint8_t rxComplete;
 
 /* Default UART configuration */
 #define UART_DEFAULT_BAUDRATE     115200
@@ -22,11 +25,9 @@ extern "C" {
 #define UART_DEFAULT_MODE         UART_MODE_TX_RX
 
 /* Default timeout value in milliseconds */
-#define UART_TIMEOUT         5000
+#define UART_TIMEOUT         5000  /* Default timeout in milliseconds */
+#define UART_CHAR_TIMEOUT   100   /* Timeout for single character reception */
 
-/* Buffer sizes */
-#define UART_RX_BUFFER_SIZE      512   /* Must match RING_BUFFER_SIZE */
-#define UART_TX_BUFFER_SIZE      512   /* Keep TX buffer same size */
 
 /* DMA configuration */
 #define UART_DMA_TX_CHANNEL      DMA_CHANNEL_4
@@ -34,9 +35,9 @@ extern "C" {
 #define UART_DMA_TX_STREAM       DMA2_Stream7
 #define UART_DMA_RX_STREAM       DMA2_Stream5
 
-/* Global DMA handles */
-extern DMA_HandleTypeDef hdma_uart1_tx;
-extern DMA_HandleTypeDef hdma_uart1_rx;
+/* Error recovery delay constants */
+#define UART_ERROR_RECOVERY_DELAY 1000
+#define UART_RETRY_DELAY          500
 
 #ifdef __cplusplus
 }

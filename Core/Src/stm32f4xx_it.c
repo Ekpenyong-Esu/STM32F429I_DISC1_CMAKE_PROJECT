@@ -240,31 +240,6 @@ void EXTI0_IRQHandler(void)
 
 }
 
-/**
-  * @brief  DMA stream interrupt handlers
-  */
-void DMA2_Stream7_IRQHandler(void)
-{
-    HAL_DMA_IRQHandler(&hdma_uart1_tx);
-}
-
-
 /* USER CODE BEGIN 1 */
 
 /* USER CODE END 1 */
-
-/**
-  * @brief This function handles USART1 global interrupt.
-  */
-void USART1_IRQHandler(void)
-{
-  HAL_UART_IRQHandler(uartHandle.huart);
-}
-
-/**
-  * @brief This function handles DMA2 Stream5 global interrupt (UART1 RX).
-  */
-void DMA2_Stream5_IRQHandler(void)
-{
-  HAL_DMA_IRQHandler(&hdma_uart1_rx);
-}

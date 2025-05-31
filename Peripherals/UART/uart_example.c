@@ -4,21 +4,30 @@
  */
 
 #include "uart_example.h"
+#include "stm32f4xx_hal_def.h"
 #include "stm32f4xx_hal_uart.h"
+#include "uart.h"
 #include "uart_config.h"
-#include "uart_blocking.h"
+#include <stdint.h>
 #include <string.h>
 #include <stdio.h>
+#include "uart_blocking.h"
 
 /* Constants for UART configuration */
 #define STATUS_MSG_SIZE          256   /* Maximum size for status message */
 #define DEFAULT_BAUD_RATE       115200 /* Default UART baud rate */
+#define UART_INIT_DELAY          100   /* Delay after UART initialization in ms */
+#define UART_POLLING_DELAY       10    /* Delay between polling cycles in ms */
+
+
+
 
 UART_HandleTypeDef huart1;  /* UART handle for USART1 */
-
 UART_Handle_t uartHandle;
+
 static uint8_t rxBuffer[RX_BUFFER_SIZE];
 static uint8_t txBuffer[TX_BUFFER_SIZE];
+static uint8_t singleBuffer[SINGLE_CHAR_BUFFER_SIZE];
 volatile uint8_t rxComplete = 0;
 volatile uint8_t txComplete = 0;
 
@@ -46,12 +55,13 @@ static void UART_Example_InitStructures(void)
     /* Initialize HAL UART handle */
     memset(&huart1, 0, sizeof(UART_HandleTypeDef));
 
-    /* Initialize UART handle structure */
+    /* Initialize UART handle structure with default mode */
     memset(&uartHandle, 0, sizeof(UART_Handle_t));
 
     /* Initialize buffers */
     memset(rxBuffer, 0, RX_BUFFER_SIZE);
     memset(txBuffer, 0, TX_BUFFER_SIZE);
+    memset(singleBuffer, 0, SINGLE_CHAR_BUFFER_SIZE);
     memset(cmdBuffer, 0, RX_BUFFER_SIZE);
 
     rxIndex = 0;
@@ -59,8 +69,9 @@ static void UART_Example_InitStructures(void)
     txComplete = 0;
 }
 
-UART_Status_t UART_Example_Init(void)
+UART_Status_t UART_Example_Init(UART_Mode_t mode)
 {
+    DEBUG_PRINT("Initializing UART with mode: %d", mode);
     UART_Example_InitStructures();
 
     /* Configure UART */
@@ -70,19 +81,18 @@ UART_Status_t UART_Example_Init(void)
         .wordLength = UART_WORDLENGTH_8B,
         .stopBits = UART_STOPBITS_1,
         .parity = UART_PARITY_NONE,
-        .mode = UART_MODE_DMA  /* Start with DMA mode */
+        .mode = mode  /* Use the mode passed as parameter */
     };
+
+    DEBUG_PRINT("Config created with mode: %d", config.mode);
 
     /* Initialize UART */
     uartHandle.huart = &huart1;
-    uartHandle.rxBuffer = rxBuffer;
+    uartHandle.rxBuffer = (mode == UART_MODE_DMA || mode == UART_MODE_INTERRUPT) ? rxBuffer : singleBuffer; // Use singleBuffer for interrupt/blocking mode
     uartHandle.txBuffer = txBuffer;
-    uartHandle.rxSize = RX_BUFFER_SIZE;
+    uartHandle.rxSize = (mode == UART_MODE_DMA || mode == UART_MODE_INTERRUPT) ? RX_BUFFER_SIZE : SINGLE_CHAR_BUFFER_SIZE; // Use singleBuffer for interrupt/blocking mode, RX_BUFFER_SIZE;
     uartHandle.txSize = TX_BUFFER_SIZE;
     uartHandle.config = config;  // Store config in handle
-
-    /* Initialize ring buffer first */
-    UART_RingBuffer_Init();
 
     UART_Status_t status = UART_Init(&uartHandle, &config);
     if (status != UART_OK) {
@@ -90,17 +100,20 @@ UART_Status_t UART_Example_Init(void)
         return status;
     }
 
-
-    if (config.mode == UART_MODE_DMA || config.mode == UART_MODE_INTERRUPT) {
-
-        /* Start reception with full buffer size */
-        UART_Status_t status = UART_Receive(&uartHandle, rxBuffer, RX_BUFFER_SIZE, 0);
+    if (config.mode == UART_MODE_DMA) {
+        status = UART_Receive(&uartHandle, uartHandle.rxBuffer, uartHandle.rxSize, 0);
         if (status != UART_OK) {
-            DEBUG_PRINT("Failed to start UART reception");
+            DEBUG_PRINT("Failed to start DMA reception");
+            return status;
+        }
+    } else if (config.mode == UART_MODE_INTERRUPT) {
+        // Start interrupt mode with larger buffer using IDLE detection
+        status = UART_Receive(&uartHandle, uartHandle.rxBuffer, uartHandle.rxSize, 0);
+        if (status != UART_OK) {
+            DEBUG_PRINT("Failed to start interrupt reception");
             return status;
         }
     }
-
     /* Send welcome message */
     return UART_Example_SendMessage(welcomeMsg);
 }
@@ -116,49 +129,99 @@ void UART_Example_PreProcess(UART_Handle_t* handle)
         return;
     }
 
-    uint8_t tempBuf[RX_BUFFER_SIZE];
-    uint16_t bytesAvailable = RingBuffer_Available(&rxRingBuffer);
+    if (handle->config.mode == UART_MODE_DMA) {
+        uint16_t bytesAvailable = RingBuffer_Available(&rxRingBuffer);
+        if (bytesAvailable == 0) {
+            DEBUG_PRINT("Ring buffer empty");
+            return;
+        }
 
-    if (bytesAvailable == 0) {
-        DEBUG_PRINT("No data available");
-        return;
-    }
+        uint8_t tempBuf[RX_BUFFER_SIZE];
+        if (UART_RingBuffer_Receive(handle, tempBuf, bytesAvailable) != UART_OK) {
+            DEBUG_PRINT("Failed to get data from ring buffer");
+            return;
+        }
 
-    /* Get data from ring buffer */
-    if (UART_RingBuffer_Receive(handle, tempBuf, bytesAvailable) != UART_OK) {
-        DEBUG_PRINT("Failed to get data from ring buffer");
-        return;
-    }
-
-    /* Process each received byte */
-    for (uint16_t i = 0; i < bytesAvailable; i++) {
-        /* Add byte to command buffer if there's space */
-        if (rxIndex < RX_BUFFER_SIZE - 1) {
-            cmdBuffer[rxIndex++] = tempBuf[i];
-
-            /* Check for line ending */
-            if (tempBuf[i] == '\r' || tempBuf[i] == '\n' || rxIndex >= RX_BUFFER_SIZE - 1) {
-                /* Null terminate the string */
-                cmdBuffer[rxIndex] = '\0';
-
-                /* Only process if we have actual content */
-                if (rxIndex > 0) {
-                    DEBUG_PRINT("Received command: %s", cmdBuffer);
-                    UART_Example_ProcessCommand((char*)cmdBuffer);
+        for (uint16_t i = 0; i < bytesAvailable; i++) {
+            if (rxIndex < RX_BUFFER_SIZE - 1) {
+                cmdBuffer[rxIndex++] = tempBuf[i];
+                if (tempBuf[i] == '\r' || tempBuf[i] == '\n' || rxIndex >= RX_BUFFER_SIZE - 1) {
+                    cmdBuffer[rxIndex] = '\0';
+                    if (rxIndex > 0) {
+                        UART_Example_ProcessCommand((char*)cmdBuffer);
+                    }
+                    rxIndex = 0;
+                    memset(cmdBuffer, 0, RX_BUFFER_SIZE);
                 }
-
-                /* Reset buffer index */
+            } else {
                 rxIndex = 0;
                 memset(cmdBuffer, 0, RX_BUFFER_SIZE);
             }
-        } else {
-            /* Buffer full, reset */
-            rxIndex = 0;
-            memset(cmdBuffer, 0, RX_BUFFER_SIZE);
+        }
+    } else if (handle->config.mode == UART_MODE_INTERRUPT) {
+
+        uint16_t bytesAvailable = RingBuffer_Available(&rxRingBuffer);
+        if (bytesAvailable == 0) {
+            // No data available in the ring buffer
+            return;
+        }
+
+        uint8_t tempBuf[RX_BUFFER_SIZE];
+        // Get data from ring buffer
+        if (UART_RingBuffer_Receive(handle, tempBuf, bytesAvailable) != UART_OK) {
+            DEBUG_PRINT("Failed to get data from ring buffer");
+            return;
+        }
+
+        // Process received data
+        for (uint16_t i = 0; i < bytesAvailable; i++) {
+            if (rxIndex < RX_BUFFER_SIZE - 1) {
+                cmdBuffer[rxIndex++] = tempBuf[i];
+
+                if (tempBuf[i] == '\r' || tempBuf[i] == '\n' || rxIndex >= RX_BUFFER_SIZE - 1) {
+                    cmdBuffer[rxIndex] = '\0';
+                    if (rxIndex > 0) {
+                        UART_Example_ProcessCommand((char*)cmdBuffer);
+                    }
+                    // Reset buffer after processing
+                    rxIndex = 0;
+                    memset(cmdBuffer, 0, RX_BUFFER_SIZE);
+                }
+            } else {
+                rxIndex = 0;
+                memset(cmdBuffer, 0, RX_BUFFER_SIZE);
+            }
+        }
+    } else if (handle->config.mode == UART_MODE_BLOCKING) {
+        uint8_t tempBuffer[8] = {0}; // Read multiple bytes at once for efficiency
+        uint16_t bytesToRead = 8;
+
+        // Use a shorter timeout for better responsiveness
+        UART_Status_t status = UART_Blocking_Receive(handle, tempBuffer, bytesToRead, UART_TIMEOUT);
+        if (status != UART_OK) {
+            DEBUG_PRINT("Blocking receive failed");
+            return;
+        }
+        // Process any received bytes, even on timeout
+        for (uint16_t i = 0; i < bytesToRead && tempBuffer[i] != 0; i++) {
+            uint8_t receivedByte = tempBuffer[i];
+            if (rxIndex < RX_BUFFER_SIZE - 1) {
+                cmdBuffer[rxIndex++] = receivedByte;
+                if (receivedByte == '\r' || receivedByte == '\n' || rxIndex >= RX_BUFFER_SIZE - 1) {
+                    cmdBuffer[rxIndex] = '\0';
+                    if (rxIndex > 0) {
+                        UART_Example_ProcessCommand((char*)cmdBuffer);
+                    }
+                    rxIndex = 0;
+                    memset(cmdBuffer, 0, RX_BUFFER_SIZE);
+                }
+            } else {
+                // Buffer overflow protection
+                rxIndex = 0;
+                memset(cmdBuffer, 0, RX_BUFFER_SIZE);
+            }
         }
     }
-
-    rxComplete = 0;
 }
 
 /**
@@ -173,12 +236,10 @@ UART_Status_t UART_Example_ProcessCommand(const char* cmd)
         return UART_ERROR;
     }
 
-    /* Remove CR/LF and create clean command */
     char cleanCmd[RX_BUFFER_SIZE];
     size_t cmdLen = strlen(cmd);
     size_t cleanIndex = 0;
 
-    /* Copy command while removing CR/LF */
     for (size_t i = 0; i < cmdLen && cleanIndex < RX_BUFFER_SIZE - 1; i++) {
         if (cmd[i] != '\r' && cmd[i] != '\n') {
             cleanCmd[cleanIndex++] = cmd[i];
@@ -186,7 +247,6 @@ UART_Status_t UART_Example_ProcessCommand(const char* cmd)
     }
     cleanCmd[cleanIndex] = '\0';
 
-    /* Ignore empty commands */
     if (cleanIndex == 0) {
         DEBUG_PRINT("Empty command received");
         return UART_OK;
@@ -212,24 +272,20 @@ UART_Status_t UART_Example_ProcessCommand(const char* cmd)
             (uartHandle.config.parity == 0) ? "None" :
             (uartHandle.config.parity == 1) ? "Even" : "Odd"
         );
-        DEBUG_PRINT("Sending status message");
         return UART_Example_SendMessage(statusMsg);
     }
 
     if (strcmp(cleanCmd, CMD_DMA) == 0) {
-        /* Switch to DMA mode */
-        uartHandle.config.mode = UART_MODE_DMA;
-        UART_Status_t status = UART_Init(&uartHandle, &uartHandle.config);
+        UART_Status_t status = UART_DeInit(&uartHandle);
         if (status != UART_OK) {
-            DEBUG_PRINT("Failed to switch to DMA mode");
+            DEBUG_PRINT("Failed to deinitialize UART");
             return status;
         }
-        DEBUG_PRINT("Switching to DMA mode");
 
-        /* Start reception with full buffer */
-        status = UART_Receive(&uartHandle, rxBuffer, RX_BUFFER_SIZE, 0);
+        /* Use UART_Example_Init which will handle the full initialization sequence */
+        status = UART_Example_Init(UART_MODE_DMA);
         if (status != UART_OK) {
-            DEBUG_PRINT("Failed to start DMA reception");
+            DEBUG_PRINT("Failed to initialize UART in DMA mode");
             return status;
         }
 
@@ -237,52 +293,54 @@ UART_Status_t UART_Example_ProcessCommand(const char* cmd)
     }
 
     if (strcmp(cleanCmd, CMD_INTERRUPT) == 0) {
-        /* Switch to Interrupt mode */
-        uartHandle.config.mode = UART_MODE_INTERRUPT;
-        UART_Status_t status = UART_Init(&uartHandle, &uartHandle.config);
+        UART_Status_t status = UART_DeInit(&uartHandle);
         if (status != UART_OK) {
-            DEBUG_PRINT("Failed to switch to Interrupt mode");
+            DEBUG_PRINT("Failed to deinitialize UART");
             return status;
         }
 
-        /* Start reception with full buffer */
-        status = UART_Receive(&uartHandle, rxBuffer, RX_BUFFER_SIZE, 0);
+        /* Use UART_Example_Init which will handle the full initialization sequence */
+        status = UART_Example_Init(UART_MODE_INTERRUPT);
         if (status != UART_OK) {
-            DEBUG_PRINT("Failed to start interrupt reception");
+            DEBUG_PRINT("Failed to initialize UART in Interrupt mode");
             return status;
         }
 
-        DEBUG_PRINT("Switching to Interrupt mode");
         return UART_Example_SendMessage(ANSI_COLOR_GREEN "Switched to Interrupt mode\r\n" ANSI_COLOR_RESET "> ");
     }
 
     if (strcmp(cleanCmd, CMD_BLOCKING) == 0) {
-        /* Switch to Blocking mode */
-        uartHandle.config.mode = UART_MODE_BLOCKING;
-        UART_Status_t status = UART_Init(&uartHandle, &uartHandle.config);
+        UART_Status_t status = UART_DeInit(&uartHandle);
         if (status != UART_OK) {
-            DEBUG_PRINT("Failed to switch to Blocking mode");
+            DEBUG_PRINT("Failed to deinitialize UART");
             return status;
         }
-        DEBUG_PRINT("Switching to Blocking mode");
+
+        /* Use UART_Example_Init which will handle the full initialization sequence */
+        status = UART_Example_Init(UART_MODE_BLOCKING);
+        if (status != UART_OK) {
+            DEBUG_PRINT("Failed to initialize UART in Blocking mode");
+            return status;
+        }
+
         return UART_Example_SendMessage(ANSI_COLOR_GREEN "Switched to Blocking mode\r\n" ANSI_COLOR_RESET "> ");
     }
 
-    if (strncmp(cleanCmd, "echo ", 5) == 0) {
-        /* Echo command - send back the received text */
-        const char* textToEcho = cleanCmd + 5;  /* Skip "echo " prefix */
-
-        /* Format echo message */
+    if (strcmp(cleanCmd, CMD_ECHO) == 0) {
         char echoMsg[STATUS_MSG_SIZE];
         snprintf(echoMsg, sizeof(echoMsg),
                 ANSI_COLOR_GREEN "Echo: %s\r\n" ANSI_COLOR_RESET "> ",
-                textToEcho);
-
+                CMD_ECHO);
         return UART_Example_SendMessage(echoMsg);
     }
 
-    /* Unknown command */
-    return UART_Example_SendMessage(ANSI_COLOR_RED "Unknown command\r\n" ANSI_COLOR_RESET "> ");
+    if (strcmp(cleanCmd, "help") == 0) {
+        return UART_Example_SendMessage(welcomeMsg);
+    }
+
+    char unknownCmdMsg[STATUS_MSG_SIZE];
+    snprintf(unknownCmdMsg, sizeof(unknownCmdMsg), ANSI_COLOR_RED "Unknown command: %s\r\n" ANSI_COLOR_RESET "> ", cleanCmd);
+    return UART_Example_SendMessage(unknownCmdMsg);
 }
 
 /**
@@ -292,27 +350,22 @@ UART_Status_t UART_Example_ProcessCommand(const char* cmd)
  */
 UART_Status_t UART_Example_SendMessage(const char* msg)
 {
-    /* Validate input */
     if (msg == NULL || uartHandle.huart == NULL) {
         DEBUG_PRINT("UART handle or message is NULL");
         return UART_ERROR;
     }
 
-    /* Get message length */
     uint16_t length = strlen(msg);
-    if (length == 0 || length >= TX_BUFFER_SIZE - 1) {  /* Leave room for null terminator */
+    if (length == 0 || length >= TX_BUFFER_SIZE - 1) {
         DEBUG_PRINT("Message length is invalid");
         return UART_ERROR;
     }
 
-    /* Reset completion flag */
     txComplete = 0;
-
-    /* Copy message to transmit buffer with null termination */
     memcpy(txBuffer, msg, length);
-    txBuffer[length] = '\0';  /* Ensure null termination */
+    txBuffer[length] = '\0';
 
-    UART_Status_t status = UART_Transmit(&uartHandle, txBuffer, length, UART_TIMEOUT);
+    UART_Status_t status = UART_Transmit(&uartHandle, uartHandle.txBuffer, length, UART_TIMEOUT);
     if (status != UART_OK) {
         DEBUG_PRINT("Send message failed: %d", status);
     }
@@ -320,66 +373,22 @@ UART_Status_t UART_Example_SendMessage(const char* msg)
     return status;
 }
 
-/* Enhanced callback for UART transmission complete */
-void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
-{
-    if (huart == uartHandle.huart) {
-        txComplete = 1;
-        DEBUG_PRINT("UART transmission complete");
-        /* Add logging or additional actions if needed */
-    }
-}
-
-void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
-{
-    if (huart == uartHandle.huart) {
-
-        if (huart->ErrorCode & HAL_UART_ERROR_ORE) {
-        DEBUG_PRINT("UART Overrun Error");
-        }
-        if (huart->ErrorCode & HAL_UART_ERROR_NE) {
-            DEBUG_PRINT("UART Noise Error");
-        }
-        if (huart->ErrorCode & HAL_UART_ERROR_FE) {
-            DEBUG_PRINT("UART Frame Error");
-        }
-        if (huart->ErrorCode & HAL_UART_ERROR_PE) {
-            DEBUG_PRINT("UART Parity Error");
-        }
-
-        /* Clear error flags */
-        __HAL_UART_CLEAR_PEFLAG(huart);
-        __HAL_UART_CLEAR_FEFLAG(huart);
-        __HAL_UART_CLEAR_NEFLAG(huart);
-        __HAL_UART_CLEAR_OREFLAG(huart);
-
-        /* Restart reception */
-        rxComplete = 0;
-        rxIndex = 0;
-        memset(rxBuffer, 0, RX_BUFFER_SIZE);
-        memset(cmdBuffer, 0, RX_BUFFER_SIZE);
-        /* Restart reception based on mode */
-        if (uartHandle.config.mode == UART_MODE_DMA) {
-            HAL_UART_Receive_DMA(huart, uartHandle.rxBuffer, uartHandle.rxSize);
-        } else if (uartHandle.config.mode == UART_MODE_INTERRUPT) {
-            HAL_UART_Receive_IT(huart, uartHandle.rxBuffer, 1);
-        }
-    }
-}
+/* HAL callbacks are now implemented in uart.c to avoid multiple definitions */
 void UART_Example_MainLoop(void)
 {
-    if (UART_Example_Init() != UART_OK) {
+
+    if (UART_Example_Init(UART_MODE_INTERRUPT) != UART_OK) {
         DEBUG_PRINT("UART Example initialization failed");
         return;
     }
 
-    while (1) {
-        /* Periodically process received data */
-        if (rxComplete) {
-            UART_Example_PreProcess(&uartHandle);
-            rxComplete = 0;  // Reset the flag after processing
-        }
+    DEBUG_PRINT("UART Example main loop started - Mode: %s",
+                uartHandle.config.mode == UART_MODE_DMA ? "DMA" :
+                uartHandle.config.mode == UART_MODE_INTERRUPT ? "IT" : "BLOCKING");
 
-        HAL_Delay(PROCESS_INTERVAL_MS);  // Defined as 10ms in uart_example.h
+    HAL_Delay(UART_INIT_DELAY); // Allow more time for initialization
+    while (1) {
+        UART_Example_PreProcess(&uartHandle);
+        HAL_Delay(UART_POLLING_DELAY); // Small delay to prevent overwhelming the system
     }
 }

@@ -27,7 +27,7 @@ UART_Status_t UART_Blocking_Init(UART_Handle_t* handle);
  * @param timeout Timeout duration in milliseconds
  * @return UART_Status_t Status of operation
  */
-UART_Status_t UART_Blocking_Transmit(UART_Handle_t* handle, uint8_t* data, uint16_t size, uint32_t timeout);
+UART_Status_t UART_Blocking_Transmit(UART_Handle_t* handle, const uint8_t* data, uint16_t size, uint32_t timeout);
 
 /**
  * @brief Receive data using UART in blocking mode
