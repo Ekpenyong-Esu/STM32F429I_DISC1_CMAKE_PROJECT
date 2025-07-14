@@ -11,6 +11,7 @@ extern "C" {
 #endif
 
 #include "uart.h"
+#include "uart_ring_buffer.h"
 
 /**
  * @brief Initialize UART Blocking mode

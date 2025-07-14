@@ -39,6 +39,11 @@ extern volatile uint8_t rxComplete;
 #define UART_ERROR_RECOVERY_DELAY 1000
 #define UART_RETRY_DELAY          500
 
+/* Buffer sizes */
+#define RX_BUFFER_SIZE     512  /* Match UART_RX_BUFFER_SIZE */
+#define TX_BUFFER_SIZE     512  /* Match UART_TX_BUFFER_SIZE */
+#define SINGLE_CHAR_BUFFER_SIZE  1   /* For single character operations */
+
 #ifdef __cplusplus
 }
 #endif

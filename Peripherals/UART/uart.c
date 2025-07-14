@@ -112,7 +112,10 @@ UART_Status_t UART_DeInit(UART_Handle_t* handle)
     handle->txSize = 0;
     memset(&handle->config, 0, sizeof(UART_Config_t));
 
+    HAL_Delay(1000); // Allow time for deinitialization
+
     return UART_OK;
+
 }
 
 /* Helper function to handle UART mode-specific operations */

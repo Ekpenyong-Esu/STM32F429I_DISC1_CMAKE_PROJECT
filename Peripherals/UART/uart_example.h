@@ -7,6 +7,9 @@
 #define UART_EXAMPLE_H
 
 #include "uart.h"
+#include "uart_config.h"
+#include <stdio.h>
+#include "uart_blocking.h"
 
 /* ANSI Color Codes */
 #define ANSI_COLOR_RED     "\x1b[31m"
@@ -17,10 +20,7 @@
 #define ANSI_COLOR_CYAN    "\x1b[36m"
 #define ANSI_COLOR_RESET   "\x1b[0m"
 
-/* Buffer sizes */
-#define RX_BUFFER_SIZE     512  /* Match UART_RX_BUFFER_SIZE */
-#define TX_BUFFER_SIZE     512  /* Match UART_TX_BUFFER_SIZE */
-#define SINGLE_CHAR_BUFFER_SIZE  1   /* For single character operations */
+
 
 /* Command definitions */
 #define CMD_HELP           "help"

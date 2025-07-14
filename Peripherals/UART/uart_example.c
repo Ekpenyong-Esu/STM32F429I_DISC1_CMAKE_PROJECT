@@ -4,14 +4,7 @@
  */
 
 #include "uart_example.h"
-#include "stm32f4xx_hal_def.h"
-#include "stm32f4xx_hal_uart.h"
-#include "uart.h"
-#include "uart_config.h"
-#include <stdint.h>
-#include <string.h>
-#include <stdio.h>
-#include "uart_blocking.h"
+
 
 /* Constants for UART configuration */
 #define STATUS_MSG_SIZE          256   /* Maximum size for status message */

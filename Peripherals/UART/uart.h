@@ -11,11 +11,12 @@ extern "C" {
 #endif
 
 #include "stm32f4xx_hal.h"
-#include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
 
-#define ENABLE_DEBUG 0
+
+
+#define ENABLE_DEBUG 1
 
 #if ENABLE_DEBUG
     /* Forward declaration for printf */
