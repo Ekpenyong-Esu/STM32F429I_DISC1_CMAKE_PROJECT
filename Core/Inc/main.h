@@ -31,7 +31,9 @@ extern "C" {
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <stdio.h>
 
+#include "SEGGER_SYSVIEW.h"
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
@@ -243,7 +245,7 @@ void Error_Handler(void);
 #define NBL1_GPIO_Port GPIOE
 
 /* USER CODE BEGIN Private defines */
-
+#define DWT_CTRL    (*(volatile uint32_t*)0xE0001000)
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

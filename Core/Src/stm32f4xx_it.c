@@ -23,7 +23,12 @@
 #include "uart.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "SEGGER_SYSVIEW.h"
 /* USER CODE END Includes */
+/**
+  * @brief This function handles System tick timer.
+  */
+
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN TD */
@@ -173,10 +178,12 @@ void DebugMon_Handler(void)
 void TIM6_DAC_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM6_DAC_IRQn 0 */
-
+  SEGGER_SYSVIEW_RecordEnterISR();
   /* USER CODE END TIM6_DAC_IRQn 0 */
   HAL_TIM_IRQHandler(&htim6);
   /* USER CODE BEGIN TIM6_DAC_IRQn 1 */
+  SEGGER_SYSVIEW_RecordExitISR();
+  /* USER CODE END TIM6_DAC_IRQn 1 */
 
   /* USER CODE END TIM6_DAC_IRQn 1 */
 }
@@ -229,6 +236,7 @@ void DMA2D_IRQHandler(void)
 void EXTI15_10_IRQHandler(void)
 {
   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_13);
+  HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_15);
 }
 
 /**
@@ -236,10 +244,22 @@ void EXTI15_10_IRQHandler(void)
   */
 void EXTI0_IRQHandler(void)
 {
-  HAL_GPIO_EXTI_IRQHandler(B1_Pin);
-
+  SEGGER_SYSVIEW_RecordEnterISR();
+  HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_0);
+  SEGGER_SYSVIEW_RecordExitISR();
 }
 
+/**
+  * @brief This function handles System tick timer.
+  */
+// void SysTick_Handler(void)
+// {
+//   SEGGER_SYSVIEW_RecordEnterISR();
+//   HAL_SYSTICK_IRQHandler();
+//   SEGGER_SYSVIEW_RecordExitISR();
+// }
+
 /* USER CODE BEGIN 1 */
+
 
 /* USER CODE END 1 */

@@ -21,7 +21,7 @@ UART_Handle_t uartHandle;
 static uint8_t rxBuffer[RX_BUFFER_SIZE];
 static uint8_t txBuffer[TX_BUFFER_SIZE];
 static uint8_t singleBuffer[SINGLE_CHAR_BUFFER_SIZE];
-volatile uint8_t rxComplete = 0;
+volatile uint8_t uartExampleRxComplete = 0;
 volatile uint8_t txComplete = 0;
 
 /* Buffer management for improved reception */
@@ -58,7 +58,7 @@ static void UART_Example_InitStructures(void)
     memset(cmdBuffer, 0, RX_BUFFER_SIZE);
 
     rxIndex = 0;
-    rxComplete = 0;
+    uartExampleRxComplete = 0;
     txComplete = 0;
 }
 

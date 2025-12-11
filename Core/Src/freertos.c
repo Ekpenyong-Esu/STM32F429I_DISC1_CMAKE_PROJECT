@@ -60,6 +60,7 @@ void vApplicationMallocFailedHook(void);
 /* USER CODE BEGIN 2 */
 void vApplicationIdleHook( void )
 {
+    printf("IDLE\r\n");
    /* vApplicationIdleHook() will only be called if configUSE_IDLE_HOOK is set
    to 1 in FreeRTOSConfig.h. It will be called on each iteration of the idle
    task. It is essential that code added to this hook function never attempts
@@ -75,6 +76,9 @@ void vApplicationIdleHook( void )
 /* USER CODE BEGIN 4 */
 void vApplicationStackOverflowHook(xTaskHandle xTask, signed char *pcTaskName)
 {
+    (void)xTask;
+    printf("STACK OVERFLOW in task: %s\r\n", pcTaskName);
+    Error_Handler();
    /* Run time stack overflow checking is performed if
    configCHECK_FOR_STACK_OVERFLOW is defined to 1 or 2. This hook function is
    called if a stack overflow is detected. */
@@ -84,6 +88,8 @@ void vApplicationStackOverflowHook(xTaskHandle xTask, signed char *pcTaskName)
 /* USER CODE BEGIN 5 */
 void vApplicationMallocFailedHook(void)
 {
+    printf("MALLOC FAILED: Out of heap memory\r\n");
+    Error_Handler();
    /* vApplicationMallocFailedHook() will only be called if
    configUSE_MALLOC_FAILED_HOOK is set to 1 in FreeRTOSConfig.h. It is a hook
    function that will get called if a call to pvPortMalloc() fails.
@@ -101,4 +107,3 @@ void vApplicationMallocFailedHook(void)
 /* USER CODE BEGIN Application */
 
 /* USER CODE END Application */
-

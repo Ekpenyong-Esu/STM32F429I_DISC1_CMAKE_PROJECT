@@ -1,4 +1,4 @@
-# Install script for directory: /home/mahonri/Desktop/BareMetal/project/cmake/stm32cubemx
+# Install script for directory: /home/mahonri/Desktop/BareMetal/Sensor_Cons/cmake/stm32cubemx
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)

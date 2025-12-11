@@ -473,6 +473,8 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef* hspi)
     GPIO_InitStruct.Alternate = GPIO_AF5_SPI5;
     HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
 
+    /* SPI5 CS pin (PC1) is configured by GPIO_Init() in the GPIO peripheral */
+
     /* USER CODE BEGIN SPI5_MspInit 1 */
 
     /* USER CODE END SPI5_MspInit 1 */
@@ -503,6 +505,8 @@ void HAL_SPI_MspDeInit(SPI_HandleTypeDef* hspi)
     PF9     ------> SPI5_MOSI
     */
     HAL_GPIO_DeInit(GPIOF, SPI5_SCK_Pin|SPI5_MISO_Pin|SPI5_MOSI_Pin);
+
+    /* SPI5 CS pin (PC1) is deinitialized by GPIO_DeInit() in the GPIO peripheral */
 
     /* USER CODE BEGIN SPI5_MspDeInit 1 */
 

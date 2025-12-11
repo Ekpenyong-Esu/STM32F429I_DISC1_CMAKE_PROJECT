@@ -50,10 +50,9 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
 )
 
-# Add include paths
-target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
-    # Add user defined include paths
-)
+
+
+
 
 # Add project symbols (macros)
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
@@ -82,6 +81,22 @@ file(GLOB_RECURSE PERIPHERALS_SOURCES
 
 # Add the peripheral sources to the project
 target_sources(${PROJECT_NAME} PRIVATE ${PERIPHERALS_SOURCES})
+
+# # Add Examples directory to include paths
+# file(GLOB EXAMPLE_DIRS LIST_DIRECTORIES true "${CMAKE_CURRENT_SOURCE_DIR}/Examples/*")
+# foreach(dir ${EXAMPLE_DIRS})
+#     if(IS_DIRECTORY ${dir})
+#         target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${dir})
+#     endif()
+# endforeach()
+
+# # Add the example source files
+# file(GLOB_RECURSE EXAMPLES_SOURCES
+#     "${CMAKE_CURRENT_SOURCE_DIR}/Examples/*/*.c"
+# )
+
+# Add the example sources to the project
+#target_sources(${PROJECT_NAME} PRIVATE ${EXAMPLES_SOURCES})
 
 #Add post-build step to copy compile_commands.json to project root
 # add_custom_command(

@@ -75,7 +75,7 @@ UART_Status_t UART_DMA_Receive(UART_Handle_t* handle, uint8_t* data, uint16_t si
     }
 
     /* Reset reception complete flag */
-    rxComplete = 0;
+    uartExampleRxComplete = 0;
 
     /* Use IDLE line detection for more responsive reception */
     HAL_StatusTypeDef status = HAL_UARTEx_ReceiveToIdle_DMA(handle->huart, handle->rxBuffer, handle->rxSize);
@@ -95,7 +95,7 @@ UART_Status_t UART_DMA_Receive(UART_Handle_t* handle, uint8_t* data, uint16_t si
     /* If timeout is specified, wait for completion or timeout */
     if (timeout > 0) {
         uint32_t startTick = HAL_GetTick();
-        while (!rxComplete) {
+        while (!uartExampleRxComplete) {
             if ((HAL_GetTick() - startTick) > timeout) {
                 DEBUG_PRINT("DMA UART Receive timeout");
                 return UART_TIMEOUT_ERROR;

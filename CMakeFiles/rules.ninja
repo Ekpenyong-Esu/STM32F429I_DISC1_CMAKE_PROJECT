@@ -6,7 +6,7 @@
 # It is included in the main 'build.ninja'.
 
 # =============================================================================
-# Project: project
+# Project: Sensor_Console
 # Configurations: Debug
 # =============================================================================
 # =============================================================================
@@ -14,7 +14,7 @@
 #############################################
 # Rule for compiling ASM files.
 
-rule ASM_COMPILER__project_unscanned_Debug
+rule ASM_COMPILER__Sensor_Console_unscanned_Debug
   depfile = $DEP_FILE
   deps = gcc
   command = ${LAUNCHER}${CODE_CHECK}/usr/bin/arm-none-eabi-gcc $DEFINES $INCLUDES $FLAGS -MD -MT $out -MF $DEP_FILE -o $out -c $in
@@ -24,7 +24,7 @@ rule ASM_COMPILER__project_unscanned_Debug
 #############################################
 # Rule for compiling C files.
 
-rule C_COMPILER__project_unscanned_Debug
+rule C_COMPILER__Sensor_Console_unscanned_Debug
   depfile = $DEP_FILE
   deps = gcc
   command = ${LAUNCHER}${CODE_CHECK}/usr/bin/arm-none-eabi-gcc $DEFINES $INCLUDES $FLAGS -MD -MT $out -MF $DEP_FILE -o $out -c $in
@@ -34,8 +34,8 @@ rule C_COMPILER__project_unscanned_Debug
 #############################################
 # Rule for linking C executable.
 
-rule C_EXECUTABLE_LINKER__project_Debug
-  command = $PRE_LINK && /usr/bin/arm-none-eabi-gcc $FLAGS -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -T "/home/mahonri/Desktop/BareMetal/project/STM32F429XX_FLASH.ld" --specs=nano.specs -Wl,-Map=project.map -Wl,--gc-sections -Wl,--start-group -lc -lm -Wl,--end-group -Wl,--print-memory-usage $LINK_FLAGS $in -o $TARGET_FILE $LINK_PATH $LINK_LIBRARIES && $POST_BUILD
+rule C_EXECUTABLE_LINKER__Sensor_Console_Debug
+  command = $PRE_LINK && /usr/bin/arm-none-eabi-gcc $FLAGS -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -T "/home/mahonri/Desktop/BareMetal/Sensor_Cons/STM32F429XX_FLASH.ld" --specs=nano.specs -Wl,-Map=Sensor_Console.map -Wl,--gc-sections -Wl,--start-group -lc -lm -Wl,--end-group -Wl,--print-memory-usage $LINK_FLAGS $in -o $TARGET_FILE $LINK_PATH $LINK_LIBRARIES && $POST_BUILD
   description = Linking C executable $TARGET_FILE
   restat = $RESTAT
 
@@ -82,7 +82,7 @@ rule C_COMPILER__USB_Host_Library_unscanned_Debug
 # Rule for re-running cmake.
 
 rule RERUN_CMAKE
-  command = /usr/bin/cmake --regenerate-during-build -S/home/mahonri/Desktop/BareMetal/project -B/home/mahonri/Desktop/BareMetal/project
+  command = /usr/bin/cmake --regenerate-during-build -S/home/mahonri/Desktop/BareMetal/Sensor_Cons -B/home/mahonri/Desktop/BareMetal/Sensor_Cons
   description = Re-running CMake...
   generator = 1
 

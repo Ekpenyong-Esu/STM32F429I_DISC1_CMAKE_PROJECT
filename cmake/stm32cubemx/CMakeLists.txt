@@ -1,3 +1,4 @@
+
 cmake_minimum_required(VERSION 3.22)
 # Enable CMake support for ASM and C languages
 enable_language(C ASM)
@@ -22,6 +23,10 @@ set(MX_Include_Dirs
     ${CMAKE_SOURCE_DIR}/Middlewares/ST/STM32_USB_Host_Library/Class/CDC/Inc
     ${CMAKE_SOURCE_DIR}/Drivers/CMSIS/Device/ST/STM32F4xx/Include
     ${CMAKE_SOURCE_DIR}/Drivers/CMSIS/Include
+    ${CMAKE_SOURCE_DIR}/Middlewares/SEGGER/SEGGER
+    ${CMAKE_SOURCE_DIR}/Middlewares/SEGGER/
+    ${CMAKE_SOURCE_DIR}/Middlewares/SEGGER/Config
+    ${CMAKE_SOURCE_DIR}/Middlewares/SEGGER/OS
 )
 
 # STM32CubeMX generated application sources
@@ -58,6 +63,12 @@ set(STM32_Drivers_Src
     ${CMAKE_SOURCE_DIR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.c
     ${CMAKE_SOURCE_DIR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c
     ${CMAKE_SOURCE_DIR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c
+    ${CMAKE_SOURCE_DIR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_adc.c
+    ${CMAKE_SOURCE_DIR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_adc_ex.c
+    ${CMAKE_SOURCE_DIR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_eth.c
+    ${CMAKE_SOURCE_DIR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc.c
+    ${CMAKE_SOURCE_DIR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_sd.c
+    ${CMAKE_SOURCE_DIR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_ll_sdmmc.c
     ${CMAKE_SOURCE_DIR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.c
     ${CMAKE_SOURCE_DIR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_crc.c
     ${CMAKE_SOURCE_DIR}/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma2d.c
@@ -91,6 +102,17 @@ set(FreeRTOS_Src
     ${CMAKE_SOURCE_DIR}/Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.c
     ${CMAKE_SOURCE_DIR}/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.c
 )
+
+# SEGGER RTT and SystemView sources
+set(SEGGER_Src
+    ${CMAKE_SOURCE_DIR}/Middlewares/SEGGER/SEGGER/SEGGER_RTT.c
+    ${CMAKE_SOURCE_DIR}/Middlewares/SEGGER/SEGGER/SEGGER_RTT_printf.c
+    ${CMAKE_SOURCE_DIR}/Middlewares/SEGGER/SEGGER/SEGGER_SYSVIEW.c
+    ${CMAKE_SOURCE_DIR}/Middlewares/SEGGER/SEGGER/SEGGER_RTT_ASM_ARMv7M.S
+    #${CMAKE_SOURCE_DIR}/Middlewares/SEGGER/Config/SEGGER_SYSVIEW_Config_FreeRTOS.c
+    #${CMAKE_SOURCE_DIR}/Middlewares/SEGGER/OS/SEGGER_SYSVIEW_FreeRTOS.c
+    ${CMAKE_SOURCE_DIR}/Middlewares/SEGGER/Config/SEGGER_SYSVIEW_Config_NoOS.c
+)
 set(USB_Host_Library_Src
     ${CMAKE_SOURCE_DIR}/Middlewares/ST/STM32_USB_Host_Library/Core/Src/usbh_core.c
     ${CMAKE_SOURCE_DIR}/Middlewares/ST/STM32_USB_Host_Library/Core/Src/usbh_ctlreq.c
@@ -108,7 +130,6 @@ set(MX_LINK_LIBS
     STM32_Drivers
     FreeRTOS
 	USB_Host_Library
-
 )
 # Interface library for includes and symbols
 add_library(stm32cubemx INTERFACE)
@@ -137,8 +158,10 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE ${MX_Application_Src})
 # Link directories setup
 target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE ${MX_LINK_DIRS})
 
-# Add libraries to the project
 target_link_libraries(${CMAKE_PROJECT_NAME} ${MX_LINK_LIBS})
+
+# Add SEGGER sources to the main target (do not link as a library)
+target_sources(${CMAKE_PROJECT_NAME} PRIVATE ${SEGGER_Src})
 
 # Add the map file to the list of files to be removed with 'clean' target
 set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES ADDITIONAL_CLEAN_FILES ${CMAKE_PROJECT_NAME}.map)

@@ -1,0 +1,31 @@
+#include "SEGGER_SYSVIEW.h"
+#include "SEGGER_SYSVIEW_Conf.h"
+#include "stm32f4xx.h"
+
+// STM32F429 SRAM base address constant
+#define STM32F429_SRAM_BASE_ADDR  0x20000000u
+
+static void cbSendSystemDesc(void) {
+  SEGGER_SYSVIEW_SendSysDesc("N=NoRTOS App,D=Cortex-M4,O=None");
+  SEGGER_SYSVIEW_SendSysDesc("I#15=SysTick");
+}
+
+void SEGGER_SYSVIEW_Conf(void) {
+  // Disable interrupts during configuration
+  __disable_irq();
+  
+  // Enable DWT cycle counter for timestamp generation
+  CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+  DWT->CYCCNT = 0;
+  DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+
+  // Initialize SYSVIEW with proper CPU and timestamp frequencies
+  // For No-OS applications, both frequencies should be the same (SystemCoreClock)
+  SEGGER_SYSVIEW_Init(SystemCoreClock, SystemCoreClock, NULL, cbSendSystemDesc);
+  
+  // Set STM32F429 SRAM base address for memory analysis
+  SEGGER_SYSVIEW_SetRAMBase(STM32F429_SRAM_BASE_ADDR);
+  
+  // Re-enable interrupts
+  __enable_irq();
+}

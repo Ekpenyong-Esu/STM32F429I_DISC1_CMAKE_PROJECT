@@ -169,7 +169,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
     if (uartHandle.config.mode == UART_MODE_DMA) {
         DEBUG_PRINT("UART Rx Event (IDLE) - Size: %d", Size);
         if (Size > 0) {
-            rxComplete = 1;
+            uartExampleRxComplete = 1;
             UART_RingBuffer_PutData(uartHandle.rxBuffer, Size);
             HAL_StatusTypeDef status = HAL_UARTEx_ReceiveToIdle_DMA(huart, uartHandle.rxBuffer, uartHandle.rxSize);
             if (status != HAL_OK) {
@@ -182,7 +182,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
         if (Size > 0) {
             // Put received data into ring buffer
             UART_RingBuffer_PutData(uartHandle.rxBuffer, Size);
-            rxComplete = 1;
+            uartExampleRxComplete = 1;
 
             HAL_StatusTypeDef status = HAL_UARTEx_ReceiveToIdle_IT(huart, uartHandle.rxBuffer, uartHandle.rxSize);
             if (status != HAL_OK) {
@@ -223,7 +223,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
     }
 
     if (uartHandle.config.mode == UART_MODE_INTERRUPT) {
-        rxComplete = 1;
+        uartExampleRxComplete = 1;
         DEBUG_PRINT("IT Received data complete");
 
         // Put received data into the ring buffer (only one byte for HAL_UART_Receive_IT)
@@ -242,7 +242,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
             }
         }
     } else if (uartHandle.config.mode == UART_MODE_DMA) {
-        rxComplete = 1;
+        uartExampleRxComplete = 1;
         DEBUG_PRINT("DMA Full Buffer Received: %d bytes", uartHandle.rxSize);
         UART_RingBuffer_PutData(uartHandle.rxBuffer, uartHandle.rxSize);
         HAL_StatusTypeDef status = HAL_UARTEx_ReceiveToIdle_DMA(huart, uartHandle.rxBuffer, uartHandle.rxSize);

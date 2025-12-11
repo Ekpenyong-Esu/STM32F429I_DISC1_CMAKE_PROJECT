@@ -127,7 +127,7 @@ void HAL_SuspendTick(void)
   * @brief  Resume Tick increment.
   * @note   Enable the tick increment by Enabling TIM6 update interrupt.
   * @param  None
-  * @retval None
+  * @rtval None
   */
 void HAL_ResumeTick(void)
 {
@@ -135,3 +135,20 @@ void HAL_ResumeTick(void)
   __HAL_TIM_ENABLE_IT(&htim6, TIM_IT_UPDATE);
 }
 
+/**
+  * @brief  Period elapsed callback in non blocking mode
+  * @note   This function is called when TIM6 interrupt took place, inside
+  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
+  * a global variable "uwTick" used as application time base.
+  * @param  htim : TIM handle
+  * @retval None
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  if (htim->Instance == TIM6) {
+    HAL_IncTick();
+  }
+  else if (htim->Instance == TIM2) {
+        HAL_IncTick();
+    }
+}

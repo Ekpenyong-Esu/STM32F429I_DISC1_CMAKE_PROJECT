@@ -61,7 +61,7 @@ UART_Status_t UART_IT_Receive(UART_Handle_t* handle, uint8_t* data, uint16_t siz
         return UART_ERROR;
     }
 
-    rxComplete = 0;
+    uartExampleRxComplete = 0;
     /* Use HAL_UARTEx_ReceiveToIdle_IT for better command reception with IDLE detection */
     HAL_StatusTypeDef status = HAL_UARTEx_ReceiveToIdle_IT(handle->huart, data, size);
     if (status != HAL_OK) {
@@ -77,7 +77,7 @@ UART_Status_t UART_IT_Receive(UART_Handle_t* handle, uint8_t* data, uint16_t siz
 
     if (timeout > 0) {
         uint32_t tickstart = HAL_GetTick();
-        while (!rxComplete) {
+        while (!uartExampleRxComplete) {
             if ((HAL_GetTick() - tickstart) > timeout) {
                 DEBUG_PRINT("UART Receive timeout");
                 return UART_TIMEOUT_ERROR;
