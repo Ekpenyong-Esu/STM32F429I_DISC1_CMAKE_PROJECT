@@ -360,6 +360,7 @@ SDCARD_StatusTypeDef SDCARD_Erase(uint32_t StartAddr, uint32_t EndAddr, uint32_t
 
     /* Erase blocks */
     halStatus = HAL_SD_Erase(&hsd, StartAddr, EndAddr);
+
     if (halStatus != HAL_OK)
     {
         return SDCARD_HALStatusToSDStatus(halStatus);

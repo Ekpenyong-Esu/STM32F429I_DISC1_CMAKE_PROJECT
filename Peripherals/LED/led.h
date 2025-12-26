@@ -14,7 +14,7 @@ extern "C" {
 #endif
 
 /* Includes ------------------------------------------------------------------*/
-#include "stm32f4xx_hal.h"
+#include "stm32f4xx.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -56,7 +56,7 @@ typedef struct {
 /* STM32F429 Discovery Board LED definitions */
 #define LED_GREEN_PORT      GPIOG
 #define LED_GREEN_PIN       GPIO_PIN_13
-#define LED_RED_PORT        GPIOG  
+#define LED_RED_PORT        GPIOG
 #define LED_RED_PIN         GPIO_PIN_14
 
 /* Exported functions --------------------------------------------------------*/

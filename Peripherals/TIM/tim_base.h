@@ -6,7 +6,7 @@
 #ifndef TIM_BASE_H
 #define TIM_BASE_H
 
-#include "stm32f4xx_hal.h"
+#include "stm32f4xx.h"
 #include "stm32f4xx_hal_tim.h"
 #include <stdint.h>
 

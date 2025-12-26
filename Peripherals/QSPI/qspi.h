@@ -17,9 +17,7 @@ extern "C" {
 #endif
 
 /* Includes ------------------------------------------------------------------*/
-#include "stm32f4xx_hal.h"
-#include "stm32f4xx_hal_spi.h"
-#include "stm32f4xx_hal_gpio.h"
+#include "stm32f4xx.h"
 #include <stdint.h>
 #include <stdbool.h>
 

@@ -18,7 +18,7 @@ extern "C" {
 #endif
 
 /* Includes ------------------------------------------------------------------*/
-#include "stm32f4xx_hal.h"
+#include "stm32f4xx.h"
 #include "stm32f4xx_hal_i2s.h"
 #include "stm32f4xx_hal_dma.h"
 #include <stdint.h>
