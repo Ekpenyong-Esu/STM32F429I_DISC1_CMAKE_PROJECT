@@ -20,6 +20,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f4xx_hal.h"
 #include "stm32f4xx_hal_tim.h"
+#include "lvgl.h"  /* For lv_tick_inc() */
 
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
@@ -147,6 +148,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   if (htim->Instance == TIM6) {
     HAL_IncTick();
+    lv_tick_inc(1);  /* LVGL tick - called every 1ms */
   }
   else if (htim->Instance == TIM2) {
         HAL_IncTick();

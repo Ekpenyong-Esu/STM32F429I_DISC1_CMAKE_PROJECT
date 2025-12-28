@@ -12,7 +12,7 @@
 #ifndef FMC_H
 #define FMC_H
 
-#include "stm32f4xx_hal.h"
+#include "stm32f4xx.h"
 #include "stm32f4xx_hal_sdram.h"
 #include "stm32f4xx_hal_sram.h"
 #include "stm32f4xx_hal_nand.h"

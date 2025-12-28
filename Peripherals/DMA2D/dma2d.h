@@ -66,7 +66,7 @@
 #define DMA2D_DRIVER_H
 
 /* Includes */
-#include "stm32f4xx_hal.h"
+#include "stm32f4xx.h"
 #include "stm32f4xx_hal_dma2d.h"
 #include <stdint.h>
 #include <stdbool.h>

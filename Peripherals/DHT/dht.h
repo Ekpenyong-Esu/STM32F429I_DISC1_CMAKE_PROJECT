@@ -1,7 +1,7 @@
 #ifndef DHT_H
 #define DHT_H
 
-#include "stm32f4xx_hal.h"
+#include "stm32f4xx.h"
 #include <stdbool.h>
 
 #ifdef __cplusplus

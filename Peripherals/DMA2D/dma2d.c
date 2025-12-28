@@ -21,6 +21,7 @@
 #include "dma2d.h"
 #include <string.h>
 #include <stdio.h>
+#include "stm32f4xx_hal.h"  /* For HAL_NVIC_EnableIRQ */
 
 #ifdef DMA2D_USE_MUTEX
 #include "cmsis_os.h"  /* For mutex operations */
@@ -169,6 +170,9 @@ HAL_StatusTypeDef DMA2D_Init(const DMA2D_Config *config)
 #endif
         return status;
     }
+
+    /* Enable DMA2D interrupt */
+    HAL_NVIC_EnableIRQ(DMA2D_IRQn);
 
     /* Set error callback */
     hdma2d.XferErrorCallback = DMA2D_ErrorHandler;

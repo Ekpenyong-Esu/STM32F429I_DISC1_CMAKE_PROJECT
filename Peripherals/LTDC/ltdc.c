@@ -15,6 +15,48 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include "stm32f4xx_hal.h"
+
+/*=============================================================================
+ * ILI9341 LCD Controller Definitions (SPI Interface)
+ *===========================================================================*/
+/* ILI9341 Commands */
+#define ILI9341_RESET               0x01
+#define ILI9341_SLEEP_OUT           0x11
+#define ILI9341_GAMMA               0x26
+#define ILI9341_DISPLAY_OFF         0x28
+#define ILI9341_DISPLAY_ON          0x29
+#define ILI9341_COLUMN_ADDR         0x2A
+#define ILI9341_PAGE_ADDR           0x2B
+#define ILI9341_GRAM                0x2C
+#define ILI9341_MAC                 0x36
+#define ILI9341_PIXEL_FORMAT        0x3A
+#define ILI9341_WDB                 0x51
+#define ILI9341_WCD                 0x53
+#define ILI9341_RGB_INTERFACE       0xB0
+#define ILI9341_FRC                 0xB1
+#define ILI9341_BPC                 0xB5
+#define ILI9341_DFC                 0xB6
+#define ILI9341_POWER1              0xC0
+#define ILI9341_POWER2              0xC1
+#define ILI9341_VCOM1               0xC5
+#define ILI9341_VCOM2               0xC7
+#define ILI9341_POWERA              0xCB
+#define ILI9341_POWERB              0xCF
+#define ILI9341_PGAMMA              0xE0
+#define ILI9341_NGAMMA              0xE1
+#define ILI9341_DTCA                0xE8
+#define ILI9341_DTCB                0xEA
+#define ILI9341_POWER_SEQ           0xED
+#define ILI9341_3GAMMA_EN           0xF2
+#define ILI9341_INTERFACE           0xF6
+#define ILI9341_PRC                 0xF7
+
+/* ILI9341 SPI GPIO Pins (STM32F429I-DISC1) */
+#define ILI9341_WRX_PIN             GPIO_PIN_13
+#define ILI9341_WRX_PORT            GPIOD
+#define ILI9341_CS_PIN              GPIO_PIN_2
+#define ILI9341_CS_PORT             GPIOC
 
 /* Private defines -----------------------------------------------------------*/
 #define LTDC_TIMEOUT                5000    /*!< Timeout for LTDC operations */
@@ -24,6 +66,13 @@
 
 /* Private variables ---------------------------------------------------------*/
 LTDC_HandleTypeDef hltdc;                   /*!< LTDC HAL handle */
+static SPI_HandleTypeDef hspi_lcd;          /*!< SPI handle for ILI9341 */
+
+/* ILI9341 SPI Helper Functions - Forward Declarations */
+static void ILI9341_SPI_Init(void);
+static void ILI9341_WriteCommand(uint8_t cmd);
+static void ILI9341_WriteData(uint8_t data);
+static void ILI9341_Init(void);
 
 /* Private function prototypes -----------------------------------------------*/
 static HAL_StatusTypeDef LTDC_ValidateDriver(LTDC_Driver_t *driver);
@@ -68,8 +117,9 @@ HAL_StatusTypeDef LTDC_Driver_Init(LTDC_Driver_t *driver, LTDC_HandleTypeDef *hl
     for (uint8_t i = 0; i < LTDC_MAX_LAYERS; i++) {
         driver->layers[i].windowX0 = 0;
         driver->layers[i].windowY0 = 0;
-        driver->layers[i].windowX1 = LTDC_DISPLAY_WIDTH;
-        driver->layers[i].windowY1 = LTDC_DISPLAY_HEIGHT;
+        /* WindowX1/Y1 are inclusive end coordinates: use width-1/height-1 */
+        driver->layers[i].windowX1 = LTDC_DISPLAY_WIDTH - 1;
+        driver->layers[i].windowY1 = LTDC_DISPLAY_HEIGHT - 1;
         driver->layers[i].imageWidth = LTDC_DISPLAY_WIDTH;
         driver->layers[i].imageHeight = LTDC_DISPLAY_HEIGHT;
         driver->layers[i].pixelFormat = LTDC_PIXEL_FORMAT_RGB565_ENUM;
@@ -385,10 +435,35 @@ HAL_StatusTypeDef LTDC_SetFramebuffer(LTDC_Driver_t *driver, uint8_t layer, uint
     /* Set framebuffer address */
     HAL_StatusTypeDef status = HAL_LTDC_SetAddress(driver->hltdc, address, layer);
     if (status == HAL_OK) {
+        /* Request register reload during next vertical blanking to avoid tearing */
+        __HAL_LTDC_VERTICAL_BLANKING_RELOAD_CONFIG(driver->hltdc);
+
+        /* Wait for register reload flag (RR) with timeout */
+        uint32_t timeout = LTDC_TIMEOUT;
+        while((__HAL_LTDC_GET_FLAG(driver->hltdc, LTDC_FLAG_RR) == RESET) && timeout--) {
+            /* simple busy-wait; in real app consider using IRQ */
+        }
+
+        /* Clear the RR flag if set */
+        if (__HAL_LTDC_GET_FLAG(driver->hltdc, LTDC_FLAG_RR) != RESET) {
+            __HAL_LTDC_CLEAR_FLAG(driver->hltdc, LTDC_FLAG_RR);
+        }
+
         driver->layers[layer].framebufferAddress = address;
     }
 
     return status;
+}
+
+/**
+ * @brief Swap framebuffer safely at next VSYNC
+ * @param driver: Pointer to LTDC driver
+ * @param layer: Layer index
+ * @param address: New framebuffer address
+ * @return HAL_StatusTypeDef
+ */
+HAL_StatusTypeDef LTDC_SwapFramebufferAtVSync(LTDC_Driver_t *driver, uint8_t layer, uint32_t address) {
+    return LTDC_SetFramebuffer(driver, layer, address);
 }
 
 /**
@@ -848,18 +923,353 @@ HAL_StatusTypeDef LTDC_ClearError(LTDC_Driver_t *driver) {
     return HAL_OK;
 }
 
+/*=============================================================================
+ * ILI9341 LCD Controller SPI Initialization (CRITICAL FOR DISPLAY!)
+ *===========================================================================*/
+
+/**
+ * @brief Initialize SPI5 for ILI9341 LCD controller communication
+ * @note  STM32F429I-DISC1 uses SPI5 for LCD communication
+ */
+static void ILI9341_SPI_Init(void)
+{
+    /* Enable GPIO clocks for SPI5 and control pins */
+    __HAL_RCC_GPIOC_CLK_ENABLE();
+    __HAL_RCC_GPIOD_CLK_ENABLE();
+    __HAL_RCC_GPIOF_CLK_ENABLE();
+    __HAL_RCC_SPI5_CLK_ENABLE();
+
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+    /* Configure SPI5 pins: SCK (PF7), MISO (PF8), MOSI (PF9) */
+    GPIO_InitStruct.Pin = GPIO_PIN_7 | GPIO_PIN_8 | GPIO_PIN_9;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF5_SPI5;
+    HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
+
+    /* Configure LCD CS pin (PC2) */
+    GPIO_InitStruct.Pin = ILI9341_CS_PIN;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    HAL_GPIO_Init(ILI9341_CS_PORT, &GPIO_InitStruct);
+
+    /* Configure LCD WRX/DCX pin (PD13) - Data/Command selection */
+    GPIO_InitStruct.Pin = ILI9341_WRX_PIN;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    HAL_GPIO_Init(ILI9341_WRX_PORT, &GPIO_InitStruct);
+
+    /* Set CS high (deselect) */
+    HAL_GPIO_WritePin(ILI9341_CS_PORT, ILI9341_CS_PIN, GPIO_PIN_SET);
+
+    /* Configure SPI5 */
+    hspi_lcd.Instance = SPI5;
+    hspi_lcd.Init.Mode = SPI_MODE_MASTER;
+    hspi_lcd.Init.Direction = SPI_DIRECTION_2LINES;
+    hspi_lcd.Init.DataSize = SPI_DATASIZE_8BIT;
+    hspi_lcd.Init.CLKPolarity = SPI_POLARITY_LOW;
+    hspi_lcd.Init.CLKPhase = SPI_PHASE_1EDGE;
+    hspi_lcd.Init.NSS = SPI_NSS_SOFT;
+    hspi_lcd.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_4;
+    hspi_lcd.Init.FirstBit = SPI_FIRSTBIT_MSB;
+    hspi_lcd.Init.TIMode = SPI_TIMODE_DISABLE;
+    hspi_lcd.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+    hspi_lcd.Init.CRCPolynomial = 10;
+    HAL_SPI_Init(&hspi_lcd);
+}
+
+/**
+ * @brief Send command to ILI9341 LCD controller
+ * @param cmd: Command byte to send
+ */
+static void ILI9341_WriteCommand(uint8_t cmd)
+{
+    /* WRX low = command */
+    HAL_GPIO_WritePin(ILI9341_WRX_PORT, ILI9341_WRX_PIN, GPIO_PIN_RESET);
+    /* CS low (select) */
+    HAL_GPIO_WritePin(ILI9341_CS_PORT, ILI9341_CS_PIN, GPIO_PIN_RESET);
+    /* Send command */
+    HAL_SPI_Transmit(&hspi_lcd, &cmd, 1, HAL_MAX_DELAY);
+    /* CS high (deselect) */
+    HAL_GPIO_WritePin(ILI9341_CS_PORT, ILI9341_CS_PIN, GPIO_PIN_SET);
+}
+
+/**
+ * @brief Send data to ILI9341 LCD controller
+ * @param data: Data byte to send
+ */
+static void ILI9341_WriteData(uint8_t data)
+{
+    /* WRX high = data */
+    HAL_GPIO_WritePin(ILI9341_WRX_PORT, ILI9341_WRX_PIN, GPIO_PIN_SET);
+    /* CS low (select) */
+    HAL_GPIO_WritePin(ILI9341_CS_PORT, ILI9341_CS_PIN, GPIO_PIN_RESET);
+    /* Send data */
+    HAL_SPI_Transmit(&hspi_lcd, &data, 1, HAL_MAX_DELAY);
+    /* CS high (deselect) */
+    HAL_GPIO_WritePin(ILI9341_CS_PORT, ILI9341_CS_PIN, GPIO_PIN_SET);
+}
+
+/**
+ * @brief Initialize ILI9341 LCD controller for RGB interface mode
+ * @note  This configures the ILI9341 to receive pixel data from LTDC via RGB interface
+ */
+static void ILI9341_Init(void)
+{
+    /* Initialize SPI for communication */
+    ILI9341_SPI_Init();
+
+    /* Hardware reset delay */
+    HAL_Delay(10);
+
+    /* Software Reset */
+    ILI9341_WriteCommand(ILI9341_RESET);
+    HAL_Delay(20);
+
+    /* Power Control A */
+    ILI9341_WriteCommand(ILI9341_POWERA);
+    ILI9341_WriteData(0x39);
+    ILI9341_WriteData(0x2C);
+    ILI9341_WriteData(0x00);
+    ILI9341_WriteData(0x34);
+    ILI9341_WriteData(0x02);
+
+    /* Power Control B */
+    ILI9341_WriteCommand(ILI9341_POWERB);
+    ILI9341_WriteData(0x00);
+    ILI9341_WriteData(0xC1);
+    ILI9341_WriteData(0x30);
+
+    /* Driver Timing Control A */
+    ILI9341_WriteCommand(ILI9341_DTCA);
+    ILI9341_WriteData(0x85);
+    ILI9341_WriteData(0x00);
+    ILI9341_WriteData(0x78);
+
+    /* Driver Timing Control B */
+    ILI9341_WriteCommand(ILI9341_DTCB);
+    ILI9341_WriteData(0x00);
+    ILI9341_WriteData(0x00);
+
+    /* Power On Sequence Control */
+    ILI9341_WriteCommand(ILI9341_POWER_SEQ);
+    ILI9341_WriteData(0x64);
+    ILI9341_WriteData(0x03);
+    ILI9341_WriteData(0x12);
+    ILI9341_WriteData(0x81);
+
+    /* Pump Ratio Control */
+    ILI9341_WriteCommand(ILI9341_PRC);
+    ILI9341_WriteData(0x20);
+
+    /* Power Control 1 */
+    ILI9341_WriteCommand(ILI9341_POWER1);
+    ILI9341_WriteData(0x23);
+
+    /* Power Control 2 */
+    ILI9341_WriteCommand(ILI9341_POWER2);
+    ILI9341_WriteData(0x10);
+
+    /* VCOM Control 1 */
+    ILI9341_WriteCommand(ILI9341_VCOM1);
+    ILI9341_WriteData(0x3E);
+    ILI9341_WriteData(0x28);
+
+    /* VCOM Control 2 */
+    ILI9341_WriteCommand(ILI9341_VCOM2);
+    ILI9341_WriteData(0x86);
+
+    /* Memory Access Control - Set orientation */
+    ILI9341_WriteCommand(ILI9341_MAC);
+    ILI9341_WriteData(0x08);  /* Portrait mode,z RGB order */
+
+    /* Pixel Format Set - 16 bits/pixel (RGB565) */
+    ILI9341_WriteCommand(ILI9341_PIXEL_FORMAT);
+    ILI9341_WriteData(0x55);  /* 16-bit for RGB and MCU interfaces */
+
+    /* Frame Rate Control */
+    ILI9341_WriteCommand(ILI9341_FRC);
+    ILI9341_WriteData(0x00);
+    ILI9341_WriteData(0x18);  /* 79Hz frame rate */
+
+    /* Display Function Control */
+    ILI9341_WriteCommand(ILI9341_DFC);
+    ILI9341_WriteData(0x08);
+    ILI9341_WriteData(0x82);
+    ILI9341_WriteData(0x27);
+
+    /* 3Gamma Function Disable */
+    ILI9341_WriteCommand(ILI9341_3GAMMA_EN);
+    ILI9341_WriteData(0x00);
+
+    /* Gamma Set */
+    ILI9341_WriteCommand(ILI9341_GAMMA);
+    ILI9341_WriteData(0x01);
+
+    /* Positive Gamma Correction */
+    ILI9341_WriteCommand(ILI9341_PGAMMA);
+    ILI9341_WriteData(0x0F);
+    ILI9341_WriteData(0x31);
+    ILI9341_WriteData(0x2B);
+    ILI9341_WriteData(0x0C);
+    ILI9341_WriteData(0x0E);
+    ILI9341_WriteData(0x08);
+    ILI9341_WriteData(0x4E);
+    ILI9341_WriteData(0xF1);
+    ILI9341_WriteData(0x37);
+    ILI9341_WriteData(0x07);
+    ILI9341_WriteData(0x10);
+    ILI9341_WriteData(0x03);
+    ILI9341_WriteData(0x0E);
+    ILI9341_WriteData(0x09);
+    ILI9341_WriteData(0x00);
+
+    /* Negative Gamma Correction */
+    ILI9341_WriteCommand(ILI9341_NGAMMA);
+    ILI9341_WriteData(0x00);
+    ILI9341_WriteData(0x0E);
+    ILI9341_WriteData(0x14);
+    ILI9341_WriteData(0x03);
+    ILI9341_WriteData(0x11);
+    ILI9341_WriteData(0x07);
+    ILI9341_WriteData(0x31);
+    ILI9341_WriteData(0xC1);
+    ILI9341_WriteData(0x48);
+    ILI9341_WriteData(0x08);
+    ILI9341_WriteData(0x0F);
+    ILI9341_WriteData(0x0C);
+    ILI9341_WriteData(0x31);
+    ILI9341_WriteData(0x36);
+    ILI9341_WriteData(0x0F);
+
+    /* Column Address Set (full width: 0-239) */
+    ILI9341_WriteCommand(ILI9341_COLUMN_ADDR);
+    ILI9341_WriteData(0x00);
+    ILI9341_WriteData(0x00);
+    ILI9341_WriteData(0x00);
+    ILI9341_WriteData(0xEF);  /* 239 */
+
+    /* Page Address Set (full height: 0-319) */
+    ILI9341_WriteCommand(ILI9341_PAGE_ADDR);
+    ILI9341_WriteData(0x00);
+    ILI9341_WriteData(0x00);
+    ILI9341_WriteData(0x01);
+    ILI9341_WriteData(0x3F);  /* 319 */
+
+    /* Interface Control - Enable RGB interface */
+    ILI9341_WriteCommand(ILI9341_INTERFACE);
+    ILI9341_WriteData(0x01);  /* System interface */
+    ILI9341_WriteData(0x00);
+    ILI9341_WriteData(0x06);  /* RGB interface, DE polarity */
+
+    /* RGB Interface Control */
+    ILI9341_WriteCommand(ILI9341_RGB_INTERFACE);
+    ILI9341_WriteData(0xC2);  /* RGB interface mode, DE polarity high */
+
+    /* Exit Sleep Mode */
+    ILI9341_WriteCommand(ILI9341_SLEEP_OUT);
+    HAL_Delay(120);  /* Wait for sleep out (required by datasheet) */
+
+    /* Display ON */
+    ILI9341_WriteCommand(ILI9341_DISPLAY_ON);
+    HAL_Delay(20);
+
+    /* Memory Write - Start receiving pixel data */
+    ILI9341_WriteCommand(ILI9341_GRAM);
+}
+
 /**
  * @brief Hardware initialization
  * @return HAL_StatusTypeDef: HAL status
  */
 HAL_StatusTypeDef LTDC_HW_Init(void) {
+    /*=========================================================================
+     * STEP 1: Initialize ILI9341 LCD Controller via SPI
+     * This is CRITICAL! The LCD won't display anything without this step.
+     *=======================================================================*/
+    ILI9341_Init();
+
     /* Enable LTDC clock */
     __HAL_RCC_LTDC_CLK_ENABLE();
 
-    /* Initialize LTDC MSP */
-    LTDC_MspInit(&hltdc);
+    /* Configure LTDC peripheral */
+    hltdc.Instance = LTDC;
+
+    /* Configure synchronous timings: signal polarities and timing parameters */
+    hltdc.Init.HSPolarity = LTDC_HSPOLARITY_AL;
+    hltdc.Init.VSPolarity = LTDC_VSPOLARITY_AL;
+    hltdc.Init.DEPolarity = LTDC_DEPOLARITY_AL;
+    hltdc.Init.PCPolarity = LTDC_PCPOLARITY_IPC;
+
+    /* Timing parameters for ILI9341 LCD controller */
+    hltdc.Init.HorizontalSync = (LTDC_HSYNC_WIDTH - 1);
+    hltdc.Init.VerticalSync = (LTDC_VSYNC_HEIGHT - 1);
+    hltdc.Init.AccumulatedHBP = (LTDC_HSYNC_WIDTH + LTDC_HBP_WIDTH - 1);
+    hltdc.Init.AccumulatedVBP = (LTDC_VSYNC_HEIGHT + LTDC_VBP_HEIGHT - 1);
+    hltdc.Init.AccumulatedActiveW = (LTDC_HSYNC_WIDTH + LTDC_HBP_WIDTH + LTDC_DISPLAY_WIDTH - 1);
+    hltdc.Init.AccumulatedActiveH = (LTDC_VSYNC_HEIGHT + LTDC_VBP_HEIGHT + LTDC_DISPLAY_HEIGHT - 1);
+    hltdc.Init.TotalWidth = (LTDC_HSYNC_WIDTH + LTDC_HBP_WIDTH + LTDC_DISPLAY_WIDTH + LTDC_HFP_WIDTH - 1);
+    hltdc.Init.TotalHeigh = (LTDC_VSYNC_HEIGHT + LTDC_VBP_HEIGHT + LTDC_DISPLAY_HEIGHT + LTDC_VFP_HEIGHT - 1);
+
+    /* Background color */
+    hltdc.Init.Backcolor.Blue = 0;
+    hltdc.Init.Backcolor.Green = 0;
+    hltdc.Init.Backcolor.Red = 0;
+
+    /* Initialize LTDC peripheral */
+    if (HAL_LTDC_Init(&hltdc) != HAL_OK) {
+        return HAL_ERROR;
+    }
+
+    /* Configure Layer 1 (background layer) for LVGL */
+    LTDC_LayerCfgTypeDef layerCfg = {0};
+    layerCfg.WindowX0 = 0;
+    /* HAL expects inclusive end positions: use width - 1 */
+    layerCfg.WindowX1 = LTDC_DISPLAY_WIDTH - 1;
+    layerCfg.WindowY0 = 0;
+    layerCfg.WindowY1 = LTDC_DISPLAY_HEIGHT - 1;
+    layerCfg.PixelFormat = LTDC_PIXEL_FORMAT_RGB565;
+    layerCfg.Alpha = 255;
+    layerCfg.Alpha0 = 0;
+    layerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_CA;
+    layerCfg.BlendingFactor2 = LTDC_BLENDING_FACTOR2_CA;
+    layerCfg.FBStartAdress = 0xD0000000; /* SDRAM Bank 2 framebuffer address */
+    layerCfg.ImageWidth = LTDC_DISPLAY_WIDTH;
+    layerCfg.ImageHeight = LTDC_DISPLAY_HEIGHT;
+    layerCfg.Backcolor.Blue = 0;
+    layerCfg.Backcolor.Green = 0;
+    layerCfg.Backcolor.Red = 0;
+
+    if (HAL_LTDC_ConfigLayer(&hltdc, &layerCfg, 0) != HAL_OK) {
+        return HAL_ERROR;
+    }
+
+    /* CRITICAL FIX: Enable Layer 1 - without this, the LCD stays black! */
+    __HAL_LTDC_LAYER_ENABLE(&hltdc, 0);
+    //__HAL_LTDC_RELOAD_IMMEDIATE_CONFIG(&hltdc);
+    __HAL_LTDC_RELOAD_CONFIG(&hltdc);  /* Reload at VSYNC, not immediately */
 
     return HAL_OK;
+}
+
+/**
+ * @brief Initialize LTDC MSP (wrapper for HAL_LTDC_MspInit)
+ * @param hltdc: Pointer to LTDC handle
+ */
+void LTDC_MspInit(LTDC_HandleTypeDef *hltdc) {
+    HAL_LTDC_MspInit(hltdc);
+}
+
+/**
+ * @brief De-initialize LTDC MSP (wrapper for HAL_LTDC_MspDeInit)
+ * @param hltdc: Pointer to LTDC handle
+ */
+void LTDC_MspDeInit(LTDC_HandleTypeDef *hltdc) {
+    HAL_LTDC_MspDeInit(hltdc);
 }
 
 /* Private Functions ---------------------------------------------------------*/

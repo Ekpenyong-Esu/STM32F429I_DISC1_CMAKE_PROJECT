@@ -24,6 +24,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "SEGGER_SYSVIEW.h"
+
 /* USER CODE END Includes */
 /**
   * @brief This function handles System tick timer.
@@ -57,6 +58,10 @@
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+/* Note: SysTick is reserved for FreeRTOS.
+ * HAL timebase uses TIM6 (see stm32f4xx_hal_timebase_tim.c)
+ * LVGL uses HAL_GetTick() via LV_TICK_CUSTOM */
 
 /* USER CODE END 0 */
 

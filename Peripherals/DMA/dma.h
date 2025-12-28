@@ -11,7 +11,7 @@
 #ifndef DMA_H
 #define DMA_H
 
-#include "stm32f4xx_hal.h"
+#include "stm32f4xx.h"
 #include <stdbool.h>
 
 /* DMA Data Size Definitions */

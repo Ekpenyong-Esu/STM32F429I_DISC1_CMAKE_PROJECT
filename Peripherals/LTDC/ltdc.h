@@ -28,12 +28,12 @@ extern "C" {
 #define LTDC_MAX_LAYERS             2       /*!< Maximum number of display layers */
 
 /* Timing parameters for ILI9341 LCD controller -----------------------------*/
-#define LTDC_HSYNC_WIDTH            9       /*!< Horizontal sync width */
-#define LTDC_VSYNC_HEIGHT           1       /*!< Vertical sync height */
-#define LTDC_HBP_WIDTH              29      /*!< Horizontal back porch */
-#define LTDC_VBP_HEIGHT             3       /*!< Vertical back porch */
-#define LTDC_HFP_WIDTH              2       /*!< Horizontal front porch */
-#define LTDC_VFP_HEIGHT             2       /*!< Vertical front porch */
+#define LTDC_HSYNC_WIDTH            10       /*!< Horizontal sync width */
+#define LTDC_VSYNC_HEIGHT           2       /*!< Vertical sync height */
+#define LTDC_HBP_WIDTH              20      /*!< Horizontal back porch */
+#define LTDC_VBP_HEIGHT             2       /*!< Vertical back porch */
+#define LTDC_HFP_WIDTH              10       /*!< Horizontal front porch */
+#define LTDC_VFP_HEIGHT             4       /*!< Vertical front porch */
 
 /* Memory allocation constants -----------------------------------------------*/
 #define LTDC_BYTES_PER_PIXEL_RGB565 2       /*!< Bytes per pixel for RGB565 format */

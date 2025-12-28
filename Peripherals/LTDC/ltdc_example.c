@@ -87,8 +87,9 @@ HAL_StatusTypeDef LTDC_ExamplesInit(void) {
         .framebufferAddress = framebuffer1,
         .windowX0 = 0,
         .windowY0 = 0,
-        .windowX1 = LTDC_DISPLAY_WIDTH,
-        .windowY1 = LTDC_DISPLAY_HEIGHT,
+        /* inclusive end coordinates */
+        .windowX1 = LTDC_DISPLAY_WIDTH - 1,
+        .windowY1 = LTDC_DISPLAY_HEIGHT - 1,
         .imageWidth = LTDC_DISPLAY_WIDTH,
         .imageHeight = LTDC_DISPLAY_HEIGHT,
         .pixelFormat = LTDC_PIXEL_FORMAT_RGB565_ENUM,

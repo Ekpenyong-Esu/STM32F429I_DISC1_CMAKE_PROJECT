@@ -47,8 +47,7 @@ extern "C" {
 #endif
 
 /* Includes ------------------------------------------------------------------*/
-#include "stm32f4xx_hal.h"           /**< STM32 HAL main header */
-#include "stm32f4xx_hal_dac.h"       /**< STM32 HAL DAC header */
+#include "stm32f4xx.h"                /**< STM32F4xx standard peripheral drivers */
 #include <stdint.h>                  /**< Standard integer types */
 #include <stdbool.h>                 /**< Standard boolean type */
 
