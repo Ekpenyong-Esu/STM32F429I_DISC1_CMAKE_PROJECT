@@ -59,8 +59,10 @@ HAL_StatusTypeDef LTDC_Driver_Init(LTDC_Driver_t *driver, LTDC_HandleTypeDef *hl
     driver->displayConfig.backgroundColor = LTDC_COLOR_BLACK;
     driver->displayConfig.hsyncActiveLow = true;
     driver->displayConfig.vsyncActiveLow = true;
-    driver->displayConfig.dataEnableActiveLow = false;
-    driver->displayConfig.pixelClockInverted = true;
+    /* Panel uses DE active LOW according to CubeMX / panel datasheet */
+    driver->displayConfig.dataEnableActiveLow = true;
+    /* Pixel clock: normal input (not inverted) */
+    driver->displayConfig.pixelClockInverted = false;
 
     /* Initialize layer configurations */
     for (uint8_t i = 0; i < LTDC_MAX_LAYERS; i++) {
@@ -126,13 +128,13 @@ HAL_StatusTypeDef LTDC_ConfigureDisplay(LTDC_Driver_t *driver, LTDC_DisplayConfi
     /* Configure LTDC timing parameters */
     driver->hltdc->Instance = LTDC;
 
-    /* Set signal polarities */
+    /* Set signal polarities from provided config (must match panel datasheet) */
     driver->hltdc->Init.HSPolarity = config->hsyncActiveLow ? LTDC_HSPOLARITY_AL : LTDC_HSPOLARITY_AH;
     driver->hltdc->Init.VSPolarity = config->vsyncActiveLow ? LTDC_VSPOLARITY_AL : LTDC_VSPOLARITY_AH;
-    driver->hltdc->Init.DEPolarity = config->dataEnableActiveLow ? LTDC_DEPOLARITY_AL : LTDC_DEPOLARITY_AH;
-    driver->hltdc->Init.PCPolarity = config->pixelClockInverted ? LTDC_PCPOLARITY_IPC : LTDC_PCPOLARITY_IIPC;
+    driver->hltdc->Init.DEPolarity  = config->dataEnableActiveLow ? LTDC_DEPOLARITY_AL : LTDC_DEPOLARITY_AH;
+    driver->hltdc->Init.PCPolarity  = config->pixelClockInverted ? LTDC_PCPOLARITY_IIPC : LTDC_PCPOLARITY_IPC;
 
-    /* Set timing parameters for STM32F429I-DISC1 */
+    // Set timing parameters for STM32F429I-DISC1 onboard LCD (ILI9341)
     driver->hltdc->Init.HorizontalSync = LTDC_HSYNC_WIDTH - 1;
     driver->hltdc->Init.VerticalSync = LTDC_VSYNC_HEIGHT - 1;
     driver->hltdc->Init.AccumulatedHBP = LTDC_HSYNC_WIDTH + LTDC_HBP_WIDTH - 1;
@@ -866,7 +868,7 @@ HAL_StatusTypeDef LTDC_HW_Init(void) {
     hltdc.Init.HSPolarity = LTDC_HSPOLARITY_AL;   // HSYNC active low
     hltdc.Init.VSPolarity = LTDC_VSPOLARITY_AL;   // VSYNC active low
     hltdc.Init.DEPolarity = LTDC_DEPOLARITY_AL;   // DE active low
-    hltdc.Init.PCPolarity = LTDC_PCPOLARITY_IPC;  // Pixel clock inverted
+    hltdc.Init.PCPolarity = LTDC_PCPOLARITY_IPC;  // Pixel clock not inverted (input pixel clock)
 
 
     // Timing parameters for STM32F429I-DISC1 LCD (RGB interface)

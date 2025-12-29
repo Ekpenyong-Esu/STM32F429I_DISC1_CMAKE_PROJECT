@@ -270,12 +270,14 @@ void HAL_LTDC_MspInit(LTDC_HandleTypeDef* hltdc)
   /** Initializes the peripherals clock
   */
     PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_LTDC;
-    /* Configure PLLSAI to generate 13MHz LTDC pixel clock */
-    /* System clock: 168 MHz, Input to PLLSAI: 2 MHz */
-    /* VCO = 2MHz * 208 = 416MHz */
-    /* PLLSAIR = 416MHz / 4 = 104MHz */
-    /* LTDC Clock = 104MHz / 8 = 13MHz (optimal for 240x320 LCD) */
-    PeriphClkInitStruct.PLLSAI.PLLSAIN = 208;
+    /* Configure PLLSAI to generate ~6.25MHz LTDC pixel clock for ILI9341 */
+    /* System clock: 168 MHz, assumed PLLSAI input: 2 MHz (HSE/PLL source)
+     * With current settings below: VCO = InputFreq * PLLSAIN = 2MHz * 96 = 192MHz
+     * PLLSAIR output = VCO / PLLSAIR = 192MHz / 4 = 48MHz
+     * LTDC Clock = PLLSAIR / PLLSAIDivR = 48MHz / 8 = 6.0MHz
+     * Adjust PLLSAIN/PLLSAIR/PLLSAIDivR if a different pixel clock is required by the panel.
+     */
+    PeriphClkInitStruct.PLLSAI.PLLSAIN = 96;
     PeriphClkInitStruct.PLLSAI.PLLSAIR = 4;
     PeriphClkInitStruct.PLLSAIDivR = RCC_PLLSAIDIVR_8;
     if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)

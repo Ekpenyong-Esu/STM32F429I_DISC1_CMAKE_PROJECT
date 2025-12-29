@@ -23,12 +23,12 @@ extern "C" {
 
 #if 0 /* (Legacy) ILI9341 timing parameters - not used */
 #endif
-#define LTDC_HSYNC_WIDTH            10       /*!< Horizontal sync width */
-#define LTDC_VSYNC_HEIGHT           2       /*!< Vertical sync height */
-#define LTDC_HBP_WIDTH              20      /*!< Horizontal back porch */
-#define LTDC_VBP_HEIGHT             2       /*!< Vertical back porch */
-#define LTDC_HFP_WIDTH              10       /*!< Horizontal front porch */
-#define LTDC_VFP_HEIGHT             4       /*!< Vertical front porch */
+#define LTDC_HSYNC_WIDTH            9        /*!< Horizontal sync width (from doc) */
+#define LTDC_VSYNC_HEIGHT           1        /*!< Vertical sync height (from doc) */
+#define LTDC_HBP_WIDTH              29       /*!< Horizontal back porch (from doc) */
+#define LTDC_VBP_HEIGHT             3        /*!< Vertical back porch (from doc) */
+#define LTDC_HFP_WIDTH              2        /*!< Horizontal front porch (from doc) */
+#define LTDC_VFP_HEIGHT             2        /*!< Vertical front porch (from doc) */
 
 /* Memory allocation constants -----------------------------------------------*/
 #define LTDC_BYTES_PER_PIXEL_RGB565 2       /*!< Bytes per pixel for RGB565 format */
