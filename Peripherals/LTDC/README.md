@@ -1,17 +1,14 @@
-# LTDC Driver for STM32F429 Discovery Board
+# LTDC (RGB) Driver for STM32F429 Discovery Board
 
-This driver provides comprehensive control for the LCD-TFT Display Controller (LTDC) on the STM32F429 Discovery board, including display initialization, layer management, framebuffer control, and advanced drawing functions.
+This folder contains a minimal, clean driver for the STM32F429 LTDC (RGB interface) peripheral. It provides display initialization, layer management, framebuffer control, and a minimal pixel drawing API. All SPI/ILI9341 logic is excluded—this is for pure LTDC (RGB) only.
 
 ## Features
 
-- **Display Control**: Complete LTDC initialization and configuration
-- **Multi-Layer Support**: Up to 2 hardware layers with alpha blending
-- **Multiple Pixel Formats**: RGB565, RGB888, ARGB8888, and more
-- **Drawing Primitives**: Pixels, lines, rectangles, circles
-- **Color Management**: Color space conversions and palette support
-- **Framebuffer Operations**: Memory management and double buffering
-- **Hardware Acceleration**: Direct framebuffer access for performance
-- **Error Handling**: Comprehensive error detection and recovery
+- Simple LTDC (RGB) initialization and configuration
+- Double-buffered framebuffer management (see fb_manager)
+- Minimal pixel drawing (no complex shapes/fonts)
+- Layer/window configuration
+- No SPI/ILI9341 or non-LTDC code
 
 ## Hardware Configuration
 
@@ -21,14 +18,11 @@ This driver provides comprehensive control for the LCD-TFT Display Controller (L
 |---------------|-------|
 | Display Size  | 2.4" TFT LCD |
 | Resolution    | 240 x 320 pixels |
-| Controller    | ILI9341 |
 | Interface     | LTDC (RGB) |
 | Colors        | 16.7M (24-bit) |
 | Orientation   | Portrait/Landscape |
 
-### GPIO Pin Configuration
-
-The LTDC uses multiple GPIO pins for RGB data, control signals, and backlight:
+### GPIO Pin Configuration (LTDC only)
 
 ```c
 // RGB Data Lines (24-bit)

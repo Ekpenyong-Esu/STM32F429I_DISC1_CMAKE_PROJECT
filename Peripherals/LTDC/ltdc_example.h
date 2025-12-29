@@ -39,55 +39,10 @@ HAL_StatusTypeDef LTDC_LayerExample(void);
  * @details Demonstrates various drawing primitives (pixels, lines, shapes)
  * @return HAL_StatusTypeDef: HAL status
  */
-HAL_StatusTypeDef LTDC_DrawingExample(void);
 
-/**
- * @brief Color and pixel format example
- * @details Demonstrates different pixel formats and color conversions
- * @return HAL_StatusTypeDef: HAL status
- */
+/* Minimal example set: keep only the essential demos */
 HAL_StatusTypeDef LTDC_ColorFormatExample(void);
-
-/**
- * @brief Framebuffer management example
- * @details Demonstrates framebuffer operations and memory management
- * @return HAL_StatusTypeDef: HAL status
- */
 HAL_StatusTypeDef LTDC_FramebufferExample(void);
-
-/**
- * @brief Animation and graphics example
- * @details Demonstrates animated graphics and advanced drawing techniques
- * @return HAL_StatusTypeDef: HAL status
- */
-HAL_StatusTypeDef LTDC_AnimationExample(void);
-
-/**
- * @brief Text display example
- * @details Demonstrates text rendering and font display
- * @return HAL_StatusTypeDef: HAL status
- */
-HAL_StatusTypeDef LTDC_TextExample(void);
-
-/**
- * @brief Performance test example
- * @details Performance testing and optimization techniques
- * @return HAL_StatusTypeDef: HAL status
- */
-HAL_StatusTypeDef LTDC_PerformanceExample(void);
-
-/**
- * @brief Memory optimization example
- * @details Demonstrates memory-efficient graphics techniques
- * @return HAL_StatusTypeDef: HAL status
- */
-HAL_StatusTypeDef LTDC_MemoryOptimizationExample(void);
-
-/**
- * @brief Error handling example
- * @details Demonstrates error detection and recovery procedures
- * @return HAL_StatusTypeDef: HAL status
- */
 HAL_StatusTypeDef LTDC_ErrorHandlingExample(void);
 
 /* Helper function prototypes -----------------------------------------------*/
@@ -117,20 +72,7 @@ void LTDC_WaitForInput(void);
  */
 void LTDC_ExamplesCleanup(void);
 
-/**
- * @brief Allocate framebuffer memory
- * @details Allocates memory for framebuffer based on format
- * @param format: Pixel format
- * @return uint32_t: Framebuffer address (0 if failed)
- */
-uint32_t LTDC_AllocateFramebuffer(LTDC_PixelFormat_t format);
-
-/**
- * @brief Free framebuffer memory
- * @details Frees previously allocated framebuffer memory
- * @param address: Framebuffer address
- */
-void LTDC_FreeFramebuffer(uint32_t address);
+/* Framebuffer allocation/free handled by fb_manager; not provided here. */
 
 /**
  * @brief Generate test pattern

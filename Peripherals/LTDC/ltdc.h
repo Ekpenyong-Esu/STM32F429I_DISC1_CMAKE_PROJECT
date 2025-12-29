@@ -1,13 +1,7 @@
 /**
  * @file ltdc.h
- * @brief LTDC (LCD-TFT Display Controller) driver for STM32F429 Discovery board
- * @details This file provides a comprehensive interface for controlling the
- *          LCD-TFT Display Controller on the STM32F429 Discovery board.
- *          Features include display initialization, layer management,
- *          framebuffer control, and various drawing functions.
- * @version 1.0
- * @date 2025-09-03
- * @author STM32 Team
+ * @brief Minimal LTDC (RGB interface) driver for STM32F429 Discovery board
+ * @details Pure LTDC (RGB) logic: display init, layer management, framebuffer, minimal pixel drawing. No SPI/ILI9341 or non-LTDC code.
  */
 
 #ifndef LTDC_H
@@ -27,7 +21,8 @@ extern "C" {
 #define LTDC_DISPLAY_HEIGHT         320     /*!< Display height in pixels */
 #define LTDC_MAX_LAYERS             2       /*!< Maximum number of display layers */
 
-/* Timing parameters for ILI9341 LCD controller -----------------------------*/
+#if 0 /* (Legacy) ILI9341 timing parameters - not used */
+#endif
 #define LTDC_HSYNC_WIDTH            10       /*!< Horizontal sync width */
 #define LTDC_VSYNC_HEIGHT           2       /*!< Vertical sync height */
 #define LTDC_HBP_WIDTH              20      /*!< Horizontal back porch */
@@ -66,6 +61,7 @@ extern "C" {
 #define LTDC_ERROR_MEMORY_ALLOC     0x04    /*!< Memory allocation failed */
 #define LTDC_ERROR_INVALID_LAYER    0x05    /*!< Invalid layer number */
 #define LTDC_ERROR_FRAMEBUFFER      0x06    /*!< Framebuffer error */
+
 
 /* Data Types ----------------------------------------------------------------*/
 
@@ -136,18 +132,7 @@ typedef struct {
     uint32_t errorCode;                     /*!< Last error code */
 } LTDC_Driver_t;
 
-/**
- * @brief Drawing context structure
- */
-typedef struct {
-    uint32_t *framebuffer;                  /*!< Framebuffer pointer */
-    uint16_t width;                         /*!< Drawing area width */
-    uint16_t height;                        /*!< Drawing area height */
-    LTDC_PixelFormat_t pixelFormat;         /*!< Pixel format */
-    uint32_t foregroundColor;               /*!< Foreground color */
-    uint32_t backgroundColor;               /*!< Background color */
-    uint8_t layer;                          /*!< Target layer */
-} LTDC_DrawContext_t;
+
 
 /**
  * @brief Rectangle structure
@@ -189,16 +174,12 @@ HAL_StatusTypeDef LTDC_ClearFramebuffer(LTDC_Driver_t *driver, uint8_t layer, ui
 HAL_StatusTypeDef LTDC_FillFramebuffer(LTDC_Driver_t *driver, uint8_t layer, uint32_t color);
 HAL_StatusTypeDef LTDC_CopyFramebuffer(LTDC_Driver_t *driver, uint8_t srcLayer, uint8_t dstLayer);
 
-/* Drawing functions */
+/* Drawing functions (simplified)
+ * Note: Higher level drawing (lines, shapes, fonts) should be done in
+ * application code or by a GUI library (LVGL). Keeping only a minimal
+ * pixel write helper keeps this driver simple and correct.
+ */
 HAL_StatusTypeDef LTDC_DrawPixel(LTDC_Driver_t *driver, uint16_t x, uint16_t y, uint32_t color);
-HAL_StatusTypeDef LTDC_DrawLine(LTDC_Driver_t *driver, LTDC_Point_t start, LTDC_Point_t end, uint32_t color);
-HAL_StatusTypeDef LTDC_DrawRectangle(LTDC_Driver_t *driver, LTDC_Rect_t *rect, uint32_t color, bool filled);
-HAL_StatusTypeDef LTDC_DrawCircle(LTDC_Driver_t *driver, LTDC_Point_t center, uint16_t radius, uint32_t color, bool filled);
-HAL_StatusTypeDef LTDC_DrawBitmap(LTDC_Driver_t *driver, uint16_t x, uint16_t y, uint16_t width, uint16_t height, const uint8_t *bitmap);
-
-/* Text drawing functions */
-HAL_StatusTypeDef LTDC_DrawChar(LTDC_Driver_t *driver, uint16_t x, uint16_t y, char character, uint32_t color);
-HAL_StatusTypeDef LTDC_DrawString(LTDC_Driver_t *driver, uint16_t x, uint16_t y, const char *string, uint32_t color);
 
 /* Display control functions */
 HAL_StatusTypeDef LTDC_SetBackgroundColor(LTDC_Driver_t *driver, uint32_t color);

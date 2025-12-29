@@ -1,5 +1,5 @@
 /* fb_manager.h
- * Framebuffer manager for LTDC + LVGL
+ * Minimal framebuffer manager for LTDC (RGB only)
  * Provides double-buffer allocation and VSYNC-safe swap helpers.
  */
 #ifndef FB_MANAGER_H

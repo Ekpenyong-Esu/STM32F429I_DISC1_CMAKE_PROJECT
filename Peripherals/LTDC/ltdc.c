@@ -1,62 +1,17 @@
+
 /**
  * @file ltdc.c
- * @brief LTDC (LCD-TFT Display Controller) driver implementation for STM32F429 Discovery board
- * @details This file provides the implementation for controlling the LCD-TFT
- *          Display Controller on the STM32F429 Discovery board. Features include
- *          display initialization, layer management, framebuffer control, and
- *          various drawing functions.
- * @version 1.0
- * @date 2025-09-03
- * @author STM32 Team
+ * @brief Minimal LTDC (RGB interface) driver for STM32F429I Discovery
+ * @details Pure LTDC (RGB) logic: display init, layer management, framebuffer, minimal pixel drawing. No SPI/ILI9341 or non-LTDC code.
  */
 
 /* Includes ------------------------------------------------------------------*/
 #include "ltdc.h"
 #include <stdlib.h>
 #include <string.h>
-#include <math.h>
 #include "stm32f4xx_hal.h"
 
-/*=============================================================================
- * ILI9341 LCD Controller Definitions (SPI Interface)
- *===========================================================================*/
-/* ILI9341 Commands */
-#define ILI9341_RESET               0x01
-#define ILI9341_SLEEP_OUT           0x11
-#define ILI9341_GAMMA               0x26
-#define ILI9341_DISPLAY_OFF         0x28
-#define ILI9341_DISPLAY_ON          0x29
-#define ILI9341_COLUMN_ADDR         0x2A
-#define ILI9341_PAGE_ADDR           0x2B
-#define ILI9341_GRAM                0x2C
-#define ILI9341_MAC                 0x36
-#define ILI9341_PIXEL_FORMAT        0x3A
-#define ILI9341_WDB                 0x51
-#define ILI9341_WCD                 0x53
-#define ILI9341_RGB_INTERFACE       0xB0
-#define ILI9341_FRC                 0xB1
-#define ILI9341_BPC                 0xB5
-#define ILI9341_DFC                 0xB6
-#define ILI9341_POWER1              0xC0
-#define ILI9341_POWER2              0xC1
-#define ILI9341_VCOM1               0xC5
-#define ILI9341_VCOM2               0xC7
-#define ILI9341_POWERA              0xCB
-#define ILI9341_POWERB              0xCF
-#define ILI9341_PGAMMA              0xE0
-#define ILI9341_NGAMMA              0xE1
-#define ILI9341_DTCA                0xE8
-#define ILI9341_DTCB                0xEA
-#define ILI9341_POWER_SEQ           0xED
-#define ILI9341_3GAMMA_EN           0xF2
-#define ILI9341_INTERFACE           0xF6
-#define ILI9341_PRC                 0xF7
 
-/* ILI9341 SPI GPIO Pins (STM32F429I-DISC1) */
-#define ILI9341_WRX_PIN             GPIO_PIN_13
-#define ILI9341_WRX_PORT            GPIOD
-#define ILI9341_CS_PIN              GPIO_PIN_2
-#define ILI9341_CS_PORT             GPIOC
 
 /* Private defines -----------------------------------------------------------*/
 #define LTDC_TIMEOUT                5000    /*!< Timeout for LTDC operations */
@@ -64,15 +19,10 @@
 #define LTDC_MAX_ALPHA              255     /*!< Maximum alpha value */
 #define LTDC_DEFAULT_BRIGHTNESS     100     /*!< Default brightness percentage */
 
-/* Private variables ---------------------------------------------------------*/
-LTDC_HandleTypeDef hltdc;                   /*!< LTDC HAL handle */
-static SPI_HandleTypeDef hspi_lcd;          /*!< SPI handle for ILI9341 */
 
-/* ILI9341 SPI Helper Functions - Forward Declarations */
-static void ILI9341_SPI_Init(void);
-static void ILI9341_WriteCommand(uint8_t cmd);
-static void ILI9341_WriteData(uint8_t data);
-static void ILI9341_Init(void);
+LTDC_HandleTypeDef hltdc;                   /*!< LTDC HAL handle */
+
+
 
 /* Private function prototypes -----------------------------------------------*/
 static HAL_StatusTypeDef LTDC_ValidateDriver(LTDC_Driver_t *driver);
@@ -80,11 +30,10 @@ static HAL_StatusTypeDef LTDC_ValidateLayer(uint8_t layer);
 static HAL_StatusTypeDef LTDC_ValidateCoordinates(uint16_t x, uint16_t y);
 static HAL_StatusTypeDef LTDC_ValidateRect(LTDC_Rect_t *rect);
 static uint32_t LTDC_GetPixelFormatHAL(LTDC_PixelFormat_t format);
-static LTDC_PixelFormat_t LTDC_GetPixelFormatDriver(uint32_t halFormat);
-static void LTDC_SetPixel(uint32_t *framebuffer, uint16_t x, uint16_t y, uint32_t color, LTDC_PixelFormat_t format);
-static uint32_t LTDC_GetPixel(uint32_t *framebuffer, uint16_t x, uint16_t y, LTDC_PixelFormat_t format);
-static void LTDC_DrawHorizontalLine(LTDC_Driver_t *driver, uint16_t x, uint16_t y, uint16_t length, uint32_t color);
-static void LTDC_DrawVerticalLine(LTDC_Driver_t *driver, uint16_t x, uint16_t y, uint16_t length, uint32_t color);
+
+/* Minimal helper: set a pixel by index in framebuffer (row-major) */
+static void LTDC_SetPixelByIndex(uint8_t *fbBase, uint32_t index, uint32_t color, LTDC_PixelFormat_t format);
+
 
 /* Public Functions ----------------------------------------------------------*/
 
@@ -288,10 +237,9 @@ HAL_StatusTypeDef LTDC_EnableLayer(LTDC_Driver_t *driver, uint8_t layer) {
 
     /* Enable layer */
     __HAL_LTDC_LAYER_ENABLE(driver->hltdc, layer);
-    __HAL_LTDC_RELOAD_IMMEDIATE_CONFIG(driver->hltdc);
+    __HAL_LTDC_RELOAD_CONFIG(driver->hltdc);
 
     driver->layers[layer].enabled = true;
-
     return HAL_OK;
 }
 
@@ -309,10 +257,9 @@ HAL_StatusTypeDef LTDC_DisableLayer(LTDC_Driver_t *driver, uint8_t layer) {
 
     /* Disable layer */
     __HAL_LTDC_LAYER_DISABLE(driver->hltdc, layer);
-    __HAL_LTDC_RELOAD_IMMEDIATE_CONFIG(driver->hltdc);
+    __HAL_LTDC_RELOAD_CONFIG(driver->hltdc);
 
     driver->layers[layer].enabled = false;
-
     return HAL_OK;
 }
 
@@ -373,17 +320,51 @@ HAL_StatusTypeDef LTDC_SetLayerPosition(LTDC_Driver_t *driver, uint8_t layer, ui
         return HAL_ERROR;
     }
 
-    /* Calculate new window coordinates */
-    uint16_t width = driver->layers[layer].windowX1 - driver->layers[layer].windowX0;
-    uint16_t height = driver->layers[layer].windowY1 - driver->layers[layer].windowY0;
+    /* Calculate width/height (inclusive coordinates stored in windowX1/windowY1) */
+    uint16_t width = (driver->layers[layer].windowX1 - driver->layers[layer].windowX0) + 1;
+    uint16_t height = (driver->layers[layer].windowY1 - driver->layers[layer].windowY0) + 1;
 
-    /* Set layer window position */
-    HAL_StatusTypeDef status = HAL_LTDC_SetWindowPosition(driver->hltdc, x, y, layer);
+    /* Build HAL layer configuration from current layer and update window coordinates */
+    LTDC_LayerCfgTypeDef layerCfg = {0};
+    layerCfg.WindowX0 = x;
+    layerCfg.WindowX1 = x + width - 1;
+    layerCfg.WindowY0 = y;
+    layerCfg.WindowY1 = y + height - 1;
+    layerCfg.PixelFormat = LTDC_GetPixelFormatHAL(driver->layers[layer].pixelFormat);
+    layerCfg.Alpha = driver->layers[layer].alpha;
+    layerCfg.Alpha0 = driver->layers[layer].alpha0;
+
+    /* preserve blending factors depending on blend mode */
+    switch (driver->layers[layer].blendMode) {
+        case LTDC_BLEND_CONSTANT_ALPHA:
+            layerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_CA;
+            layerCfg.BlendingFactor2 = LTDC_BLENDING_FACTOR2_CA;
+            break;
+        case LTDC_BLEND_PIXEL_ALPHA:
+            layerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_PAxCA;
+            layerCfg.BlendingFactor2 = LTDC_BLENDING_FACTOR2_PAxCA;
+            break;
+        default:
+            layerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_CA;
+            layerCfg.BlendingFactor2 = LTDC_BLENDING_FACTOR2_CA;
+            break;
+    }
+
+    layerCfg.FBStartAdress = driver->layers[layer].framebufferAddress;
+    layerCfg.ImageWidth = driver->layers[layer].imageWidth;
+    layerCfg.ImageHeight = driver->layers[layer].imageHeight;
+    layerCfg.Backcolor.Blue = (driver->layers[layer].backgroundColor) & 0xFF;
+    layerCfg.Backcolor.Green = (driver->layers[layer].backgroundColor >> 8) & 0xFF;
+    layerCfg.Backcolor.Red = (driver->layers[layer].backgroundColor >> 16) & 0xFF;
+
+    HAL_StatusTypeDef status = HAL_LTDC_ConfigLayer(driver->hltdc, &layerCfg, layer);
     if (status == HAL_OK) {
-        driver->layers[layer].windowX0 = x;
-        driver->layers[layer].windowY0 = y;
-        driver->layers[layer].windowX1 = x + width;
-        driver->layers[layer].windowY1 = y + height;
+        driver->layers[layer].windowX0 = layerCfg.WindowX0;
+        driver->layers[layer].windowY0 = layerCfg.WindowY0;
+        driver->layers[layer].windowX1 = layerCfg.WindowX1;
+        driver->layers[layer].windowY1 = layerCfg.WindowY1;
+    } else {
+        driver->errorCode = LTDC_ERROR_LAYER_CONFIG;
     }
 
     return status;
@@ -403,17 +384,49 @@ HAL_StatusTypeDef LTDC_SetLayerWindow(LTDC_Driver_t *driver, uint8_t layer, LTDC
         return HAL_ERROR;
     }
 
-    /* Set layer window size */
-    HAL_StatusTypeDef status = HAL_LTDC_SetWindowSize(driver->hltdc, window->width, window->height, layer);
+    /* Build layer config and apply */
+    LTDC_LayerCfgTypeDef layerCfg = {0};
+    layerCfg.WindowX0 = window->x;
+    layerCfg.WindowX1 = window->x + window->width - 1; /* inclusive */
+    layerCfg.WindowY0 = window->y;
+    layerCfg.WindowY1 = window->y + window->height - 1; /* inclusive */
+    layerCfg.PixelFormat = LTDC_GetPixelFormatHAL(driver->layers[layer].pixelFormat);
+    layerCfg.Alpha = driver->layers[layer].alpha;
+    layerCfg.Alpha0 = driver->layers[layer].alpha0;
+
+    switch (driver->layers[layer].blendMode) {
+        case LTDC_BLEND_CONSTANT_ALPHA:
+            layerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_CA;
+            layerCfg.BlendingFactor2 = LTDC_BLENDING_FACTOR2_CA;
+            break;
+        case LTDC_BLEND_PIXEL_ALPHA:
+            layerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_PAxCA;
+            layerCfg.BlendingFactor2 = LTDC_BLENDING_FACTOR2_PAxCA;
+            break;
+        default:
+            layerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_CA;
+            layerCfg.BlendingFactor2 = LTDC_BLENDING_FACTOR2_CA;
+            break;
+    }
+
+    layerCfg.FBStartAdress = driver->layers[layer].framebufferAddress;
+    layerCfg.ImageWidth = window->width;
+    layerCfg.ImageHeight = window->height;
+
+    layerCfg.Backcolor.Blue = (driver->layers[layer].backgroundColor) & 0xFF;
+    layerCfg.Backcolor.Green = (driver->layers[layer].backgroundColor >> 8) & 0xFF;
+    layerCfg.Backcolor.Red = (driver->layers[layer].backgroundColor >> 16) & 0xFF;
+
+    HAL_StatusTypeDef status = HAL_LTDC_ConfigLayer(driver->hltdc, &layerCfg, layer);
     if (status == HAL_OK) {
-        /* Update position */
-        status = HAL_LTDC_SetWindowPosition(driver->hltdc, window->x, window->y, layer);
-        if (status == HAL_OK) {
-            driver->layers[layer].windowX0 = window->x;
-            driver->layers[layer].windowY0 = window->y;
-            driver->layers[layer].windowX1 = window->x + window->width;
-            driver->layers[layer].windowY1 = window->y + window->height;
-        }
+        driver->layers[layer].windowX0 = layerCfg.WindowX0;
+        driver->layers[layer].windowY0 = layerCfg.WindowY0;
+        driver->layers[layer].windowX1 = layerCfg.WindowX1;
+        driver->layers[layer].windowY1 = layerCfg.WindowY1;
+        driver->layers[layer].imageWidth = layerCfg.ImageWidth;
+        driver->layers[layer].imageHeight = layerCfg.ImageHeight;
+    } else {
+        driver->errorCode = LTDC_ERROR_LAYER_CONFIG;
     }
 
     return status;
@@ -589,145 +602,35 @@ HAL_StatusTypeDef LTDC_DrawPixel(LTDC_Driver_t *driver, uint16_t x, uint16_t y, 
     }
 
     uint8_t layer = driver->activeLayer;
-    if (driver->layers[layer].framebufferAddress == 0) {
+    LTDC_LayerConfig_t *l = &driver->layers[layer];
+    if (l->framebufferAddress == 0) {
         driver->errorCode = LTDC_ERROR_FRAMEBUFFER;
         return HAL_ERROR;
     }
 
-    uint32_t *framebuffer = (uint32_t *)driver->layers[layer].framebufferAddress;
-    LTDC_SetPixel(framebuffer, x, y, color, driver->layers[layer].pixelFormat);
-
-    return HAL_OK;
-}
-
-/**
- * @brief Draw line between two points
- * @param driver: Pointer to LTDC driver structure
- * @param start: Start point
- * @param end: End point
- * @param color: Line color
- * @return HAL_StatusTypeDef: HAL status
- */
-HAL_StatusTypeDef LTDC_DrawLine(LTDC_Driver_t *driver, LTDC_Point_t start, LTDC_Point_t end, uint32_t color) {
-    if (LTDC_ValidateDriver(driver) != HAL_OK ||
-        LTDC_ValidateCoordinates(start.x, start.y) != HAL_OK ||
-        LTDC_ValidateCoordinates(end.x, end.y) != HAL_OK) {
+    /* Ensure pixel is inside layer window */
+    if (x < l->windowX0 || x > l->windowX1 || y < l->windowY0 || y > l->windowY1) {
         driver->errorCode = LTDC_ERROR_INVALID_PARAM;
         return HAL_ERROR;
     }
 
-    /* Bresenham's line algorithm */
-    int16_t dx = abs(end.x - start.x);
-    int16_t dy = abs(end.y - start.y);
-    int16_t sx = (start.x < end.x) ? 1 : -1;
-    int16_t sy = (start.y < end.y) ? 1 : -1;
-    int16_t err = dx - dy;
+    /* Compute index within the image buffer (row-major) */
+    uint32_t ix = x - l->windowX0;
+    uint32_t iy = y - l->windowY0;
+    uint32_t index = iy * l->imageWidth + ix;
 
-    int16_t x = start.x;
-    int16_t y = start.y;
-
-    while (true) {
-        LTDC_DrawPixel(driver, x, y, color);
-
-        if (x == end.x && y == end.y) {
-            break;
-        }
-
-        int16_t e2 = 2 * err;
-        if (e2 > -dy) {
-            err -= dy;
-            x += sx;
-        }
-        if (e2 < dx) {
-            err += dx;
-            y += sy;
-        }
-    }
+    uint8_t *fbBase = (uint8_t *)(uintptr_t)l->framebufferAddress;
+    LTDC_SetPixelByIndex(fbBase, index, color, l->pixelFormat);
 
     return HAL_OK;
 }
 
-/**
- * @brief Draw rectangle
- * @param driver: Pointer to LTDC driver structure
- * @param rect: Pointer to rectangle structure
- * @param color: Rectangle color
- * @param filled: true for filled rectangle, false for outline
- * @return HAL_StatusTypeDef: HAL status
+/* Removed complex drawing helpers to keep LTDC driver small and focused.
+ * Complex drawing (lines, rectangles, circles, fonts, bitmaps) should be
+ * implemented in application code or a GUI library (e.g., LVGL). This
+ * reduces driver size and keeps the LTDC module correct and maintainable.
  */
-HAL_StatusTypeDef LTDC_DrawRectangle(LTDC_Driver_t *driver, LTDC_Rect_t *rect, uint32_t color, bool filled) {
-    if (LTDC_ValidateDriver(driver) != HAL_OK || LTDC_ValidateRect(rect) != HAL_OK) {
-        driver->errorCode = LTDC_ERROR_INVALID_PARAM;
-        return HAL_ERROR;
-    }
 
-    if (filled) {
-        /* Fill rectangle */
-        for (uint16_t y = rect->y; y < (rect->y + rect->height); y++) {
-            LTDC_DrawHorizontalLine(driver, rect->x, y, rect->width, color);
-        }
-    } else {
-        /* Draw rectangle outline */
-        LTDC_DrawHorizontalLine(driver, rect->x, rect->y, rect->width, color);
-        LTDC_DrawHorizontalLine(driver, rect->x, rect->y + rect->height - 1, rect->width, color);
-        LTDC_DrawVerticalLine(driver, rect->x, rect->y, rect->height, color);
-        LTDC_DrawVerticalLine(driver, rect->x + rect->width - 1, rect->y, rect->height, color);
-    }
-
-    return HAL_OK;
-}
-
-/**
- * @brief Draw circle
- * @param driver: Pointer to LTDC driver structure
- * @param center: Circle center point
- * @param radius: Circle radius
- * @param color: Circle color
- * @param filled: true for filled circle, false for outline
- * @return HAL_StatusTypeDef: HAL status
- */
-HAL_StatusTypeDef LTDC_DrawCircle(LTDC_Driver_t *driver, LTDC_Point_t center, uint16_t radius, uint32_t color, bool filled) {
-    if (LTDC_ValidateDriver(driver) != HAL_OK ||
-        LTDC_ValidateCoordinates(center.x, center.y) != HAL_OK) {
-        driver->errorCode = LTDC_ERROR_INVALID_PARAM;
-        return HAL_ERROR;
-    }
-
-    /* Midpoint circle algorithm */
-    int16_t x = 0;
-    int16_t y = radius;
-    int16_t d = 1 - radius;
-
-    while (x <= y) {
-        if (filled) {
-            /* Draw horizontal lines for filled circle */
-            LTDC_DrawHorizontalLine(driver, center.x - x, center.y + y, 2 * x + 1, color);
-            LTDC_DrawHorizontalLine(driver, center.x - x, center.y - y, 2 * x + 1, color);
-            LTDC_DrawHorizontalLine(driver, center.x - y, center.y + x, 2 * y + 1, color);
-            LTDC_DrawHorizontalLine(driver, center.x - y, center.y - x, 2 * y + 1, color);
-        } else {
-            /* Draw circle outline */
-            LTDC_DrawPixel(driver, center.x + x, center.y + y, color);
-            LTDC_DrawPixel(driver, center.x - x, center.y + y, color);
-            LTDC_DrawPixel(driver, center.x + x, center.y - y, color);
-            LTDC_DrawPixel(driver, center.x - x, center.y - y, color);
-            LTDC_DrawPixel(driver, center.x + y, center.y + x, color);
-            LTDC_DrawPixel(driver, center.x - y, center.y + x, color);
-            LTDC_DrawPixel(driver, center.x + y, center.y - x, color);
-            LTDC_DrawPixel(driver, center.x - y, center.y - x, color);
-        }
-
-        if (d < 0) {
-            d += 2 * x + 3;
-        } else {
-            d += 2 * (x - y) + 5;
-            y--;
-        }
-        x++;
-    }
-
-    return HAL_OK;
-}
 
 /**
  * @brief Set background color
@@ -741,18 +644,16 @@ HAL_StatusTypeDef LTDC_SetBackgroundColor(LTDC_Driver_t *driver, uint32_t color)
         return HAL_ERROR;
     }
 
-    /* Set background color */
-    LTDC_ColorTypeDef bgColor;
-    bgColor.Blue = (color) & 0xFF;
-    bgColor.Green = (color >> 8) & 0xFF;
-    bgColor.Red = (color >> 16) & 0xFF;
+    uint32_t blue = (color) & 0xFF;
+    uint32_t green = (color >> 8) & 0xFF;
+    uint32_t red = (color >> 16) & 0xFF;
 
-    HAL_StatusTypeDef status = HAL_LTDC_ConfigCLUT(driver->hltdc, &bgColor, 1, 0);
-    if (status == HAL_OK) {
-        driver->displayConfig.backgroundColor = color;
-    }
+    /* Write directly to LTDC background color register (BCCR) */
+    driver->hltdc->Instance->BCCR = (red << 16) | (green << 8) | blue;
+    __HAL_LTDC_RELOAD_CONFIG(driver->hltdc);
 
-    return status;
+    driver->displayConfig.backgroundColor = color;
+    return HAL_OK;
 }
 
 /**
@@ -789,6 +690,28 @@ HAL_StatusTypeDef LTDC_DisplayOff(LTDC_Driver_t *driver) {
     return HAL_OK;
 }
 
+/**
+ * @brief Set display brightness (platform dependent; default stub)
+ * @param driver: Pointer to LTDC driver structure
+ * @param brightness: Brightness percent (0-100)
+ * @return HAL_StatusTypeDef: HAL status
+ */
+HAL_StatusTypeDef LTDC_SetDisplayBrightness(LTDC_Driver_t *driver, uint8_t brightness) {
+    if (LTDC_ValidateDriver(driver) != HAL_OK) {
+        return HAL_ERROR;
+    }
+
+    if (brightness > 100) {
+        return HAL_ERROR;
+    }
+
+    /* Platform-specific: hook up to PWM/backlight if available. For now, store nothing and return OK. */
+    (void)driver;
+    (void)brightness;
+
+    return HAL_OK;
+}
+
 /* Utility Functions ---------------------------------------------------------*/
 
 /**
@@ -804,7 +727,7 @@ uint32_t LTDC_ConvertColor(uint32_t color, LTDC_PixelFormat_t fromFormat, LTDC_P
     }
 
     /* Convert to RGB888 as intermediate format */
-    uint32_t rgb888;
+    uint32_t rgb888 = 0U; /* initialize to silence static analysis */
 
     switch (fromFormat) {
         case LTDC_PIXEL_FORMAT_RGB565_ENUM:
@@ -923,275 +846,15 @@ HAL_StatusTypeDef LTDC_ClearError(LTDC_Driver_t *driver) {
     return HAL_OK;
 }
 
-/*=============================================================================
- * ILI9341 LCD Controller SPI Initialization (CRITICAL FOR DISPLAY!)
- *===========================================================================*/
 
-/**
- * @brief Initialize SPI5 for ILI9341 LCD controller communication
- * @note  STM32F429I-DISC1 uses SPI5 for LCD communication
- */
-static void ILI9341_SPI_Init(void)
-{
-    /* Enable GPIO clocks for SPI5 and control pins */
-    __HAL_RCC_GPIOC_CLK_ENABLE();
-    __HAL_RCC_GPIOD_CLK_ENABLE();
-    __HAL_RCC_GPIOF_CLK_ENABLE();
-    __HAL_RCC_SPI5_CLK_ENABLE();
-
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
-
-    /* Configure SPI5 pins: SCK (PF7), MISO (PF8), MOSI (PF9) */
-    GPIO_InitStruct.Pin = GPIO_PIN_7 | GPIO_PIN_8 | GPIO_PIN_9;
-    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-    GPIO_InitStruct.Alternate = GPIO_AF5_SPI5;
-    HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
-
-    /* Configure LCD CS pin (PC2) */
-    GPIO_InitStruct.Pin = ILI9341_CS_PIN;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-    HAL_GPIO_Init(ILI9341_CS_PORT, &GPIO_InitStruct);
-
-    /* Configure LCD WRX/DCX pin (PD13) - Data/Command selection */
-    GPIO_InitStruct.Pin = ILI9341_WRX_PIN;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-    HAL_GPIO_Init(ILI9341_WRX_PORT, &GPIO_InitStruct);
-
-    /* Set CS high (deselect) */
-    HAL_GPIO_WritePin(ILI9341_CS_PORT, ILI9341_CS_PIN, GPIO_PIN_SET);
-
-    /* Configure SPI5 */
-    hspi_lcd.Instance = SPI5;
-    hspi_lcd.Init.Mode = SPI_MODE_MASTER;
-    hspi_lcd.Init.Direction = SPI_DIRECTION_2LINES;
-    hspi_lcd.Init.DataSize = SPI_DATASIZE_8BIT;
-    hspi_lcd.Init.CLKPolarity = SPI_POLARITY_LOW;
-    hspi_lcd.Init.CLKPhase = SPI_PHASE_1EDGE;
-    hspi_lcd.Init.NSS = SPI_NSS_SOFT;
-    hspi_lcd.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_4;
-    hspi_lcd.Init.FirstBit = SPI_FIRSTBIT_MSB;
-    hspi_lcd.Init.TIMode = SPI_TIMODE_DISABLE;
-    hspi_lcd.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
-    hspi_lcd.Init.CRCPolynomial = 10;
-    HAL_SPI_Init(&hspi_lcd);
-}
-
-/**
- * @brief Send command to ILI9341 LCD controller
- * @param cmd: Command byte to send
- */
-static void ILI9341_WriteCommand(uint8_t cmd)
-{
-    /* WRX low = command */
-    HAL_GPIO_WritePin(ILI9341_WRX_PORT, ILI9341_WRX_PIN, GPIO_PIN_RESET);
-    /* CS low (select) */
-    HAL_GPIO_WritePin(ILI9341_CS_PORT, ILI9341_CS_PIN, GPIO_PIN_RESET);
-    /* Send command */
-    HAL_SPI_Transmit(&hspi_lcd, &cmd, 1, HAL_MAX_DELAY);
-    /* CS high (deselect) */
-    HAL_GPIO_WritePin(ILI9341_CS_PORT, ILI9341_CS_PIN, GPIO_PIN_SET);
-}
-
-/**
- * @brief Send data to ILI9341 LCD controller
- * @param data: Data byte to send
- */
-static void ILI9341_WriteData(uint8_t data)
-{
-    /* WRX high = data */
-    HAL_GPIO_WritePin(ILI9341_WRX_PORT, ILI9341_WRX_PIN, GPIO_PIN_SET);
-    /* CS low (select) */
-    HAL_GPIO_WritePin(ILI9341_CS_PORT, ILI9341_CS_PIN, GPIO_PIN_RESET);
-    /* Send data */
-    HAL_SPI_Transmit(&hspi_lcd, &data, 1, HAL_MAX_DELAY);
-    /* CS high (deselect) */
-    HAL_GPIO_WritePin(ILI9341_CS_PORT, ILI9341_CS_PIN, GPIO_PIN_SET);
-}
-
-/**
- * @brief Initialize ILI9341 LCD controller for RGB interface mode
- * @note  This configures the ILI9341 to receive pixel data from LTDC via RGB interface
- */
-static void ILI9341_Init(void)
-{
-    /* Initialize SPI for communication */
-    ILI9341_SPI_Init();
-
-    /* Hardware reset delay */
-    HAL_Delay(10);
-
-    /* Software Reset */
-    ILI9341_WriteCommand(ILI9341_RESET);
-    HAL_Delay(20);
-
-    /* Power Control A */
-    ILI9341_WriteCommand(ILI9341_POWERA);
-    ILI9341_WriteData(0x39);
-    ILI9341_WriteData(0x2C);
-    ILI9341_WriteData(0x00);
-    ILI9341_WriteData(0x34);
-    ILI9341_WriteData(0x02);
-
-    /* Power Control B */
-    ILI9341_WriteCommand(ILI9341_POWERB);
-    ILI9341_WriteData(0x00);
-    ILI9341_WriteData(0xC1);
-    ILI9341_WriteData(0x30);
-
-    /* Driver Timing Control A */
-    ILI9341_WriteCommand(ILI9341_DTCA);
-    ILI9341_WriteData(0x85);
-    ILI9341_WriteData(0x00);
-    ILI9341_WriteData(0x78);
-
-    /* Driver Timing Control B */
-    ILI9341_WriteCommand(ILI9341_DTCB);
-    ILI9341_WriteData(0x00);
-    ILI9341_WriteData(0x00);
-
-    /* Power On Sequence Control */
-    ILI9341_WriteCommand(ILI9341_POWER_SEQ);
-    ILI9341_WriteData(0x64);
-    ILI9341_WriteData(0x03);
-    ILI9341_WriteData(0x12);
-    ILI9341_WriteData(0x81);
-
-    /* Pump Ratio Control */
-    ILI9341_WriteCommand(ILI9341_PRC);
-    ILI9341_WriteData(0x20);
-
-    /* Power Control 1 */
-    ILI9341_WriteCommand(ILI9341_POWER1);
-    ILI9341_WriteData(0x23);
-
-    /* Power Control 2 */
-    ILI9341_WriteCommand(ILI9341_POWER2);
-    ILI9341_WriteData(0x10);
-
-    /* VCOM Control 1 */
-    ILI9341_WriteCommand(ILI9341_VCOM1);
-    ILI9341_WriteData(0x3E);
-    ILI9341_WriteData(0x28);
-
-    /* VCOM Control 2 */
-    ILI9341_WriteCommand(ILI9341_VCOM2);
-    ILI9341_WriteData(0x86);
-
-    /* Memory Access Control - Set orientation */
-    ILI9341_WriteCommand(ILI9341_MAC);
-    ILI9341_WriteData(0x08);  /* Portrait mode,z RGB order */
-
-    /* Pixel Format Set - 16 bits/pixel (RGB565) */
-    ILI9341_WriteCommand(ILI9341_PIXEL_FORMAT);
-    ILI9341_WriteData(0x55);  /* 16-bit for RGB and MCU interfaces */
-
-    /* Frame Rate Control */
-    ILI9341_WriteCommand(ILI9341_FRC);
-    ILI9341_WriteData(0x00);
-    ILI9341_WriteData(0x18);  /* 79Hz frame rate */
-
-    /* Display Function Control */
-    ILI9341_WriteCommand(ILI9341_DFC);
-    ILI9341_WriteData(0x08);
-    ILI9341_WriteData(0x82);
-    ILI9341_WriteData(0x27);
-
-    /* 3Gamma Function Disable */
-    ILI9341_WriteCommand(ILI9341_3GAMMA_EN);
-    ILI9341_WriteData(0x00);
-
-    /* Gamma Set */
-    ILI9341_WriteCommand(ILI9341_GAMMA);
-    ILI9341_WriteData(0x01);
-
-    /* Positive Gamma Correction */
-    ILI9341_WriteCommand(ILI9341_PGAMMA);
-    ILI9341_WriteData(0x0F);
-    ILI9341_WriteData(0x31);
-    ILI9341_WriteData(0x2B);
-    ILI9341_WriteData(0x0C);
-    ILI9341_WriteData(0x0E);
-    ILI9341_WriteData(0x08);
-    ILI9341_WriteData(0x4E);
-    ILI9341_WriteData(0xF1);
-    ILI9341_WriteData(0x37);
-    ILI9341_WriteData(0x07);
-    ILI9341_WriteData(0x10);
-    ILI9341_WriteData(0x03);
-    ILI9341_WriteData(0x0E);
-    ILI9341_WriteData(0x09);
-    ILI9341_WriteData(0x00);
-
-    /* Negative Gamma Correction */
-    ILI9341_WriteCommand(ILI9341_NGAMMA);
-    ILI9341_WriteData(0x00);
-    ILI9341_WriteData(0x0E);
-    ILI9341_WriteData(0x14);
-    ILI9341_WriteData(0x03);
-    ILI9341_WriteData(0x11);
-    ILI9341_WriteData(0x07);
-    ILI9341_WriteData(0x31);
-    ILI9341_WriteData(0xC1);
-    ILI9341_WriteData(0x48);
-    ILI9341_WriteData(0x08);
-    ILI9341_WriteData(0x0F);
-    ILI9341_WriteData(0x0C);
-    ILI9341_WriteData(0x31);
-    ILI9341_WriteData(0x36);
-    ILI9341_WriteData(0x0F);
-
-    /* Column Address Set (full width: 0-239) */
-    ILI9341_WriteCommand(ILI9341_COLUMN_ADDR);
-    ILI9341_WriteData(0x00);
-    ILI9341_WriteData(0x00);
-    ILI9341_WriteData(0x00);
-    ILI9341_WriteData(0xEF);  /* 239 */
-
-    /* Page Address Set (full height: 0-319) */
-    ILI9341_WriteCommand(ILI9341_PAGE_ADDR);
-    ILI9341_WriteData(0x00);
-    ILI9341_WriteData(0x00);
-    ILI9341_WriteData(0x01);
-    ILI9341_WriteData(0x3F);  /* 319 */
-
-    /* Interface Control - Enable RGB interface */
-    ILI9341_WriteCommand(ILI9341_INTERFACE);
-    ILI9341_WriteData(0x01);  /* System interface */
-    ILI9341_WriteData(0x00);
-    ILI9341_WriteData(0x06);  /* RGB interface, DE polarity */
-
-    /* RGB Interface Control */
-    ILI9341_WriteCommand(ILI9341_RGB_INTERFACE);
-    ILI9341_WriteData(0xC2);  /* RGB interface mode, DE polarity high */
-
-    /* Exit Sleep Mode */
-    ILI9341_WriteCommand(ILI9341_SLEEP_OUT);
-    HAL_Delay(120);  /* Wait for sleep out (required by datasheet) */
-
-    /* Display ON */
-    ILI9341_WriteCommand(ILI9341_DISPLAY_ON);
-    HAL_Delay(20);
-
-    /* Memory Write - Start receiving pixel data */
-    ILI9341_WriteCommand(ILI9341_GRAM);
-}
 
 /**
  * @brief Hardware initialization
  * @return HAL_StatusTypeDef: HAL status
  */
 HAL_StatusTypeDef LTDC_HW_Init(void) {
-    /*=========================================================================
-     * STEP 1: Initialize ILI9341 LCD Controller via SPI
-     * This is CRITICAL! The LCD won't display anything without this step.
-     *=======================================================================*/
-    ILI9341_Init();
+
+    /* Initialize LTDC Peripheral (RGB interface only) */
 
     /* Enable LTDC clock */
     __HAL_RCC_LTDC_CLK_ENABLE();
@@ -1199,47 +862,47 @@ HAL_StatusTypeDef LTDC_HW_Init(void) {
     /* Configure LTDC peripheral */
     hltdc.Instance = LTDC;
 
-    /* Configure synchronous timings: signal polarities and timing parameters */
-    hltdc.Init.HSPolarity = LTDC_HSPOLARITY_AL;
-    hltdc.Init.VSPolarity = LTDC_VSPOLARITY_AL;
-    hltdc.Init.DEPolarity = LTDC_DEPOLARITY_AL;
-    hltdc.Init.PCPolarity = LTDC_PCPOLARITY_IPC;
+    /* Signal polarities - MUST MATCH ILI9341 RGB interface settings! */
+    hltdc.Init.HSPolarity = LTDC_HSPOLARITY_AL;   // HSYNC active low
+    hltdc.Init.VSPolarity = LTDC_VSPOLARITY_AL;   // VSYNC active low
+    hltdc.Init.DEPolarity = LTDC_DEPOLARITY_AL;   // DE active low
+    hltdc.Init.PCPolarity = LTDC_PCPOLARITY_IPC;  // Pixel clock inverted
 
-    /* Timing parameters for ILI9341 LCD controller */
-    hltdc.Init.HorizontalSync = (LTDC_HSYNC_WIDTH - 1);
-    hltdc.Init.VerticalSync = (LTDC_VSYNC_HEIGHT - 1);
-    hltdc.Init.AccumulatedHBP = (LTDC_HSYNC_WIDTH + LTDC_HBP_WIDTH - 1);
-    hltdc.Init.AccumulatedVBP = (LTDC_VSYNC_HEIGHT + LTDC_VBP_HEIGHT - 1);
-    hltdc.Init.AccumulatedActiveW = (LTDC_HSYNC_WIDTH + LTDC_HBP_WIDTH + LTDC_DISPLAY_WIDTH - 1);
-    hltdc.Init.AccumulatedActiveH = (LTDC_VSYNC_HEIGHT + LTDC_VBP_HEIGHT + LTDC_DISPLAY_HEIGHT - 1);
-    hltdc.Init.TotalWidth = (LTDC_HSYNC_WIDTH + LTDC_HBP_WIDTH + LTDC_DISPLAY_WIDTH + LTDC_HFP_WIDTH - 1);
-    hltdc.Init.TotalHeigh = (LTDC_VSYNC_HEIGHT + LTDC_VBP_HEIGHT + LTDC_DISPLAY_HEIGHT + LTDC_VFP_HEIGHT - 1);
 
-    /* Background color */
+    // Timing parameters for STM32F429I-DISC1 LCD (RGB interface)
+    hltdc.Init.HorizontalSync = 9;   // HSYNC width - 1
+    hltdc.Init.VerticalSync = 1;     // VSYNC height - 1
+    hltdc.Init.AccumulatedHBP = 29;  // HSYNC + HBP - 1
+    hltdc.Init.AccumulatedVBP = 3;   // VSYNC + VBP - 1
+    hltdc.Init.AccumulatedActiveW = 269;  // HSYNC + HBP + Width - 1 (240)
+    hltdc.Init.AccumulatedActiveH = 323;  // VSYNC + VBP + Height - 1 (320)
+    hltdc.Init.TotalWidth = 279;     // Total horizontal - 1
+    hltdc.Init.TotalHeigh = 327;     // Total vertical - 1
+
+    /* Background color (black) */
     hltdc.Init.Backcolor.Blue = 0;
     hltdc.Init.Backcolor.Green = 0;
     hltdc.Init.Backcolor.Red = 0;
 
-    /* Initialize LTDC peripheral */
+    /* Initialize LTDC */
     if (HAL_LTDC_Init(&hltdc) != HAL_OK) {
         return HAL_ERROR;
     }
 
-    /* Configure Layer 1 (background layer) for LVGL */
+    /* Configure Layer 1 */
     LTDC_LayerCfgTypeDef layerCfg = {0};
     layerCfg.WindowX0 = 0;
-    /* HAL expects inclusive end positions: use width - 1 */
-    layerCfg.WindowX1 = LTDC_DISPLAY_WIDTH - 1;
+    layerCfg.WindowX1 = 239;  // 240 pixels wide (inclusive)
     layerCfg.WindowY0 = 0;
-    layerCfg.WindowY1 = LTDC_DISPLAY_HEIGHT - 1;
+    layerCfg.WindowY1 = 319;  // 320 pixels tall (inclusive)
     layerCfg.PixelFormat = LTDC_PIXEL_FORMAT_RGB565;
     layerCfg.Alpha = 255;
     layerCfg.Alpha0 = 0;
     layerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_CA;
     layerCfg.BlendingFactor2 = LTDC_BLENDING_FACTOR2_CA;
-    layerCfg.FBStartAdress = 0xD0000000; /* SDRAM Bank 2 framebuffer address */
-    layerCfg.ImageWidth = LTDC_DISPLAY_WIDTH;
-    layerCfg.ImageHeight = LTDC_DISPLAY_HEIGHT;
+    layerCfg.FBStartAdress = 0xD0000000;  // SDRAM framebuffer
+    layerCfg.ImageWidth = 240;
+    layerCfg.ImageHeight = 320;
     layerCfg.Backcolor.Blue = 0;
     layerCfg.Backcolor.Green = 0;
     layerCfg.Backcolor.Red = 0;
@@ -1248,10 +911,9 @@ HAL_StatusTypeDef LTDC_HW_Init(void) {
         return HAL_ERROR;
     }
 
-    /* CRITICAL FIX: Enable Layer 1 - without this, the LCD stays black! */
+    /* Enable Layer 1 */
     __HAL_LTDC_LAYER_ENABLE(&hltdc, 0);
-    //__HAL_LTDC_RELOAD_IMMEDIATE_CONFIG(&hltdc);
-    __HAL_LTDC_RELOAD_CONFIG(&hltdc);  /* Reload at VSYNC, not immediately */
+    __HAL_LTDC_RELOAD_CONFIG(&hltdc);  // Reload at VSYNC
 
     return HAL_OK;
 }
@@ -1351,19 +1013,7 @@ static uint32_t LTDC_GetPixelFormatHAL(LTDC_PixelFormat_t format) {
  * @param halFormat: HAL pixel format
  * @return LTDC_PixelFormat_t: Driver pixel format
  */
-static LTDC_PixelFormat_t LTDC_GetPixelFormatDriver(uint32_t halFormat) {
-    switch (halFormat) {
-        case LTDC_PIXEL_FORMAT_ARGB8888: return LTDC_PIXEL_FORMAT_ARGB8888_ENUM;
-        case LTDC_PIXEL_FORMAT_RGB888: return LTDC_PIXEL_FORMAT_RGB888_ENUM;
-        case LTDC_PIXEL_FORMAT_RGB565: return LTDC_PIXEL_FORMAT_RGB565_ENUM;
-        case LTDC_PIXEL_FORMAT_ARGB1555: return LTDC_PIXEL_FORMAT_ARGB1555_ENUM;
-        case LTDC_PIXEL_FORMAT_ARGB4444: return LTDC_PIXEL_FORMAT_ARGB4444_ENUM;
-        case LTDC_PIXEL_FORMAT_L8: return LTDC_PIXEL_FORMAT_L8_ENUM;
-        case LTDC_PIXEL_FORMAT_AL44: return LTDC_PIXEL_FORMAT_AL44_ENUM;
-        case LTDC_PIXEL_FORMAT_AL88: return LTDC_PIXEL_FORMAT_AL88_ENUM;
-        default: return LTDC_PIXEL_FORMAT_ARGB8888_ENUM;
-    }
-}
+
 
 /**
  * @brief Set pixel in framebuffer
@@ -1373,91 +1023,36 @@ static LTDC_PixelFormat_t LTDC_GetPixelFormatDriver(uint32_t halFormat) {
  * @param color: Pixel color
  * @param format: Pixel format
  */
-static void LTDC_SetPixel(uint32_t *framebuffer, uint16_t x, uint16_t y, uint32_t color, LTDC_PixelFormat_t format) {
-    uint32_t index = y * LTDC_DISPLAY_WIDTH + x;
-
-    switch (format) {
-        case LTDC_PIXEL_FORMAT_RGB565_ENUM:
-            {
-                uint16_t *fb16 = (uint16_t *)framebuffer;
-                fb16[index] = (uint16_t)color;
-            }
-            break;
-
-        case LTDC_PIXEL_FORMAT_RGB888_ENUM:
-            {
-                uint8_t *fb8 = (uint8_t *)framebuffer;
-                fb8[index * 3] = (color) & 0xFF;        /* Blue */
-                fb8[index * 3 + 1] = (color >> 8) & 0xFF;  /* Green */
-                fb8[index * 3 + 2] = (color >> 16) & 0xFF; /* Red */
-            }
-            break;
-
-        case LTDC_PIXEL_FORMAT_ARGB8888_ENUM:
-        default:
-            framebuffer[index] = color;
-            break;
-    }
-}
-
-/**
- * @brief Get pixel from framebuffer
- * @param framebuffer: Framebuffer pointer
- * @param x: X coordinate
- * @param y: Y coordinate
- * @param format: Pixel format
- * @return uint32_t: Pixel color
+/* Removed legacy per-scanline Set/Get pixel logic that assumed full display stride.
+ * Use LTDC_SetPixelByIndex / LTDC_GetPixelByIndex for image-buffer-indexed access.
  */
-static uint32_t LTDC_GetPixel(uint32_t *framebuffer, uint16_t x, uint16_t y, LTDC_PixelFormat_t format) {
-    uint32_t index = y * LTDC_DISPLAY_WIDTH + x;
 
+/* Line helpers removed to simplify driver; use application-level routines if needed. */
+
+/* New helper: set pixel by linear index (row-major) where framebuffer base is a byte pointer */
+static void LTDC_SetPixelByIndex(uint8_t *fbBase, uint32_t index, uint32_t color, LTDC_PixelFormat_t format) {
     switch (format) {
-        case LTDC_PIXEL_FORMAT_RGB565_ENUM:
-            {
-                uint16_t *fb16 = (uint16_t *)framebuffer;
-                return fb16[index];
-            }
-
-        case LTDC_PIXEL_FORMAT_RGB888_ENUM:
-            {
-                uint8_t *fb8 = (uint8_t *)framebuffer;
-                return (fb8[index * 3 + 2] << 16) | (fb8[index * 3 + 1] << 8) | fb8[index * 3];
-            }
-
+        case LTDC_PIXEL_FORMAT_RGB565_ENUM: {
+            uint16_t *fb16 = (uint16_t *)fbBase;
+            fb16[index] = (uint16_t)color;
+            break;
+        }
+        case LTDC_PIXEL_FORMAT_RGB888_ENUM: {
+            uint8_t *p = fbBase + index * 3;
+            p[0] = (color) & 0xFF;        /* Blue */
+            p[1] = (color >> 8) & 0xFF;  /* Green */
+            p[2] = (color >> 16) & 0xFF; /* Red */
+            break;
+        }
         case LTDC_PIXEL_FORMAT_ARGB8888_ENUM:
-        default:
-            return framebuffer[index];
-    }
-}
-
-/**
- * @brief Draw horizontal line
- * @param driver: Pointer to LTDC driver structure
- * @param x: Start X coordinate
- * @param y: Y coordinate
- * @param length: Line length
- * @param color: Line color
- */
-static void LTDC_DrawHorizontalLine(LTDC_Driver_t *driver, uint16_t x, uint16_t y, uint16_t length, uint32_t color) {
-    for (uint16_t i = 0; i < length; i++) {
-        if ((x + i) < LTDC_DISPLAY_WIDTH) {
-            LTDC_DrawPixel(driver, x + i, y, color);
+        default: {
+            uint32_t *fb32 = (uint32_t *)fbBase;
+            fb32[index] = color;
+            break;
         }
     }
 }
 
-/**
- * @brief Draw vertical line
- * @param driver: Pointer to LTDC driver structure
- * @param x: X coordinate
- * @param y: Start Y coordinate
- * @param length: Line length
- * @param color: Line color
- */
-static void LTDC_DrawVerticalLine(LTDC_Driver_t *driver, uint16_t x, uint16_t y, uint16_t length, uint32_t color) {
-    for (uint16_t i = 0; i < length; i++) {
-        if ((y + i) < LTDC_DISPLAY_HEIGHT) {
-            LTDC_DrawPixel(driver, x, y + i, color);
-        }
-    }
-}
+/* GetPixelByIndex removed (unused) to keep the driver small. */
+
+/* Bitmap/font helpers removed: use LVGL or application-level routines for text and complex image drawing. */

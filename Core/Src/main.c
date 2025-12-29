@@ -2,17 +2,7 @@
 /**
  ******************************************************************************
  * @file           : main.c
- * @brief          : Main program body
- ******************************************************************************
- * @attention
- *
- * Copyright (c) 2025 STMicroelectronics.
- * All rights reserved.
- *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
- *
+ * @brief          : Main program body for STM32F429I-DISC1 with LVGL
  ******************************************************************************
  */
 /* USER CODE END Header */
@@ -20,32 +10,21 @@
 #include "SEGGER_SYSVIEW.h"
 #include "stm32f4xx.h"
 #include "main.h"
-
 #include "sys.h"
 #include <stdint.h>
-#include "lvgl.h"       /* LVGL symbols and types */
-#include "lvgl_app.h"   /* Application GUI functions */
-#include "ltdc.h"       /* Display controller */
-#include "fmc.h"        /* External SDRAM controller */
+#include "lvgl.h"
+#include "lvgl_app.h"
+#include "ltdc.h"
+#include "fmc.h"
+#include "spiltdc.h"  /* ILI9341 SPI initialization */
 
-
-/*******************************************************************************
- * Main Function - Program Entry Point
- *******************************************************************************
- * This is where your program starts!
- *
- * For Beginners:
- * 1. Initialize hardware (SYS_Init)
- * 2. Create GUI screens (LVGL_App_Init)
- * 3. Loop forever updating the display
- ******************************************************************************/
 int main(void)
 {
-    SYS_Init();              // Step 1: Initialize all system hardware
     /*-------------------------------------------------------------------------
-     * STEP 1: Initialize Hardware
+     * STEP 1: Initialize System Hardware
      *-----------------------------------------------------------------------*/
-    SEGGER_SYSVIEW_Conf();   // Optional: System tracing for debugging
+    SYS_Init();
+    SEGGER_SYSVIEW_Conf();
     SEGGER_SYSVIEW_Start();
 
     /*-------------------------------------------------------------------------
@@ -53,7 +32,7 @@ int main(void)
      *-----------------------------------------------------------------------*/
     FMC_Driver_Handle_t fmcHandle;
     FMC_Driver_SDRAM_Config_t sdramConfig = {
-        .bank = FMC_SDRAM_BANK2, /* STM32F429I-DISCO uses Bank 2 (SDNE1) */
+        .bank = FMC_SDRAM_BANK2,
         .columnBits = FMC_SDRAM_COLUMN_BITS_NUM_8,
         .rowBits = FMC_SDRAM_ROW_BITS_NUM_12,
         .dataWidth = FMC_SDRAM_MEM_BUS_WIDTH_16,
@@ -75,81 +54,86 @@ int main(void)
     FMC_Driver_SDRAM_Init(&fmcHandle, &sdramConfig);
 
     /*-------------------------------------------------------------------------
-     * STEP 2.1: Clear SDRAM (Black Screen)
+     * STEP 2.1: Clear BOTH SDRAM Framebuffers
      *-----------------------------------------------------------------------*/
-    /* Clear framebuffer at Bank 2 Address (0xD0000000) */
-    volatile uint16_t *fb = (volatile uint16_t *)0xD0000000;
-    for(int i = 0; i < (240 * 320); i++) {
-        fb[i] = 0x0000; /* Black in RGB565 */
+    #define FB_SIZE (240 * 320)
+    #define FB_BYTES (FB_SIZE * 2)
+
+    volatile uint16_t *fb1 = (volatile uint16_t *)0xD0000000;
+    volatile uint16_t *fb2 = (volatile uint16_t *)(0xD0000000 + FB_BYTES);
+
+    /* Clear buffer 0 */
+    for(int i = 0; i < FB_SIZE; i++) {
+        fb1[i] = 0x0000;
     }
-    if (fb[0] != 0x0000  || fb[1] != 0x0000 || fb[320] != 0x0000) {
-        // Error: SDRAM not working
-        while (1) {
-            // Optionally blink an LED here
-        }
+
+    /* Clear buffer 1 */
+    for(int i = 0; i < FB_SIZE; i++) {
+        fb2[i] = 0x0000;
+    }
+
+    /* Verify SDRAM works */
+    if (fb1[0] != 0x0000 || fb1[100] != 0x0000 || fb2[0] != 0x0000) {
+        while (1) { /* SDRAM error - hang here */ }
     }
 
     /*-------------------------------------------------------------------------
-     * STEP 3: Initialize Display Hardware (LTDC)
+     * STEP 3: Initialize ILI9341 LCD Controller (CRITICAL!)
      *-----------------------------------------------------------------------*/
-    LTDC_HW_Init();          // Initialize LTDC display controller hardware
+    ILI9341_Init();  /* Configure LCD via SPI, switch to RGB mode */
 
     /*-------------------------------------------------------------------------
-     * STEP 4: Create GUI Screens
+     * STEP 4: Initialize LTDC Display Controller
      *-----------------------------------------------------------------------*/
-    LVGL_App_Init();  // Creates 4 screens: Home, Sensors, Settings, Info
+    LTDC_HW_Init();
 
     /*-------------------------------------------------------------------------
-     * STEP 5: Demo Mode Variables
+     * STEP 5: Initialize LVGL and Create GUI
      *-----------------------------------------------------------------------*/
-    /* These create animated demo values - replace with real sensors! */
-    uint32_t last_update = 0;    // Tracks time for updates
-    int temp = 25;               // Simulated temperature (°C)
-    int humidity = 60;           // Simulated humidity (%)
-    int sensor_val = 50;         // Simulated sensor reading
-    int demo_counter = 0;        // Counter for animation
+    LVGL_App_Init();
 
     /*-------------------------------------------------------------------------
-     * STEP 6: Main Loop (Runs Forever)
+     * STEP 6: Demo Variables
+     *-----------------------------------------------------------------------*/
+    uint32_t last_update = 0;
+    int temp = 25;
+    int humidity = 60;
+    int sensor_val = 50;
+    int demo_counter = 0;
+
+    /*-------------------------------------------------------------------------
+     * STEP 7: Main Loop
      *-----------------------------------------------------------------------*/
     while(1) {
-        /*---------------------------------------------------------------------
-         * Update GUI (Call this every 5ms)
-         *-------------------------------------------------------------------*/
-        LVGL_App_Tick();  // Process animations, touch input, redraws
+        /* Update LVGL (renders GUI, handles touch, animations) */
+        LVGL_App_Tick();
 
-        /*---------------------------------------------------------------------
-         * Update Display Values Every 500ms (0.5 seconds)
-         *-------------------------------------------------------------------*/
-         uint32_t current_update = HAL_GetTick();
-         if(current_update - last_update >= 200) {
-
-            /* Temperature: Animate between 25-40°C */
+        /* Update sensor values every 200ms */
+        uint32_t current_time = HAL_GetTick();
+        if(current_time - last_update >= 200) {
+            /* Animate temperature 25-40°C */
             temp = 25 + (demo_counter % 15);
             LVGL_App_UpdateTemperature(temp);
 
-            /* Humidity: Animate between 50-80% */
+            /* Animate humidity 50-80% */
             humidity = 50 + (demo_counter % 30);
             LVGL_App_UpdateHumidity(humidity);
 
-            /* Chart: Add new data point (30-70 range) */
+            /* Add chart data point */
             sensor_val = 30 + (demo_counter % 40);
             LVGL_App_AddChartData(sensor_val);
 
-            /* Status: Update message every 5 seconds */
+            /* Update status every 2 seconds */
             if(demo_counter % 10 == 0) {
                 LVGL_App_UpdateStatus(LV_SYMBOL_OK " System Running");
             }
 
-            /* Increment counter and save time */
             demo_counter++;
-            last_update = HAL_GetTick();
+            last_update = current_time;
         }
 
-        /*---------------------------------------------------------------------
-         * Small Delay (Prevents CPU Overload)
-         *-------------------------------------------------------------------*/
-        HAL_Delay(5);  // Sleep 5ms, then loop again
+        /* Small delay to prevent CPU overload */
+        HAL_Delay(5);
     }
 }
 

@@ -36,6 +36,14 @@
  */
 #define LVGL_FB_ADDR        0xD0000000
 
+#ifndef LVGL_BGR_MODE
+/* Try no conversion first. If colors are wrong, set to:
+ * 1 = swap R/B fields (RGB565 <-> BGR565)
+ * 2 = byte-swap each 16-bit word (endianness correction)
+ */
+#define LVGL_BGR_MODE 0
+#endif
+
 /*-----------------------------------------------------------------------------
  * Draw Buffer Configuration
  *---------------------------------------------------------------------------*/
@@ -104,13 +112,7 @@ static void disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_ma
      * 1 = swap R/B fields (RGB565 -> BGR565)
      * 2 = byte-swap each 16-bit word (endian correction)
      */
-#ifndef LVGL_BGR_MODE
-/* Try no conversion first. If colors are wrong, set to:
- * 1 = swap R/B fields (RGB565 <-> BGR565)
- * 2 = byte-swap each 16-bit word (endianness correction)
- */
-#define LVGL_BGR_MODE 0
-#endif
+
 
     uint16_t *dst = (uint16_t *)dst_addr;
     uint16_t *src = (uint16_t *)px_map;
@@ -153,9 +155,8 @@ static void disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_ma
      * flush of the current refresh and do the VSYNC-safe swap only then. */
     if(lv_display_flush_is_last(disp)) {
         fb_manager_mark_backbuffer_ready();
-        /* Perform a VSYNC-safe swap (short blocking timeout). If the swap fails
-         * we still inform LVGL that the flush is complete so it won't hang. */
-        (void)fb_manager_swap_blocking(50); /* 50 ms timeout */
+        /* Use shorter timeout or non-blocking swap */
+        (void)fb_manager_swap_blocking(5);  // ✅ Reduced from 50ms to 5ms
     }
 
     /* Notify LVGL that this flush region has been handled */
