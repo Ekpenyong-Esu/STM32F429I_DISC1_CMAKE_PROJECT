@@ -16,7 +16,7 @@
 #include "lvgl_app.h"
 #include "ltdc.h"
 #include "fmc.h"
-#include "spiltdc.h"  /* ILI9341 SPI initialization */
+#include "ili9341.h"  /* ILI9341 driver */
 
 int main(void)
 {
@@ -39,8 +39,8 @@ int main(void)
         .internalBanks = FMC_SDRAM_INTERN_BANKS_NUM_4,
         .casLatency = FMC_SDRAM_CAS_LATENCY_3,
         .clockPeriod = FMC_SDRAM_CLOCK_PERIOD_2,
-        .readBurst = FMC_SDRAM_RBURST_ENABLE,
-        .readPipeDelay = FMC_SDRAM_RPIPE_DELAY_0,
+        .readBurst = FMC_SDRAM_RBURST_DISABLE,   /* ST BSP: DISABLE */
+        .readPipeDelay = FMC_SDRAM_RPIPE_DELAY_1, /* ST BSP: DELAY_1 */
         .writeProtection = FMC_SDRAM_WRITE_PROTECTION_DISABLE,
         .loadToActiveDelay = 2,
         .exitSelfRefreshDelay = 7,
@@ -80,7 +80,7 @@ int main(void)
     /*-------------------------------------------------------------------------
      * STEP 3: Initialize ILI9341 LCD Controller (CRITICAL!)
      *-----------------------------------------------------------------------*/
-    ILI9341_Init();  /* Configure LCD via SPI, switch to RGB mode */
+    ili9341_Init();  /* Configure LCD via SPI, switch to RGB mode */
 
     /*-------------------------------------------------------------------------
      * STEP 4: Initialize LTDC Display Controller

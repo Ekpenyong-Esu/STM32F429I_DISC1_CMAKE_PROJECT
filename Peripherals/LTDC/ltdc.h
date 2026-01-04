@@ -130,6 +130,7 @@ typedef struct {
     uint8_t activeLayer;                    /*!< Currently active layer */
     bool initialized;                       /*!< Initialization status */
     uint32_t errorCode;                     /*!< Last error code */
+    volatile uint8_t reloadFlag;           /*!< Set when a reload event occurs (VSYNC) */
 } LTDC_Driver_t;
 
 
@@ -167,6 +168,16 @@ HAL_StatusTypeDef LTDC_SetActiveLayer(LTDC_Driver_t *driver, uint8_t layer);
 HAL_StatusTypeDef LTDC_SetLayerAlpha(LTDC_Driver_t *driver, uint8_t layer, uint8_t alpha);
 HAL_StatusTypeDef LTDC_SetLayerPosition(LTDC_Driver_t *driver, uint8_t layer, uint16_t x, uint16_t y);
 HAL_StatusTypeDef LTDC_SetLayerWindow(LTDC_Driver_t *driver, uint8_t layer, LTDC_Rect_t *window);
+
+/* Non-blocking window position update: change window position without triggering reload
+   The application should call LTDC_RequestReload() to apply changes at next VSYNC. */
+HAL_StatusTypeDef LTDC_SetWindowPosition_NoReload(LTDC_Driver_t *driver, uint16_t x, uint16_t y, uint8_t layer);
+
+/* Request hardware register reload (example: LTDC_SRCR_VBR) */
+HAL_StatusTypeDef LTDC_RequestReload(LTDC_Driver_t *driver, uint32_t reload);
+
+/* Wait for a reload event (VSYNC) with timeout in ms. Returns HAL_OK on event, HAL_TIMEOUT on timeout. */
+HAL_StatusTypeDef LTDC_WaitForReload(LTDC_Driver_t *driver, uint32_t timeout_ms);
 
 /* Framebuffer functions */
 HAL_StatusTypeDef LTDC_SetFramebuffer(LTDC_Driver_t *driver, uint8_t layer, uint32_t address);

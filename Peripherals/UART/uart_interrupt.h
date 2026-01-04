@@ -11,7 +11,6 @@ extern "C" {
 #endif
 
 #include "uart.h"
-#include "uart_config.h"
 
 /**
  * @brief Initialize UART Interrupt mode

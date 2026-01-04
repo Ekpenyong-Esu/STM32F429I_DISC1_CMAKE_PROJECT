@@ -27,9 +27,12 @@ LTDC_HandleTypeDef hltdc;                   /*!< LTDC HAL handle */
 /* Private function prototypes -----------------------------------------------*/
 static HAL_StatusTypeDef LTDC_ValidateDriver(LTDC_Driver_t *driver);
 static HAL_StatusTypeDef LTDC_ValidateLayer(uint8_t layer);
-static HAL_StatusTypeDef LTDC_ValidateCoordinates(uint16_t x, uint16_t y);
+static HAL_StatusTypeDef LTDC_ValidateCoordinates(uint16_t xCoord, uint16_t yCoord);
 static HAL_StatusTypeDef LTDC_ValidateRect(LTDC_Rect_t *rect);
 static uint32_t LTDC_GetPixelFormatHAL(LTDC_PixelFormat_t format);
+
+/* Global instance used for forwarding HAL callbacks to driver-level state */
+static LTDC_Driver_t *g_ltdc_driver = NULL;
 
 /* Minimal helper: set a pixel by index in framebuffer (row-major) */
 static void LTDC_SetPixelByIndex(uint8_t *fbBase, uint32_t index, uint32_t color, LTDC_PixelFormat_t format);
@@ -52,6 +55,10 @@ HAL_StatusTypeDef LTDC_Driver_Init(LTDC_Driver_t *driver, LTDC_HandleTypeDef *hl
     memset(driver, 0, sizeof(LTDC_Driver_t));
     driver->hltdc = hltdc_handle;
     driver->errorCode = LTDC_ERROR_NONE;
+    driver->reloadFlag = 0;
+
+    /* Register global instance for HAL callbacks (single-LTDC system assumption) */
+    g_ltdc_driver = driver;
 
     /* Set default display configuration */
     driver->displayConfig.width = LTDC_DISPLAY_WIDTH;
@@ -109,6 +116,11 @@ HAL_StatusTypeDef LTDC_Driver_DeInit(LTDC_Driver_t *driver) {
     /* Reset driver structure */
     driver->initialized = false;
     driver->errorCode = LTDC_ERROR_NONE;
+
+    /* Clear global instance */
+    if (g_ltdc_driver == driver) {
+        g_ltdc_driver = NULL;
+    }
 
     return status;
 }
@@ -326,50 +338,23 @@ HAL_StatusTypeDef LTDC_SetLayerPosition(LTDC_Driver_t *driver, uint8_t layer, ui
     uint16_t width = (driver->layers[layer].windowX1 - driver->layers[layer].windowX0) + 1;
     uint16_t height = (driver->layers[layer].windowY1 - driver->layers[layer].windowY0) + 1;
 
-    /* Build HAL layer configuration from current layer and update window coordinates */
-    LTDC_LayerCfgTypeDef layerCfg = {0};
-    layerCfg.WindowX0 = x;
-    layerCfg.WindowX1 = x + width - 1;
-    layerCfg.WindowY0 = y;
-    layerCfg.WindowY1 = y + height - 1;
-    layerCfg.PixelFormat = LTDC_GetPixelFormatHAL(driver->layers[layer].pixelFormat);
-    layerCfg.Alpha = driver->layers[layer].alpha;
-    layerCfg.Alpha0 = driver->layers[layer].alpha0;
-
-    /* preserve blending factors depending on blend mode */
-    switch (driver->layers[layer].blendMode) {
-        case LTDC_BLEND_CONSTANT_ALPHA:
-            layerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_CA;
-            layerCfg.BlendingFactor2 = LTDC_BLENDING_FACTOR2_CA;
-            break;
-        case LTDC_BLEND_PIXEL_ALPHA:
-            layerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_PAxCA;
-            layerCfg.BlendingFactor2 = LTDC_BLENDING_FACTOR2_PAxCA;
-            break;
-        default:
-            layerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_CA;
-            layerCfg.BlendingFactor2 = LTDC_BLENDING_FACTOR2_CA;
-            break;
-    }
-
-    layerCfg.FBStartAdress = driver->layers[layer].framebufferAddress;
-    layerCfg.ImageWidth = driver->layers[layer].imageWidth;
-    layerCfg.ImageHeight = driver->layers[layer].imageHeight;
-    layerCfg.Backcolor.Blue = (driver->layers[layer].backgroundColor) & 0xFF;
-    layerCfg.Backcolor.Green = (driver->layers[layer].backgroundColor >> 8) & 0xFF;
-    layerCfg.Backcolor.Red = (driver->layers[layer].backgroundColor >> 16) & 0xFF;
-
-    HAL_StatusTypeDef status = HAL_LTDC_ConfigLayer(driver->hltdc, &layerCfg, layer);
-    if (status == HAL_OK) {
-        driver->layers[layer].windowX0 = layerCfg.WindowX0;
-        driver->layers[layer].windowY0 = layerCfg.WindowY0;
-        driver->layers[layer].windowX1 = layerCfg.WindowX1;
-        driver->layers[layer].windowY1 = layerCfg.WindowY1;
-    } else {
+    /* Use HAL helper to set window position without immediate reload and then force a reload */
+    HAL_StatusTypeDef status = HAL_LTDC_SetWindowPosition_NoReload(driver->hltdc, x, y, layer);
+    if (status != HAL_OK) {
         driver->errorCode = LTDC_ERROR_LAYER_CONFIG;
+        return status;
     }
 
-    return status;
+    /* Update the cached geometry (applied after reload) */
+    driver->layers[layer].windowX0 = x;
+    driver->layers[layer].windowY0 = y;
+    driver->layers[layer].windowX1 = x + width - 1;
+    driver->layers[layer].windowY1 = y + height - 1;
+
+    /* Request reload at next VSync */
+    LTDC_RequestReload(driver, LTDC_SRCR_VBR);
+
+    return HAL_OK;
 }
 
 /**
@@ -447,21 +432,16 @@ HAL_StatusTypeDef LTDC_SetFramebuffer(LTDC_Driver_t *driver, uint8_t layer, uint
         return HAL_ERROR;
     }
 
-    /* Set framebuffer address */
+    /* Set framebuffer address (HAL will stage the change) */
     HAL_StatusTypeDef status = HAL_LTDC_SetAddress(driver->hltdc, address, layer);
     if (status == HAL_OK) {
         /* Request register reload during next vertical blanking to avoid tearing */
-        __HAL_LTDC_VERTICAL_BLANKING_RELOAD_CONFIG(driver->hltdc);
+        LTDC_RequestReload(driver, LTDC_SRCR_VBR);
 
-        /* Wait for register reload flag (RR) with timeout */
-        uint32_t timeout = LTDC_TIMEOUT;
-        while((__HAL_LTDC_GET_FLAG(driver->hltdc, LTDC_FLAG_RR) == RESET) && timeout--) {
-            /* simple busy-wait; in real app consider using IRQ */
-        }
-
-        /* Clear the RR flag if set */
-        if (__HAL_LTDC_GET_FLAG(driver->hltdc, LTDC_FLAG_RR) != RESET) {
-            __HAL_LTDC_CLEAR_FLAG(driver->hltdc, LTDC_FLAG_RR);
+        /* Wait for reload flag (using driver-level reload flag) */
+        if (LTDC_WaitForReload(driver, LTDC_TIMEOUT) != HAL_OK) {
+            driver->errorCode = LTDC_ERROR_FRAMEBUFFER;
+            return HAL_TIMEOUT;
         }
 
         driver->layers[layer].framebufferAddress = address;
@@ -499,6 +479,10 @@ HAL_StatusTypeDef LTDC_ClearFramebuffer(LTDC_Driver_t *driver, uint8_t layer, ui
         return HAL_ERROR;
     }
 
+    /* After clearing the backbuffer, request reload so the displayed buffer updates at VSYNC */
+    HAL_StatusTypeDef status = HAL_OK;
+    /* Perform clearing */
+
     uint32_t *framebuffer = (uint32_t *)driver->layers[layer].framebufferAddress;
     uint32_t pixelCount = driver->layers[layer].imageWidth * driver->layers[layer].imageHeight;
 
@@ -533,7 +517,10 @@ HAL_StatusTypeDef LTDC_ClearFramebuffer(LTDC_Driver_t *driver, uint8_t layer, ui
             break;
     }
 
-    return HAL_OK;
+    /* Request reload to apply buffer changes if using swap at VSYNC */
+    LTDC_RequestReload(driver, LTDC_SRCR_VBR);
+
+    return status;
 }
 
 /**
@@ -626,12 +613,6 @@ HAL_StatusTypeDef LTDC_DrawPixel(LTDC_Driver_t *driver, uint16_t x, uint16_t y, 
 
     return HAL_OK;
 }
-
-/* Removed complex drawing helpers to keep LTDC driver small and focused.
- * Complex drawing (lines, rectangles, circles, fonts, bitmaps) should be
- * implemented in application code or a GUI library (e.g., LVGL). This
- * reduces driver size and keeps the LTDC module correct and maintainable.
- */
 
 
 /**
@@ -811,6 +792,57 @@ HAL_StatusTypeDef LTDC_GetLayerInfo(LTDC_Driver_t *driver, uint8_t layer, LTDC_L
 }
 
 /**
+ * @brief  Request a register reload (e.g., LTDC_SRCR_VBR) to apply staged changes at VSYNC
+ */
+HAL_StatusTypeDef LTDC_RequestReload(LTDC_Driver_t *driver, uint32_t reload) {
+    if (LTDC_ValidateDriver(driver) != HAL_OK) return HAL_ERROR;
+
+    /* Clear previous flag and request reload */
+    driver->reloadFlag = 0;
+    HAL_LTDC_Reload(driver->hltdc, reload);
+    return HAL_OK;
+}
+
+/**
+ * @brief Wait for reload event (VSYNC) - interrupt-driven
+ * This implementation uses ARM WFE/SEV to wait efficiently for the HAL reload
+ * event callback to set the driver's reloadFlag and wake this task.
+ */
+HAL_StatusTypeDef LTDC_WaitForReload(LTDC_Driver_t *driver, uint32_t timeout_ms) {
+    if (LTDC_ValidateDriver(driver) != HAL_OK) return HAL_ERROR;
+    uint32_t start = HAL_GetTick();
+    /* Wait efficiently using WFE (wait for event). The HAL_LTDC_ReloadEventCallback
+       will set reloadFlag and call __SEV() to wake up this waiter. */
+    while (driver->reloadFlag == 0) {
+        if (HAL_GetTick() - start > timeout_ms) return HAL_TIMEOUT;
+        __WFE(); /* low-power wait until an event occurs */
+    }
+    driver->reloadFlag = 0;
+    return HAL_OK;
+}
+
+/**
+ * @brief Set window position without triggering a reload immediately
+ */
+HAL_StatusTypeDef LTDC_SetWindowPosition_NoReload(LTDC_Driver_t *driver, uint16_t x, uint16_t y, uint8_t layer) {
+    if (LTDC_ValidateDriver(driver) != HAL_OK || LTDC_ValidateLayer(layer) != HAL_OK) return HAL_ERROR;
+    if (x >= LTDC_DISPLAY_WIDTH || y >= LTDC_DISPLAY_HEIGHT) return HAL_ERROR;
+
+    /* Use HAL's NoReload API and update cached window origin to be applied after reload */
+    HAL_StatusTypeDef status = HAL_LTDC_SetWindowPosition_NoReload(driver->hltdc, x, y, layer);
+    if (status == HAL_OK) {
+        /* Update cache - x/y origin; end coordinates kept consistent with width/height */
+        uint16_t width = (driver->layers[layer].windowX1 - driver->layers[layer].windowX0) + 1;
+        uint16_t height = (driver->layers[layer].windowY1 - driver->layers[layer].windowY0) + 1;
+        driver->layers[layer].windowX0 = x;
+        driver->layers[layer].windowY0 = y;
+        driver->layers[layer].windowX1 = x + width - 1;
+        driver->layers[layer].windowY1 = y + height - 1;
+    }
+    return status;
+}
+
+/**
  * @brief Check if layer is enabled
  * @param driver: Pointer to LTDC driver structure
  * @param layer: Layer number
@@ -867,19 +899,21 @@ HAL_StatusTypeDef LTDC_HW_Init(void) {
     /* Signal polarities - MUST MATCH ILI9341 RGB interface settings! */
     hltdc.Init.HSPolarity = LTDC_HSPOLARITY_AL;   // HSYNC active low
     hltdc.Init.VSPolarity = LTDC_VSPOLARITY_AL;   // VSYNC active low
-    hltdc.Init.DEPolarity = LTDC_DEPOLARITY_AL;   // DE active low
+    hltdc.Init.DEPolarity = LTDC_DEPOLARITY_AL;   // DE active low (per STM32F429I-DISCO BSP)
     hltdc.Init.PCPolarity = LTDC_PCPOLARITY_IPC;  // Pixel clock not inverted (input pixel clock)
 
 
-    // Timing parameters for STM32F429I-DISC1 LCD (RGB interface)
-    hltdc.Init.HorizontalSync = 9;   // HSYNC width - 1
-    hltdc.Init.VerticalSync = 1;     // VSYNC height - 1
-    hltdc.Init.AccumulatedHBP = 29;  // HSYNC + HBP - 1
-    hltdc.Init.AccumulatedVBP = 3;   // VSYNC + VBP - 1
-    hltdc.Init.AccumulatedActiveW = 269;  // HSYNC + HBP + Width - 1 (240)
-    hltdc.Init.AccumulatedActiveH = 323;  // VSYNC + VBP + Height - 1 (320)
-    hltdc.Init.TotalWidth = 279;     // Total horizontal - 1
-    hltdc.Init.TotalHeigh = 327;     // Total vertical - 1
+    /* Timing parameters for STM32F429I-DISC1 LCD (RGB interface)
+     * Matches ST BSP values: HSYNC=10, HBP=20, HFP=10, VSYNC=2, VBP=2, VFP=4, active=240x320.
+     */
+    hltdc.Init.HorizontalSync = 9;   // HSYNC width - 1 (10)
+    hltdc.Init.VerticalSync = 1;     // VSYNC height - 1 (2)
+    hltdc.Init.AccumulatedHBP = 29;  // HSYNC + HBP - 1 (10+20-1)
+    hltdc.Init.AccumulatedVBP = 3;   // VSYNC + VBP - 1 (2+2-1)
+    hltdc.Init.AccumulatedActiveW = 269;  // HSYNC + HBP + Width - 1 (10+20+240-1)
+    hltdc.Init.AccumulatedActiveH = 323;  // VSYNC + VBP + Height - 1 (2+2+320-1)
+    hltdc.Init.TotalWidth = 279;     // Total horizontal - 1 (add HFP=10)
+    hltdc.Init.TotalHeigh = 327;     // Total vertical - 1 (add VFP=4)
 
     /* Background color (black) */
     hltdc.Init.Backcolor.Blue = 0;
@@ -894,9 +928,9 @@ HAL_StatusTypeDef LTDC_HW_Init(void) {
     /* Configure Layer 1 */
     LTDC_LayerCfgTypeDef layerCfg = {0};
     layerCfg.WindowX0 = 0;
-    layerCfg.WindowX1 = 239;  // 240 pixels wide (inclusive)
+    layerCfg.WindowX1 = 240;  // Use BSP convention: stop coordinate is end+1
     layerCfg.WindowY0 = 0;
-    layerCfg.WindowY1 = 319;  // 320 pixels tall (inclusive)
+    layerCfg.WindowY1 = 320;  // BSP convention: stop coordinate is end+1
     layerCfg.PixelFormat = LTDC_PIXEL_FORMAT_RGB565;
     layerCfg.Alpha = 255;
     layerCfg.Alpha0 = 0;
@@ -934,6 +968,16 @@ void LTDC_MspInit(LTDC_HandleTypeDef *hltdc) {
  */
 void LTDC_MspDeInit(LTDC_HandleTypeDef *hltdc) {
     HAL_LTDC_MspDeInit(hltdc);
+}
+
+/* HAL reload event callback - forward to driver instance if available */
+void HAL_LTDC_ReloadEventCallback(LTDC_HandleTypeDef *hltdc) {
+    (void)hltdc;
+    if (g_ltdc_driver != NULL) {
+        g_ltdc_driver->reloadFlag = 1;
+        /* Wake any waiter blocked in __WFE() */
+        __SEV();
+    }
 }
 
 /* Private Functions ---------------------------------------------------------*/
@@ -1017,20 +1061,6 @@ static uint32_t LTDC_GetPixelFormatHAL(LTDC_PixelFormat_t format) {
  */
 
 
-/**
- * @brief Set pixel in framebuffer
- * @param framebuffer: Framebuffer pointer
- * @param x: X coordinate
- * @param y: Y coordinate
- * @param color: Pixel color
- * @param format: Pixel format
- */
-/* Removed legacy per-scanline Set/Get pixel logic that assumed full display stride.
- * Use LTDC_SetPixelByIndex / LTDC_GetPixelByIndex for image-buffer-indexed access.
- */
-
-/* Line helpers removed to simplify driver; use application-level routines if needed. */
-
 /* New helper: set pixel by linear index (row-major) where framebuffer base is a byte pointer */
 static void LTDC_SetPixelByIndex(uint8_t *fbBase, uint32_t index, uint32_t color, LTDC_PixelFormat_t format) {
     switch (format) {
@@ -1055,6 +1085,3 @@ static void LTDC_SetPixelByIndex(uint8_t *fbBase, uint32_t index, uint32_t color
     }
 }
 
-/* GetPixelByIndex removed (unused) to keep the driver small. */
-
-/* Bitmap/font helpers removed: use LVGL or application-level routines for text and complex image drawing. */

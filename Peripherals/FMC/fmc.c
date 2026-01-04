@@ -131,8 +131,8 @@ HAL_StatusTypeDef FMC_Driver_SDRAM_Init(FMC_Driver_Handle_t *handle, FMC_Driver_
 
     /* Step 5: Set refresh rate (64ms / 4096 rows = 15.625µs per row)
      * Refresh rate = (15.625µs × SDRAM_CLK) - 20
-     * For 90MHz SDRAM_CLK: (15.625µs × 90MHz) - 20 = 1386 */
-    if (HAL_SDRAM_ProgramRefreshRate(&handle->hsdram, 1386) != HAL_OK) {
+     * For 84MHz SDRAM_CLK: (15.625µs × 84MHz) - 20 = 1292 */
+    if (HAL_SDRAM_ProgramRefreshRate(&handle->hsdram, 1292) != HAL_OK) {
         handle->errorCode = FMC_DRIVER_ERROR_CONFIG;
         return HAL_ERROR;
     }

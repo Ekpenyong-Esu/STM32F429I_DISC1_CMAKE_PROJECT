@@ -52,10 +52,16 @@
 extern "C" {
 #endif
 
-void ILI9341_SPI_Init(void);
-void ILI9341_WriteCommand(uint8_t cmd);
-void ILI9341_WriteData(uint8_t data);
-void ILI9341_Init(void);
+/* NOTE: This header provided legacy SPI-based access to the ILI9341. The
+   functionality has been replaced by `Peripherals/ILI9341/ili9341.{h,c}`. Use
+   that API instead. These wrappers remain for backward compatibility. */
+
+#include "../ILI9341/ili9341.h"
+
+void ILI9341_SPI_Init(void);   /* Deprecated wrapper - calls ILI9341_MspInit() */
+void ILI9341_WriteCommand(uint8_t cmd); /* Deprecated wrapper - calls ili9341_WriteReg() */
+void ILI9341_WriteData(uint8_t data);   /* Deprecated wrapper - calls ili9341_WriteData() */
+void ILI9341_Init(void);       /* Deprecated wrapper - calls ili9341_Init() */
 
 #ifdef __cplusplus
 }

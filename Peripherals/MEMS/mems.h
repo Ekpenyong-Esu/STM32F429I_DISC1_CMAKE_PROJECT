@@ -98,6 +98,9 @@ extern "C" {
 #define L3GD20_BLE_LSB                  0x00
 #define L3GD20_BLE_MSB                  0x40
 
+/* Temperature offset used when converting raw temp to degrees C */
+#define MEMS_TEMPERATURE_OFFSET        25.0f
+
 /* SPI Communication Constants */
 #define L3GD20_READ_CMD                 0x80
 #define L3GD20_MULTIPLEBYTE_CMD         0x40
@@ -207,13 +210,21 @@ typedef struct {
  */
 typedef struct {
     SPI_HandleTypeDef *hspi;                   /**< SPI handle */
+    GPIO_TypeDef *CS_Port;                      /**< Optional chip-select port (external device) */
+    uint16_t CS_Pin;                            /**< Optional chip-select pin (external device) */
     MEMS_GyroConfigTypeDef GyroConfig;         /**< Gyroscope configuration */
     MEMS_InterruptConfigTypeDef IntConfig;     /**< Interrupt configuration */
     bool IsInitialized;                        /**< Initialization status */
-    bool IsCalibrated;                         /**< Calibration status */
+    bool IsCalibrated;                        /**< Calibration status */
     MEMS_AxesTypeDef CalibrationOffset;        /**< Calibration offset values */
     float Temperature;                         /**< Current temperature */
 } MEMS_HandleTypeDef;
+
+/**
+ * @brief Set chip-select pin to use for this MEMS handle.
+ * @note If not set, the board default `MEMS_CS_GPIO_PORT`/`MEMS_CS_PIN` will be used.
+ */
+void MEMS_SetCS(MEMS_HandleTypeDef *hmems, GPIO_TypeDef *csPort, uint16_t csPin);
 
 /**
  * @brief MEMS device information structure

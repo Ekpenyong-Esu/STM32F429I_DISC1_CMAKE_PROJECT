@@ -2,6 +2,8 @@
 
 This directory contains a comprehensive MEMS (Micro-Electro-Mechanical Systems) sensor driver implementation for the STM32F429 Discovery board, specifically designed for the L3GD20 3-axis digital gyroscope.
 
+**Note:** The older `Peripherals/GYRO` driver was removed — use this `MEMS` driver for both the on-board and external gyroscopes (use `MEMS_SetCS()` to specify an external CS pin).
+
 ## Overview
 
 The MEMS driver provides a complete interface for controlling and reading data from the L3GD20 gyroscope sensor connected via SPI5 on the STM32F429 Discovery board. The driver includes features for initialization, calibration, data reading, power management, and interrupt handling.
@@ -93,6 +95,18 @@ float MEMS_ConvertToDPS(int16_t raw_data, MEMS_GyroFullScaleTypeDef full_scale);
 ## Usage Examples
 
 ### Basic Initialization and Reading
+
+**Using an external gyroscope (custom CS pin)**
+
+If your gyroscope is not the on-board device and you wired it to a custom CS pin, call `MEMS_SetCS()` before `MEMS_Init()` to configure the chip-select pin for the `MEMS_HandleTypeDef`:
+
+```c
+// Example: external device CS on PA4
+MEMS_SetCS(&hmems, GPIOA, GPIO_PIN_4);
+if (MEMS_Init(&hmems, &hspi5) == MEMS_OK) {
+    // proceed as normal
+}
+```
 ```c
 #include "mems.h"
 
@@ -153,8 +167,7 @@ Ensure that the STM32F429 Discovery board is properly connected and powered. The
 The SPI5 peripheral must be configured before initializing the MEMS driver. This is typically done in the main initialization routine:
 
 ```c
-// SPI5 is configured automatically by MEMS_Init()
-// Or configure manually if needed:
+// SPI5 must be configured by the application using the shared SPI driver (Peripherals/SPI). For example call `SPI_Init()` or `SPI_Init_Custom()` before `MEMS_Init()`.
 void MX_SPI5_Init(void) {
     hspi5.Instance = SPI5;
     hspi5.Init.Mode = SPI_MODE_MASTER;

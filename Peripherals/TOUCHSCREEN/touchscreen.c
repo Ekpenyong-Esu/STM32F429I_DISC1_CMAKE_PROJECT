@@ -11,6 +11,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "touchscreen.h"
+#include "../I2C/i2c.h"
 #include <string.h>
 #include <math.h>
 #include <stdlib.h>
@@ -30,6 +31,22 @@
 #define TS_ADC_CTRL_12BIT               0x48    /* 12-bit ADC configuration */
 #define TS_COORD_HIGH_MASK              0xF0    /* High nibble mask */
 #define TS_COORD_LOW_MASK               0x0F    /* Low nibble mask */
+
+/* ST-style mapping constants */
+#define TS_Y_CORRECTION_OFFSET          360U    /* Y offset applied before dividing */
+#define TS_Y_DIVISOR                    11U     /* Y scaling divisor */
+#define TS_X_THRESHOLD                  3000U  /* Decision threshold for X mapping */
+#define TS_X_SUB1                       3870U  /* X sub value for lower range */
+#define TS_X_SUB2                       3800U  /* X sub value for upper range */
+#define TS_X_DIVISOR                    15U    /* X scaling divisor */
+
+/* Pressure scaling */
+#define TS_PRESSURE_MAX_VALUE           0xFFU
+#define TS_PRESSURE_SCALE               255U
+#define TS_BYTE_MASK                    0xFFU
+
+/* Smoothing */
+#define TS_SMOOTHING_THRESHOLD          5U
 
 /* Private variables ---------------------------------------------------------*/
 /* Global touchscreen handle */
@@ -490,8 +507,7 @@ TS_StatusTypeDef TS_ReadRegister(TS_HandleTypeDef *hts, uint8_t reg, uint8_t *da
         return TS_INVALID_PARAM;
     }
 
-    if (HAL_I2C_Mem_Read(hts->hi2c, STMPE811_I2C_ADDRESS, reg, I2C_MEMADD_SIZE_8BIT,
-                         data, 1, TS_TIMEOUT) != HAL_OK) {
+    if (I2C_Mem_Read(STMPE811_I2C_ADDRESS, reg, I2C_MEMADD_SIZE_8BIT, data, 1, TS_TIMEOUT) != I2C_OK) {
         return TS_COMMUNICATION_ERROR;
     }
 
@@ -511,8 +527,7 @@ TS_StatusTypeDef TS_WriteRegister(TS_HandleTypeDef *hts, uint8_t reg, uint8_t da
         return TS_INVALID_PARAM;
     }
 
-    if (HAL_I2C_Mem_Write(hts->hi2c, STMPE811_I2C_ADDRESS, reg, I2C_MEMADD_SIZE_8BIT,
-                          &data, 1, TS_TIMEOUT) != HAL_OK) {
+    if (I2C_Mem_Write(STMPE811_I2C_ADDRESS, reg, I2C_MEMADD_SIZE_8BIT, &data, 1, TS_TIMEOUT) != I2C_OK) {
         return TS_COMMUNICATION_ERROR;
     }
 
@@ -533,8 +548,7 @@ TS_StatusTypeDef TS_ReadRegister16(TS_HandleTypeDef *hts, uint8_t reg, uint16_t 
     }
 
     uint8_t buffer[2];
-    if (HAL_I2C_Mem_Read(hts->hi2c, STMPE811_I2C_ADDRESS, reg, I2C_MEMADD_SIZE_8BIT,
-                         buffer, 2, TS_TIMEOUT) != HAL_OK) {
+    if (I2C_Mem_Read(STMPE811_I2C_ADDRESS, reg, I2C_MEMADD_SIZE_8BIT, buffer, 2, TS_TIMEOUT) != I2C_OK) {
         return TS_COMMUNICATION_ERROR;
     }
 
@@ -558,10 +572,9 @@ TS_StatusTypeDef TS_WriteRegister16(TS_HandleTypeDef *hts, uint8_t reg, uint16_t
 
     uint8_t buffer[2];
     buffer[0] = (uint8_t)(data >> 8);   // MSB first
-    buffer[1] = (uint8_t)(data & 0xFF); // LSB
+    buffer[1] = (uint8_t)(data & TS_BYTE_MASK); // LSB
 
-    if (HAL_I2C_Mem_Write(hts->hi2c, STMPE811_I2C_ADDRESS, reg, I2C_MEMADD_SIZE_8BIT,
-                          buffer, 2, TS_TIMEOUT) != HAL_OK) {
+    if (I2C_Mem_Write(STMPE811_I2C_ADDRESS, reg, I2C_MEMADD_SIZE_8BIT, buffer, 2, TS_TIMEOUT) != I2C_OK) {
         return TS_COMMUNICATION_ERROR;
     }
 
@@ -580,7 +593,7 @@ TS_StatusTypeDef TS_GetPressure(TS_HandleTypeDef *hts, uint16_t *pressure)
         return TS_INVALID_PARAM;
     }
 
-    uint8_t data;
+    uint8_t data = 0;
 
     /* Read pressure data from Z register */
     if (TS_ReadRegister(hts, STMPE811_REG_TSC_DATA_Z, &data) != TS_OK) {
@@ -592,7 +605,7 @@ TS_StatusTypeDef TS_GetPressure(TS_HandleTypeDef *hts, uint16_t *pressure)
 
     /* Apply pressure scaling if needed */
     if (*pressure > 0) {
-        *pressure = (uint16_t)((*pressure * 255) / 0xFF);
+        *pressure = (uint16_t)((*pressure * TS_PRESSURE_SCALE) / TS_PRESSURE_MAX_VALUE);
     }
 
     return TS_OK;
@@ -653,26 +666,11 @@ static TS_StatusTypeDef TS_InitGPIO(void)
  */
 static TS_StatusTypeDef TS_InitI2C(TS_HandleTypeDef *hts)
 {
+    /* If application already provided an I2C handle, assume it's configured and ready.
+       Otherwise use the central I2C driver (I2C_Init which configures hi2c3) */
     if (hts->hi2c == NULL) {
-        return TS_INVALID_PARAM;
-    }
-
-    /* Enable I2C clock */
-    TS_I2C_CLK_ENABLE();
-
-    /* Configure I2C parameters */
-    hts->hi2c->Instance = TS_I2C;
-    hts->hi2c->Init.ClockSpeed = TS_I2C_SPEED;
-    hts->hi2c->Init.DutyCycle = I2C_DUTYCYCLE_2;
-    hts->hi2c->Init.OwnAddress1 = 0;
-    hts->hi2c->Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-    hts->hi2c->Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-    hts->hi2c->Init.OwnAddress2 = 0;
-    hts->hi2c->Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-    hts->hi2c->Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-
-    if (HAL_I2C_Init(hts->hi2c) != HAL_OK) {
-        return TS_ERROR;
+        I2C_Init(); /* initializes hi2c3 */
+        hts->hi2c = &hi2c3; /* use central handle */
     }
 
     return TS_OK;
@@ -704,32 +702,79 @@ static TS_StatusTypeDef TS_CheckDevice(TS_HandleTypeDef *hts)
  * @brief Configure STMPE811 controller
  * @param hts Pointer to touchscreen handle structure
  * @retval TS_StatusTypeDef Status of the operation
+ * @note Configuration sequence based on ST BSP STMPE811_TS_Init()
  */
 static TS_StatusTypeDef TS_ConfigureController(TS_HandleTypeDef *hts)
 {
+    uint8_t tmp = 0;
+
     /* Reset the device */
     TS_Reset(hts);
 
-    /* Enable TSC and ADC */
-    TS_WriteRegister(hts, STMPE811_REG_SYS_CTRL2, 0x00);
+    /* Get the current SYS_CTRL2 register value */
+    TS_ReadRegister(hts, STMPE811_REG_SYS_CTRL2, &tmp);
 
-    /* Configure touchscreen */
-    TS_WriteRegister(hts, STMPE811_REG_TSC_CFG, hts->Config.SampleTime |
-                                               hts->Config.TouchDetectDelay |
-                                               hts->Config.PanelDriverSettlingTime);
+    /* Disable IO function (keep others enabled for now) */
+    tmp &= ~0x04U;  /* Clear IO_FCT bit to enable IO */
 
-    /* Set window for touch detection */
-    TS_WriteRegister16(hts, STMPE811_REG_WDW_TR_X, STMPE811_MAX_X);
-    TS_WriteRegister16(hts, STMPE811_REG_WDW_TR_Y, STMPE811_MAX_Y);
-    TS_WriteRegister16(hts, STMPE811_REG_WDW_BL_X, 0);
-    TS_WriteRegister16(hts, STMPE811_REG_WDW_BL_Y, 0);
+    /* Write back - this enables GPIO/IO functionality */
+    TS_WriteRegister(hts, STMPE811_REG_SYS_CTRL2, tmp);
 
-    /* Configure ADC */
-    TS_WriteRegister(hts, STMPE811_REG_ADC_CTRL1, TS_ADC_CTRL_12BIT);  /* 12-bit, internal reference */
-    TS_WriteRegister(hts, STMPE811_REG_ADC_CTRL2, 0x01);  /* 3.25MHz ADC clock */
+    /* Enable Alternate Function for touchscreen pins (GPIO 4-7) */
+    /* Read current IO_AF register */
+    TS_ReadRegister(hts, STMPE811_REG_GPIO_EN, &tmp);
+    /* Enable AF for pins 4-7 (TSC pins): clear bits to enable AF */
+    tmp &= ~0xF0U;  /* Clear bits 4-7 to enable AF for those pins */
+    TS_WriteRegister(hts, STMPE811_REG_GPIO_EN, tmp);
 
-    /* Enable touchscreen controller */
-    TS_WriteRegister(hts, STMPE811_REG_TSC_CTRL, STMPE811_TSC_CTRL_EN | STMPE811_TSC_CTRL_XY);
+    /* Now enable TSC and ADC functions in SYS_CTRL2 */
+    TS_ReadRegister(hts, STMPE811_REG_SYS_CTRL2, &tmp);
+    tmp &= ~0x03U;  /* Clear TSC_FCT and ADC_FCT bits to enable them */
+    TS_WriteRegister(hts, STMPE811_REG_SYS_CTRL2, tmp);
+
+    /* Configure ADC - Sample Time, bit number and Reference
+       0x48 = 64 sample time, 12-bit, internal reference */
+    TS_WriteRegister(hts, STMPE811_REG_ADC_CTRL1, 0x48U);
+
+    /* Wait for ADC to stabilize */
+    TS_DELAY_MS(2);
+
+    /* Configure ADC clock speed: 3.25 MHz */
+    TS_WriteRegister(hts, STMPE811_REG_ADC_CTRL2, 0x01U);
+
+    /* Configure touchscreen:
+       - 4 samples averaging (0x80)
+       - 500us touch detect delay (0x18)
+       - 500us panel driver settling time (0x02)
+       = 0x9A */
+    TS_WriteRegister(hts, STMPE811_REG_TSC_CFG, 0x9AU);
+
+    /* Configure FIFO threshold: single point reading */
+    TS_WriteRegister(hts, STMPE811_REG_FIFO_TH, 0x01U);
+
+    /* Clear the FIFO memory content */
+    TS_WriteRegister(hts, STMPE811_REG_FIFO_STA, 0x01U);
+
+    /* Put the FIFO back into operation mode */
+    TS_WriteRegister(hts, STMPE811_REG_FIFO_STA, 0x00U);
+
+    /* Set the fractional part and whole part for Z pressure:
+       - Fractional part: 7
+       - Whole part: 1 */
+    TS_WriteRegister(hts, STMPE811_REG_TSC_FRACT_XYZ, 0x01U);
+
+    /* Set the driving capability for TSC pins: 50mA */
+    TS_WriteRegister(hts, STMPE811_REG_TSC_I_DRIVE, 0x01U);
+
+    /* Enable touchscreen controller:
+       0x73 = TSC enabled, X-Y only mode, window tracking index 127 */
+    TS_WriteRegister(hts, STMPE811_REG_TSC_CTRL, 0x73U);
+
+    /* Clear all pending interrupts */
+    TS_WriteRegister(hts, STMPE811_REG_INT_STA, 0xFFU);
+
+    /* Wait for configuration to settle */
+    TS_DELAY_MS(2);
 
     /* Configure interrupts if enabled */
     if (hts->Config.InterruptEnable) {
@@ -749,11 +794,11 @@ static TS_StatusTypeDef TS_ConfigureController(TS_HandleTypeDef *hts)
  */
 static TS_StatusTypeDef TS_ReadRawCoordinates(TS_HandleTypeDef *hts, uint16_t *raw_x, uint16_t *raw_y, uint16_t *pressure)
 {
-    uint8_t data_xyz[4];
+    (void)hts; /* Unused - I2C access uses central driver */
+    uint8_t data_xyz[4] = {0};
 
     /* Read XYZ data */
-    if (HAL_I2C_Mem_Read(hts->hi2c, STMPE811_I2C_ADDRESS, STMPE811_REG_TSC_DATA_XYZ,
-                         I2C_MEMADD_SIZE_8BIT, data_xyz, 4, TS_TIMEOUT) != HAL_OK) {
+    if (I2C_Mem_Read(STMPE811_I2C_ADDRESS, STMPE811_REG_TSC_DATA_XYZ, I2C_MEMADD_SIZE_8BIT, data_xyz, 4, TS_TIMEOUT) != I2C_OK) {
         return TS_COMMUNICATION_ERROR;
     }
 
@@ -782,8 +827,59 @@ static void TS_ProcessTouchData(TS_HandleTypeDef *hts)
     /* Read raw coordinates */
     if (TS_ReadRawCoordinates(hts, &raw_x, &raw_y, &pressure) == TS_OK) {
         if (TS_IsValidTouch(pressure)) {
-            /* Convert to display coordinates */
-            TS_ConvertCoordinates(hts, raw_x, raw_y, &display_x, &display_y);
+            /* If calibrated, use calibrated conversion; otherwise use ST-style mapping */
+            if (hts->Calibration.IsCalibrated) {
+                TS_ConvertCoordinates(hts, raw_x, raw_y, &display_x, &display_y);
+                /* Update prev for smoothing */
+                hts->PrevTouchData.Points[0].X = display_x;
+                hts->PrevTouchData.Points[0].Y = display_y;
+            } else {
+                /* ST-style mapping adapted from BSP implementation */
+                uint32_t xRaw = raw_x;
+                uint32_t yRaw = raw_y;
+                uint16_t xScaled = 0;
+                uint16_t yScaled = 0;
+
+                /* Y value first correction */
+                if (yRaw > TS_Y_CORRECTION_OFFSET) {
+                    yRaw -= TS_Y_CORRECTION_OFFSET;
+                } else {
+                    yRaw = 0;
+                }
+
+                /* Y value second correction */
+                yScaled = (uint16_t)(yRaw / TS_Y_DIVISOR);
+                if (yScaled > TS_DISPLAY_HEIGHT) {
+                    yScaled = TS_DISPLAY_HEIGHT - 1;
+                }
+
+                /* X value first correction */
+                if (xRaw <= TS_X_THRESHOLD) {
+                    xRaw = TS_X_SUB1 - xRaw;
+                } else {
+                    xRaw = TS_X_SUB2 - xRaw;
+                }
+
+                /* X value second correction */
+                xScaled = (uint16_t)(xRaw / TS_X_DIVISOR);
+                if (xScaled > TS_DISPLAY_WIDTH) {
+                    xScaled = TS_DISPLAY_WIDTH - 1;
+                }
+
+                /* Smoothing using previous point */
+                uint16_t prev_x = hts->PrevTouchData.Points[0].X;
+                uint16_t prev_y = hts->PrevTouchData.Points[0].Y;
+                uint16_t xDiff = (uint16_t)(xScaled > prev_x ? xScaled - prev_x : prev_x - xScaled);
+                uint16_t yDiff = (uint16_t)(yScaled > prev_y ? yScaled - prev_y : prev_y - yScaled);
+
+                if ((xDiff + yDiff) > TS_SMOOTHING_THRESHOLD) {
+                    hts->PrevTouchData.Points[0].X = xScaled;
+                    hts->PrevTouchData.Points[0].Y = yScaled;
+                }
+
+                display_x = hts->PrevTouchData.Points[0].X;
+                display_y = hts->PrevTouchData.Points[0].Y;
+            }
 
             /* Filter coordinates */
             TS_FilterCoordinates(hts, &display_x, &display_y);

@@ -29,10 +29,9 @@ static const float MEMS_SENSITIVITY_FACTORS[] = {
 /* Private function prototypes -----------------------------------------------*/
 static MEMS_StatusTypeDef MEMS_WriteRegister(MEMS_HandleTypeDef *hmems, uint8_t addr, uint8_t data);
 static MEMS_StatusTypeDef MEMS_ReadRegister(MEMS_HandleTypeDef *hmems, uint8_t addr, uint8_t *data);
-static void MEMS_CS_High(void);
-static void MEMS_CS_Low(void);
-static MEMS_StatusTypeDef MEMS_InitGPIO(void);
-static MEMS_StatusTypeDef MEMS_InitSPI(SPI_HandleTypeDef *hspi);
+static void MEMS_CS_High(MEMS_HandleTypeDef *hmems);
+static void MEMS_CS_Low(MEMS_HandleTypeDef *hmems);
+static MEMS_StatusTypeDef MEMS_InitGPIO(MEMS_HandleTypeDef *hmems);
 static MEMS_StatusTypeDef MEMS_VerifyDevice(MEMS_HandleTypeDef *hmems);
 
 /* Exported functions --------------------------------------------------------*/
@@ -57,19 +56,16 @@ MEMS_StatusTypeDef MEMS_Init(MEMS_HandleTypeDef *hmems, SPI_HandleTypeDef *hspi)
     hmems->hspi = hspi;
 
     /* Initialize GPIO pins */
-    status = MEMS_InitGPIO();
+    status = MEMS_InitGPIO(hmems);
     if (status != MEMS_OK) {
         return status;
     }
 
-    /* Initialize SPI peripheral */
-    status = MEMS_InitSPI(hspi);
-    if (status != MEMS_OK) {
-        return status;
-    }
+    /* SPI must be initialized by the application (use Peripherals/SPI SPI_Init() or SPI_Init_Custom()).
+       MEMS will use the provided SPI handle and will NOT reconfigure it. */
 
     /* Set CS high initially */
-    MEMS_CS_High();
+    MEMS_CS_High(hmems);
     MEMS_DELAY_MS(1);
 
     /* Verify device presence */
@@ -181,9 +177,15 @@ MEMS_StatusTypeDef MEMS_GyroConfig(MEMS_HandleTypeDef *hmems, MEMS_GyroConfigTyp
     }
 
     /* Enable axes */
-    if (config->XAxisEnable) ctrl_reg1 |= 0x01;
-    if (config->YAxisEnable) ctrl_reg1 |= 0x02;
-    if (config->ZAxisEnable) ctrl_reg1 |= 0x04;
+    if (config->XAxisEnable) {
+        ctrl_reg1 |= 0x01;
+    }
+    if (config->YAxisEnable) {
+        ctrl_reg1 |= 0x02;
+    }
+    if (config->ZAxisEnable) {
+        ctrl_reg1 |= 0x04;
+    }
 
     /* Configure CTRL_REG4 */
     switch (config->FullScale) {
@@ -298,7 +300,7 @@ MEMS_StatusTypeDef MEMS_GyroRead(MEMS_HandleTypeDef *hmems, MEMS_AxesTypeDef *ax
 MEMS_StatusTypeDef MEMS_ReadTemperature(MEMS_HandleTypeDef *hmems, float *temperature)
 {
     MEMS_StatusTypeDef status = MEMS_OK;
-    uint8_t temp_raw;
+    uint8_t temp_raw = 0U;
 
     if (hmems == NULL || temperature == NULL) {
         return MEMS_INVALID_PARAM;
@@ -315,7 +317,7 @@ MEMS_StatusTypeDef MEMS_ReadTemperature(MEMS_HandleTypeDef *hmems, float *temper
     }
 
     /* Convert to temperature (simplified conversion) */
-    *temperature = 25.0f + ((float)((int8_t)temp_raw));
+    *temperature = MEMS_TEMPERATURE_OFFSET + ((float)((int8_t)temp_raw));
     hmems->Temperature = *temperature;
 
     return MEMS_OK;
@@ -492,7 +494,7 @@ MEMS_StatusTypeDef MEMS_ReadStatus(MEMS_HandleTypeDef *hmems, uint8_t *status_re
 MEMS_StatusTypeDef MEMS_SetPowerMode(MEMS_HandleTypeDef *hmems, bool power_down)
 {
     MEMS_StatusTypeDef status = MEMS_OK;
-    uint8_t ctrl_reg1;
+    uint8_t ctrl_reg1 = 0;
 
     if (hmems == NULL) {
         return MEMS_INVALID_PARAM;
@@ -537,19 +539,29 @@ MEMS_StatusTypeDef MEMS_Reset(MEMS_HandleTypeDef *hmems)
 
     /* Reset all control registers to default values */
     status = MEMS_WriteRegister(hmems, L3GD20_CTRL_REG1_ADDR, 0x07);
-    if (status != MEMS_OK) return status;
+    if (status != MEMS_OK) {
+        return status;
+    }
 
     status = MEMS_WriteRegister(hmems, L3GD20_CTRL_REG2_ADDR, 0x00);
-    if (status != MEMS_OK) return status;
+    if (status != MEMS_OK) {
+        return status;
+    }
 
     status = MEMS_WriteRegister(hmems, L3GD20_CTRL_REG3_ADDR, 0x00);
-    if (status != MEMS_OK) return status;
+    if (status != MEMS_OK) {
+        return status;
+    }
 
     status = MEMS_WriteRegister(hmems, L3GD20_CTRL_REG4_ADDR, 0x00);
-    if (status != MEMS_OK) return status;
+    if (status != MEMS_OK) {
+        return status;
+    }
 
     status = MEMS_WriteRegister(hmems, L3GD20_CTRL_REG5_ADDR, 0x00);
-    if (status != MEMS_OK) return status;
+    if (status != MEMS_OK) {
+        return status;
+    }
 
     /* Reset calibration */
     hmems->IsCalibrated = false;
@@ -702,24 +714,24 @@ MEMS_StatusTypeDef MEMS_ReadRegisters(MEMS_HandleTypeDef *hmems, uint8_t start_a
     }
 
     /* Select device */
-    MEMS_CS_Low();
+    MEMS_CS_Low(hmems);
 
     /* Send address */
     hal_status = HAL_SPI_Transmit(hmems->hspi, tx_buffer, 1, MEMS_SPI_TIMEOUT);
     if (hal_status != HAL_OK) {
-        MEMS_CS_High();
+        MEMS_CS_High(hmems);
         return MEMS_COMMUNICATION_ERROR;
     }
 
     /* Read data */
     hal_status = HAL_SPI_Receive(hmems->hspi, data, length, MEMS_SPI_TIMEOUT);
     if (hal_status != HAL_OK) {
-        MEMS_CS_High();
+        MEMS_CS_High(hmems);
         return MEMS_COMMUNICATION_ERROR;
     }
 
     /* Deselect device */
-    MEMS_CS_High();
+    MEMS_CS_High(hmems);
 
     return MEMS_OK;
 }
@@ -753,24 +765,24 @@ MEMS_StatusTypeDef MEMS_WriteRegisters(MEMS_HandleTypeDef *hmems, uint8_t start_
     }
 
     /* Select device */
-    MEMS_CS_Low();
+    MEMS_CS_Low(hmems);
 
     /* Send address */
     hal_status = HAL_SPI_Transmit(hmems->hspi, tx_buffer, 1, MEMS_SPI_TIMEOUT);
     if (hal_status != HAL_OK) {
-        MEMS_CS_High();
+        MEMS_CS_High(hmems);
         return MEMS_COMMUNICATION_ERROR;
     }
 
     /* Write data */
     hal_status = HAL_SPI_Transmit(hmems->hspi, data, length, MEMS_SPI_TIMEOUT);
     if (hal_status != HAL_OK) {
-        MEMS_CS_High();
+        MEMS_CS_High(hmems);
         return MEMS_COMMUNICATION_ERROR;
     }
 
     /* Deselect device */
-    MEMS_CS_High();
+    MEMS_CS_High(hmems);
 
     return MEMS_OK;
 }
@@ -855,38 +867,64 @@ static MEMS_StatusTypeDef MEMS_ReadRegister(MEMS_HandleTypeDef *hmems, uint8_t a
 /**
  * @brief Set CS pin high (deselect device)
  */
-static void MEMS_CS_High(void)
+static void MEMS_CS_High(MEMS_HandleTypeDef *hmems)
 {
-    HAL_GPIO_WritePin(MEMS_CS_GPIO_PORT, MEMS_CS_PIN, GPIO_PIN_SET);
+    if (hmems != NULL && hmems->CS_Port != NULL && hmems->CS_Pin != 0U) {
+        HAL_GPIO_WritePin(hmems->CS_Port, hmems->CS_Pin, GPIO_PIN_SET);
+    } else {
+        HAL_GPIO_WritePin(MEMS_CS_GPIO_PORT, MEMS_CS_PIN, GPIO_PIN_SET);
+    }
 }
 
 /**
  * @brief Set CS pin low (select device)
  */
-static void MEMS_CS_Low(void)
+static void MEMS_CS_Low(MEMS_HandleTypeDef *hmems)
 {
-    HAL_GPIO_WritePin(MEMS_CS_GPIO_PORT, MEMS_CS_PIN, GPIO_PIN_RESET);
+    if (hmems != NULL && hmems->CS_Port != NULL && hmems->CS_Pin != 0U) {
+        HAL_GPIO_WritePin(hmems->CS_Port, hmems->CS_Pin, GPIO_PIN_RESET);
+    } else {
+        HAL_GPIO_WritePin(MEMS_CS_GPIO_PORT, MEMS_CS_PIN, GPIO_PIN_RESET);
+    }
 }
 
 /**
  * @brief Initialize GPIO pins for MEMS sensor
  * @retval MEMS_StatusTypeDef Status of the operation
  */
-static MEMS_StatusTypeDef MEMS_InitGPIO(void)
+static MEMS_StatusTypeDef MEMS_InitGPIO(MEMS_HandleTypeDef *hmems)
 {
     GPIO_InitTypeDef GPIO_InitStruct = {0};
 
-    /* Enable GPIO clocks */
+    /* Enable common GPIO clocks used by default pins */
     __HAL_RCC_GPIOA_CLK_ENABLE();
     __HAL_RCC_GPIOC_CLK_ENABLE();
     __HAL_RCC_GPIOF_CLK_ENABLE();
 
-    /* Configure CS pin */
-    GPIO_InitStruct.Pin = MEMS_CS_PIN;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-    HAL_GPIO_Init(MEMS_CS_GPIO_PORT, &GPIO_InitStruct);
+    /* Configure CS pin: prefer user-specified in handle if provided */
+    if (hmems != NULL && hmems->CS_Port != NULL && hmems->CS_Pin != 0U) {
+        /* Try to enable clock for provided port (best-effort) */
+        if (hmems->CS_Port == GPIOA) { __HAL_RCC_GPIOA_CLK_ENABLE(); }
+        else if (hmems->CS_Port == GPIOB) { __HAL_RCC_GPIOB_CLK_ENABLE(); }
+        else if (hmems->CS_Port == GPIOC) { __HAL_RCC_GPIOC_CLK_ENABLE(); }
+        else if (hmems->CS_Port == GPIOD) { __HAL_RCC_GPIOD_CLK_ENABLE(); }
+        else if (hmems->CS_Port == GPIOE) { __HAL_RCC_GPIOE_CLK_ENABLE(); }
+        else if (hmems->CS_Port == GPIOF) { __HAL_RCC_GPIOF_CLK_ENABLE(); }
+        else if (hmems->CS_Port == GPIOG) { __HAL_RCC_GPIOG_CLK_ENABLE(); }
+
+        GPIO_InitStruct.Pin = hmems->CS_Pin;
+        GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+        GPIO_InitStruct.Pull = GPIO_NOPULL;
+        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+        HAL_GPIO_Init(hmems->CS_Port, &GPIO_InitStruct);
+    } else {
+        /* Configure default CS pin */
+        GPIO_InitStruct.Pin = MEMS_CS_PIN;
+        GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+        GPIO_InitStruct.Pull = GPIO_NOPULL;
+        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+        HAL_GPIO_Init(MEMS_CS_GPIO_PORT, &GPIO_InitStruct);
+    }
 
     /* Configure interrupt pins */
     GPIO_InitStruct.Pin = MEMS_INT1_PIN;
@@ -898,6 +936,48 @@ static MEMS_StatusTypeDef MEMS_InitGPIO(void)
     HAL_GPIO_Init(MEMS_INT2_GPIO_PORT, &GPIO_InitStruct);
 
     /* Configure SPI pins */
+
+    return MEMS_OK;
+}
+
+/**
+ * @brief Configure chip-select pin for a MEMS handle
+ * @param hmems Pointer to MEMS handle structure
+ * @param csPort GPIO port for CS
+ * @param csPin GPIO pin number for CS
+ */
+void MEMS_SetCS(MEMS_HandleTypeDef *hmems, GPIO_TypeDef *csPort, uint16_t csPin)
+{
+    if (hmems == NULL) {
+        return;
+    }
+
+    hmems->CS_Port = csPort;
+    hmems->CS_Pin = csPin;
+
+    if (csPort == NULL || csPin == 0U) {
+        return;
+    }
+
+    /* Try to enable clock for provided port (best-effort) */
+    if (csPort == GPIOA) { __HAL_RCC_GPIOA_CLK_ENABLE(); }
+    else if (csPort == GPIOB) { __HAL_RCC_GPIOB_CLK_ENABLE(); }
+    else if (csPort == GPIOC) { __HAL_RCC_GPIOC_CLK_ENABLE(); }
+    else if (csPort == GPIOD) { __HAL_RCC_GPIOD_CLK_ENABLE(); }
+    else if (csPort == GPIOE) { __HAL_RCC_GPIOE_CLK_ENABLE(); }
+    else if (csPort == GPIOF) { __HAL_RCC_GPIOF_CLK_ENABLE(); }
+    else if (csPort == GPIOG) { __HAL_RCC_GPIOG_CLK_ENABLE(); }
+
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitStruct.Pin = csPin;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    HAL_GPIO_Init(csPort, &GPIO_InitStruct);
+
+    /* Deassert CS */
+    HAL_GPIO_WritePin(csPort, csPin, GPIO_PIN_SET);
+
     GPIO_InitStruct.Pin = MEMS_SPI_SCK_PIN | MEMS_SPI_MISO_PIN | MEMS_SPI_MOSI_PIN;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
@@ -905,43 +985,12 @@ static MEMS_StatusTypeDef MEMS_InitGPIO(void)
     GPIO_InitStruct.Alternate = GPIO_AF5_SPI5;
     HAL_GPIO_Init(MEMS_SPI_SCK_GPIO_PORT, &GPIO_InitStruct);
 
-    return MEMS_OK;
+    /* MEMS_SetCS is a void helper, no return value */
+    (void)0;
 }
 
-/**
- * @brief Initialize SPI peripheral
- * @param hspi Pointer to SPI handle
- * @retval MEMS_StatusTypeDef Status of the operation
- */
-static MEMS_StatusTypeDef MEMS_InitSPI(SPI_HandleTypeDef *hspi)
-{
-    if (hspi == NULL) {
-        return MEMS_INVALID_PARAM;
-    }
-
-    /* Enable SPI clock */
-    MEMS_SPI_CLK_ENABLE();
-
-    /* Configure SPI parameters */
-    hspi->Instance = MEMS_SPI;
-    hspi->Init.Mode = SPI_MODE_MASTER;
-    hspi->Init.Direction = SPI_DIRECTION_2LINES;
-    hspi->Init.DataSize = SPI_DATASIZE_8BIT;
-    hspi->Init.CLKPolarity = SPI_POLARITY_HIGH;
-    hspi->Init.CLKPhase = SPI_PHASE_2EDGE;
-    hspi->Init.NSS = SPI_NSS_SOFT;
-    hspi->Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
-    hspi->Init.FirstBit = SPI_FIRSTBIT_MSB;
-    hspi->Init.TIMode = SPI_TIMODE_DISABLE;
-    hspi->Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
-    hspi->Init.CRCPolynomial = 10;
-
-    if (HAL_SPI_Init(hspi) != HAL_OK) {
-        return MEMS_ERROR;
-    }
-
-    return MEMS_OK;
-}
+/* Note: SPI initialization is intentionally omitted — the application must initialize SPI (e.g., call `SPI_Init()` in Peripherals/SPI or `SPI_Init_Custom()`).
+   This driver will use the provided `SPI_HandleTypeDef *hspi` and will not reconfigure or initialize the peripheral. */
 
 /**
  * @brief Verify device presence by reading WHO_AM_I register

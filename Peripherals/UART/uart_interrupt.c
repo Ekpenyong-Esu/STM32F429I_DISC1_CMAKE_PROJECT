@@ -4,6 +4,7 @@
  */
 
 #include "uart_interrupt.h"
+#include "uart_config.h"
 
 /* External reference to global UART handle */
 extern UART_Handle_t uartHandle;

@@ -2,6 +2,8 @@
 
 This folder contains a minimal, clean driver for the STM32F429 LTDC (RGB interface) peripheral. It provides display initialization, layer management, framebuffer control, and a minimal pixel drawing API. All SPI/ILI9341 logic is excluded—this is for pure LTDC (RGB) only.
 
+Note: The legacy SPI-based ILI9341 implementation (`Peripherals/LTDC/spiltdc.*`) has been removed in favor of the new dedicated driver `Peripherals/ILI9341/`. Use `ili9341.h` and `ili9341.c` for SPI-driven LCD initialization and control.
+
 ## Features
 
 - Simple LTDC (RGB) initialization and configuration

@@ -270,16 +270,16 @@ void HAL_LTDC_MspInit(LTDC_HandleTypeDef* hltdc)
   /** Initializes the peripherals clock
   */
     PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_LTDC;
-    /* Configure PLLSAI to generate ~6.25MHz LTDC pixel clock for ILI9341 */
+    /* Configure PLLSAI to generate the BSP-like ~9.6MHz LTDC pixel clock for ILI9341 */
     /* System clock: 168 MHz, assumed PLLSAI input: 2 MHz (HSE/PLL source)
-     * With current settings below: VCO = InputFreq * PLLSAIN = 2MHz * 96 = 192MHz
-     * PLLSAIR output = VCO / PLLSAIR = 192MHz / 4 = 48MHz
-     * LTDC Clock = PLLSAIR / PLLSAIDivR = 48MHz / 8 = 6.0MHz
-     * Adjust PLLSAIN/PLLSAIR/PLLSAIDivR if a different pixel clock is required by the panel.
+     * VCO = InputFreq * PLLSAIN = 2MHz * 192 = 384MHz
+     * PLLSAIR output = VCO / PLLSAIR = 384MHz / 5 = 76.8MHz
+     * LTDC Clock = PLLSAIR / PLLSAIDivR = 76.8MHz / 4 = 19.2MHz
+     * LTDC uses pixel clock = LTDC_CLK/2 = 9.6MHz (matches ST BSP for STM32F429I-DISC1).
      */
-    PeriphClkInitStruct.PLLSAI.PLLSAIN = 96;
-    PeriphClkInitStruct.PLLSAI.PLLSAIR = 4;
-    PeriphClkInitStruct.PLLSAIDivR = RCC_PLLSAIDIVR_8;
+    PeriphClkInitStruct.PLLSAI.PLLSAIN = 192;
+    PeriphClkInitStruct.PLLSAI.PLLSAIR = 5;
+    PeriphClkInitStruct.PLLSAIDivR = RCC_PLLSAIDIVR_4;
     if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
     {
       Error_Handler();
@@ -471,15 +471,15 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef* hspi)
     __HAL_RCC_SPI5_CLK_ENABLE();
 
     __HAL_RCC_GPIOF_CLK_ENABLE();
-    /**SPI5 GPIO Configuration
+    /**SPI5 GPIO Configuration (matching ST BSP stm32f429i_discovery.c)
     PF7     ------> SPI5_SCK
     PF8     ------> SPI5_MISO
     PF9     ------> SPI5_MOSI
     */
     GPIO_InitStruct.Pin = SPI5_SCK_Pin|SPI5_MISO_Pin|SPI5_MOSI_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    GPIO_InitStruct.Pull = GPIO_PULLDOWN;        /* ST BSP uses PULLDOWN for SPI5 LCD/Gyro */
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_MEDIUM;  /* ST BSP uses MEDIUM speed */
     GPIO_InitStruct.Alternate = GPIO_AF5_SPI5;
     HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
 
@@ -585,6 +585,14 @@ static void HAL_FMC_MspInit(void){
 
   /* Peripheral clock enable */
   __HAL_RCC_FMC_CLK_ENABLE();
+
+  /* Enable GPIO clocks for FMC pins */
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_GPIOC_CLK_ENABLE();
+  __HAL_RCC_GPIOD_CLK_ENABLE();
+  __HAL_RCC_GPIOE_CLK_ENABLE();
+  __HAL_RCC_GPIOF_CLK_ENABLE();
+  __HAL_RCC_GPIOG_CLK_ENABLE();
 
   /** FMC GPIO Configuration
   PF0   ------> FMC_A0

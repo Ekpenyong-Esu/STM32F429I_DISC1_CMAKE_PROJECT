@@ -4,6 +4,7 @@
  */
 
 #include "uart_dma.h"
+#include "uart_config.h"
 #include "stm32f4xx_hal_dma.h"
 
 /* External references */

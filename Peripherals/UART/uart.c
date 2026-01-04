@@ -10,6 +10,9 @@
 #include "uart_blocking.h"
 #include "sys.h"
 
+/** @brief Delay after deinitialization to allow hardware to settle */
+#define UART_DEINIT_DELAY_MS (1000U)
+
 
 
 /* Ensure uartHandle is declared globally */
@@ -112,7 +115,7 @@ UART_Status_t UART_DeInit(UART_Handle_t* handle)
     handle->txSize = 0;
     memset(&handle->config, 0, sizeof(UART_Config_t));
 
-    HAL_Delay(1000); // Allow time for deinitialization
+    HAL_Delay(UART_DEINIT_DELAY_MS); // Allow time for deinitialization
 
     return UART_OK;
 

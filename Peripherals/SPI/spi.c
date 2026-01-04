@@ -32,15 +32,16 @@ SPI_HandleTypeDef hspi5;
   *          - Master mode operation
   *          - Full-duplex (2 lines) communication
   *          - 8-bit data size
-  *          - High clock polarity (CPOL=1)
-  *          - Second clock transition is the data capture edge (CPHA=1)
+  *          - Low clock polarity (CPOL=0) - ILI9341 requirement
+  *          - First clock transition is the data capture edge (CPHA=0) - ILI9341 requirement
   *          - Software NSS management
-  *          - Baud rate = fPCLK/8
+  *          - Baud rate = fPCLK/16 (conservative for LCD stability)
   *          - MSB transmitted/received first
   *          - TI mode disabled
   *          - CRC calculation disabled
   *
-  * @note   SPI5 is commonly used for display or external sensor communication
+  * @note   SPI5 is used for ILI9341 LCD display communication (SPI Mode 0)
+  *         ILI9341 requires CPOL=0, CPHA=0 (clock idle LOW, sample on rising edge)
   * @param  None
   * @retval None
   */
@@ -51,10 +52,10 @@ void SPI_Init(void)
   hspi5.Init.Mode = SPI_MODE_MASTER;                    /* Configure as master */
   hspi5.Init.Direction = SPI_DIRECTION_2LINES;          /* Full-duplex mode */
   hspi5.Init.DataSize = SPI_DATASIZE_8BIT;              /* 8-bit data size */
-  hspi5.Init.CLKPolarity = SPI_POLARITY_HIGH;           /* Clock polarity high (CPOL=1) for L3GD20 */
-  hspi5.Init.CLKPhase = SPI_PHASE_2EDGE;                /* Clock phase 2nd edge (CPHA=1) for L3GD20 */
+  hspi5.Init.CLKPolarity = SPI_POLARITY_LOW;            /* Clock polarity low (CPOL=0) for ILI9341 */
+  hspi5.Init.CLKPhase = SPI_PHASE_1EDGE;                /* Clock phase 1st edge (CPHA=0) for ILI9341 */
   hspi5.Init.NSS = SPI_NSS_SOFT;                        /* Software NSS management */
-  hspi5.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8; /* SPI clock = APB2 clock / 8 - faster for L3GD20 */
+  hspi5.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16; /* SPI clock = APB2 clock / 16 for ILI9341 */
   hspi5.Init.FirstBit = SPI_FIRSTBIT_MSB;               /* MSB transmitted first */
   hspi5.Init.TIMode = SPI_TIMODE_DISABLE;               /* TI mode disabled */
   hspi5.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE; /* CRC calculation disabled */
