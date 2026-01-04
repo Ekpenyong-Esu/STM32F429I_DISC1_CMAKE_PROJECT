@@ -40,6 +40,11 @@ extern "C" {
 #define LTDC_FB_SIZE_RGB888         (LTDC_DISPLAY_WIDTH * LTDC_DISPLAY_HEIGHT * LTDC_BYTES_PER_PIXEL_RGB888)
 #define LTDC_FB_SIZE_ARGB8888       (LTDC_DISPLAY_WIDTH * LTDC_DISPLAY_HEIGHT * LTDC_BYTES_PER_PIXEL_ARGB8888)
 
+/* Framebuffer base address (external SDRAM Bank 2) */
+#define LTDC_FB_BASE_ADDR           ((uint32_t)0xD0000000U)
+#define LTDC_FB0_ADDR               (LTDC_FB_BASE_ADDR)
+#define LTDC_FB1_ADDR               (LTDC_FB_BASE_ADDR + LTDC_FB_SIZE_RGB565)  /* second buffer for double buffering */
+
 /* Default colors in RGB565 format ------------------------------------------*/
 #define LTDC_COLOR_BLACK            0x0000  /*!< Black color */
 #define LTDC_COLOR_WHITE            0xFFFF  /*!< White color */
@@ -54,13 +59,14 @@ extern "C" {
 #define LTDC_COLOR_LIGHTGRAY        0xBDF7  /*!< Light gray color */
 
 /* Error codes ---------------------------------------------------------------*/
-#define LTDC_ERROR_NONE             0x00    /*!< No error */
-#define LTDC_ERROR_INVALID_PARAM    0x01    /*!< Invalid parameter */
-#define LTDC_ERROR_INIT_FAILED      0x02    /*!< Initialization failed */
-#define LTDC_ERROR_LAYER_CONFIG     0x03    /*!< Layer configuration failed */
-#define LTDC_ERROR_MEMORY_ALLOC     0x04    /*!< Memory allocation failed */
-#define LTDC_ERROR_INVALID_LAYER    0x05    /*!< Invalid layer number */
-#define LTDC_ERROR_FRAMEBUFFER      0x06    /*!< Framebuffer error */
+#define LTDC_ERROR_NONE                  0x00    /*!< No error */
+#define LTDC_ERROR_INVALID_PARAM         0x01    /*!< Invalid parameter */
+#define LTDC_ERROR_INIT_FAILED           0x02    /*!< Initialization failed */
+#define LTDC_ERROR_LAYER_CONFIG          0x03    /*!< Layer configuration failed */
+#define LTDC_ERROR_MEMORY_ALLOC          0x04    /*!< Memory allocation failed */
+#define LTDC_ERROR_INVALID_LAYER         0x05    /*!< Invalid layer number */
+#define LTDC_ERROR_FRAMEBUFFER           0x06    /*!< Framebuffer error */
+#define LTDC_ERROR_UNSUPPORTED_FORMAT    0x07    /*!< Unsupported pixel format (avoid RGB888) */
 
 
 /* Data Types ----------------------------------------------------------------*/

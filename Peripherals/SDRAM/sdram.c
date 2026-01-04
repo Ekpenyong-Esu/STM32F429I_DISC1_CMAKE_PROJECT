@@ -31,7 +31,7 @@ SDRAM_StatusTypeDef SDRAM_Init(void)
     fmc_cfg.exitSelfRefreshDelay = 7;
     fmc_cfg.selfRefreshTime = 4;
     fmc_cfg.rowCycleDelay = 7;
-    fmc_cfg.writeRecoveryTime = 2;
+    fmc_cfg.writeRecoveryTime = 3;
     fmc_cfg.rpDelay = 2;
     fmc_cfg.rcdDelay = 2;
 

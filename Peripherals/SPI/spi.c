@@ -55,7 +55,12 @@ void SPI_Init(void)
   hspi5.Init.CLKPolarity = SPI_POLARITY_LOW;            /* Clock polarity low (CPOL=0) for ILI9341 */
   hspi5.Init.CLKPhase = SPI_PHASE_1EDGE;                /* Clock phase 1st edge (CPHA=0) for ILI9341 */
   hspi5.Init.NSS = SPI_NSS_SOFT;                        /* Software NSS management */
-  hspi5.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16; /* SPI clock = APB2 clock / 16 for ILI9341 */
+  /* Choose prescaler to match ST BSP recommended SPI clock (~5.6 - 10 MHz).
+   * With current SystemClock (APB2 = 84 MHz) using prescaler 8 yields SCLK = 84/8 = 10.5 MHz
+   * which is slightly above the 10 MHz upper recommendation but closer to BSP range
+   * than the previous value (prescaler 16 => 5.25 MHz which is below 5.6 MHz).
+   */
+  hspi5.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8; /* SPI clock = APB2 clock / 8 (≈10.5 MHz) */
   hspi5.Init.FirstBit = SPI_FIRSTBIT_MSB;               /* MSB transmitted first */
   hspi5.Init.TIMode = SPI_TIMODE_DISABLE;               /* TI mode disabled */
   hspi5.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE; /* CRC calculation disabled */

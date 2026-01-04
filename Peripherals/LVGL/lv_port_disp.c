@@ -25,10 +25,10 @@
 #define DISP_BPP        2
 
 /** SDRAM framebuffer base address (Bank 2) */
-#define FB_BASE_ADDR    0xD0000000U
+#define FB_BASE_ADDR    LTDC_FB_BASE_ADDR
 
 /** Single framebuffer size in bytes */
-#define FB_SIZE         (DISP_HOR_RES * DISP_VER_RES * DISP_BPP)
+#define FB_SIZE         LTDC_FB_SIZE_RGB565
 
 /** Framebuffer addresses for double-buffering */
 #define FB0_ADDR        FB_BASE_ADDR

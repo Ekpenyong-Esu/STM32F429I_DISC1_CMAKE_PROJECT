@@ -147,6 +147,12 @@ The driver is configured for **SPI5** peripheral with the following default sett
 - **MOSI**: PF9 (AF5)
 - **MISO**: PF8 (AF5)
 - **SCK**: PF7 (AF5)
+
+Note on baudrate: ST BSP expects ILI9341 SPI SCLK in the ~5.6–10 MHz range. With this project's
+SystemClock (APB2 = 84 MHz) the recommended prescaler is `SPI_BAUDRATEPRESCALER_8` (84/8 = 10.5 MHz),
+which is slightly above 10 MHz but closer to the BSP range than prescaler 16 (84/16 = 5.25 MHz, below 5.6).
+If strict adherence to <=10 MHz is required, either adjust APB2 clock or use prescaler 16 and accept the
+slightly lower SCLK.
 - **NSS**: Software controlled
 
 ## Running Examples

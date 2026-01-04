@@ -62,13 +62,12 @@ void ILI9341_MspInit(void)
 
         /* ---- SPI5 pins (per ST BSP stm32f429i_discovery.c SPIx_MspInit) ---- */
 
-        /* SPI5 SCK/MISO/MOSI (PF7/PF8/PF9) */
-        GPIO_InitStruct.Pin = GPIO_PIN_7 | GPIO_PIN_8 | GPIO_PIN_9;
-        GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-        GPIO_InitStruct.Pull = GPIO_PULLDOWN;   /* ST BSP uses PULLDOWN */
-        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_MEDIUM;  /* ST BSP uses MEDIUM */
-        GPIO_InitStruct.Alternate = GPIO_AF5_SPI5;
-        HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
+        /* NOTE: SPI5 SCK/MISO/MOSI (PF7/PF8/PF9) are configured centrally in
+         * HAL_SPI_MspInit() (see Core/Src/stm32f4xx_hal_msp.c). To avoid
+         * duplicate initialization and potential conflicts, do not reconfigure
+         * the AF pins here. The board-specific MSP still enables clocks and
+         * configures control lines (CS/WRX/RDX) above.
+         */
 
         /* Configure SPI via central driver using ST BSP settings */
         SPI_ConfigTypeDef cfg = {0};
@@ -78,7 +77,10 @@ void ILI9341_MspInit(void)
         cfg.CLKPolarity = SPI_POLARITY_LOW;     /* CPOL=0 */
         cfg.CLKPhase = SPI_PHASE_1EDGE;         /* CPHA=0 (Mode 0) */
         cfg.NSS = SPI_NSS_SOFT;
-        cfg.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;  /* ST BSP: PCLK2/16 = 5.625 MHz */
+        /* ST BSP expects SPI SCLK ≈ 5.6 - 10 MHz. With current clocks (APB2 = 84 MHz)
+         * prescaler=8 => 10.5 MHz; prescaler=16 => 5.25 MHz (below 5.6). Use prescaler=8
+         * for better compliance with ST BSP recommendations. */
+        cfg.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;  /* SPI clock ≈ APB2 / 8 = 10.5 MHz */
         cfg.FirstBit = SPI_FIRSTBIT_MSB;
         cfg.TIMode = SPI_TIMODE_DISABLE;
         cfg.CRCCalculation = SPI_CRCCALCULATION_DISABLE;

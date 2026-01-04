@@ -161,11 +161,14 @@ HAL_StatusTypeDef LTDC_ConfigureDisplay(LTDC_Driver_t *driver, LTDC_DisplayConfi
     driver->hltdc->Init.Backcolor.Green = (config->backgroundColor >> 8) & 0xFF;
     driver->hltdc->Init.Backcolor.Red = (config->backgroundColor >> 16) & 0xFF;
 
-    /* Initialize LTDC */
-    HAL_StatusTypeDef status = HAL_LTDC_Init(driver->hltdc);
-    if (status != HAL_OK) {
-        driver->errorCode = LTDC_ERROR_INIT_FAILED;
-        return status;
+    /* Initialize LTDC only if not already initialized to avoid double-initialization */
+    HAL_StatusTypeDef status = HAL_OK;
+    if (driver->hltdc->State == HAL_LTDC_STATE_RESET) {
+        status = HAL_LTDC_Init(driver->hltdc);
+        if (status != HAL_OK) {
+            driver->errorCode = LTDC_ERROR_INIT_FAILED;
+            return status;
+        }
     }
 
     /* Store configuration */
@@ -184,6 +187,18 @@ HAL_StatusTypeDef LTDC_ConfigureDisplay(LTDC_Driver_t *driver, LTDC_DisplayConfi
 HAL_StatusTypeDef LTDC_ConfigureLayer(LTDC_Driver_t *driver, uint8_t layer, LTDC_LayerConfig_t *config) {
     if (LTDC_ValidateDriver(driver) != HAL_OK || LTDC_ValidateLayer(layer) != HAL_OK || config == NULL) {
         driver->errorCode = LTDC_ERROR_INVALID_PARAM;
+        return HAL_ERROR;
+    }
+
+    /* Note: RGB888 (24-bit packed) is discouraged on STM32 LTDC because DMA and
+     * LTDC fetches are optimized for 32-bit aligned bursts. Packed 3-bytes-per-pixel
+     * layouts can cause misaligned DMA transfers, performance penalties, or require
+     * padding/stride. Prefer RGB565 (16-bit) or ARGB8888 (32-bit) for best performance.
+     * Explicitly reject RGB888 here to avoid subtle bugs — applications should use
+     * ARGB8888 if 24-bit color is required.
+     */
+    if (config->pixelFormat == LTDC_PIXEL_FORMAT_RGB888_ENUM) {
+        driver->errorCode = LTDC_ERROR_UNSUPPORTED_FORMAT;
         return HAL_ERROR;
     }
 
@@ -251,7 +266,13 @@ HAL_StatusTypeDef LTDC_EnableLayer(LTDC_Driver_t *driver, uint8_t layer) {
 
     /* Enable layer */
     __HAL_LTDC_LAYER_ENABLE(driver->hltdc, layer);
-    __HAL_LTDC_RELOAD_CONFIG(driver->hltdc);
+
+    /* Request a reload at next VSync so the change is applied without tearing */
+    HAL_StatusTypeDef status = LTDC_RequestReload(driver, LTDC_SRCR_VBR);
+    if (status != HAL_OK) {
+        driver->errorCode = LTDC_ERROR_LAYER_CONFIG;
+        return status;
+    }
 
     driver->layers[layer].enabled = true;
     return HAL_OK;
@@ -890,8 +911,9 @@ HAL_StatusTypeDef LTDC_HW_Init(void) {
 
     /* Initialize LTDC Peripheral (RGB interface only) */
 
-    /* Enable LTDC clock */
-    __HAL_RCC_LTDC_CLK_ENABLE();
+    /* LTDC clocks and GPIOs are configured in HAL_LTDC_MspInit() to centralize board init.
+     * Do not enable the LTDC clock here to avoid duplicate clock setup. */
+    /* __HAL_RCC_LTDC_CLK_ENABLE(); intentionally omitted */
 
     /* Configure LTDC peripheral */
     hltdc.Instance = LTDC;
@@ -899,7 +921,7 @@ HAL_StatusTypeDef LTDC_HW_Init(void) {
     /* Signal polarities - MUST MATCH ILI9341 RGB interface settings! */
     hltdc.Init.HSPolarity = LTDC_HSPOLARITY_AL;   // HSYNC active low
     hltdc.Init.VSPolarity = LTDC_VSPOLARITY_AL;   // VSYNC active low
-    hltdc.Init.DEPolarity = LTDC_DEPOLARITY_AL;   // DE active low (per STM32F429I-DISCO BSP)
+    hltdc.Init.DEPolarity = LTDC_DEPOLARITY_AL;   // DE active high (ILI9341 RGB)
     hltdc.Init.PCPolarity = LTDC_PCPOLARITY_IPC;  // Pixel clock not inverted (input pixel clock)
 
 
@@ -928,17 +950,17 @@ HAL_StatusTypeDef LTDC_HW_Init(void) {
     /* Configure Layer 1 */
     LTDC_LayerCfgTypeDef layerCfg = {0};
     layerCfg.WindowX0 = 0;
-    layerCfg.WindowX1 = 240;  // Use BSP convention: stop coordinate is end+1
+    layerCfg.WindowX1 = 240;  // 240 pixels wide (inclusive)
     layerCfg.WindowY0 = 0;
-    layerCfg.WindowY1 = 320;  // BSP convention: stop coordinate is end+1
+    layerCfg.WindowY1 = 320;  // 320 pixels tall (inclusive)
     layerCfg.PixelFormat = LTDC_PIXEL_FORMAT_RGB565;
     layerCfg.Alpha = 255;
     layerCfg.Alpha0 = 0;
-    layerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_CA;
-    layerCfg.BlendingFactor2 = LTDC_BLENDING_FACTOR2_CA;
-    layerCfg.FBStartAdress = 0xD0000000;  // SDRAM framebuffer
-    layerCfg.ImageWidth = 240;
-    layerCfg.ImageHeight = 320;
+    layerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_PAxCA;
+    layerCfg.BlendingFactor2 = LTDC_BLENDING_FACTOR2_PAxCA;
+    layerCfg.FBStartAdress = LTDC_FB_BASE_ADDR;  // SDRAM framebuffer
+    layerCfg.ImageWidth = LTDC_DISPLAY_WIDTH;
+    layerCfg.ImageHeight = LTDC_DISPLAY_HEIGHT;
     layerCfg.Backcolor.Blue = 0;
     layerCfg.Backcolor.Green = 0;
     layerCfg.Backcolor.Red = 0;
@@ -1062,6 +1084,11 @@ static uint32_t LTDC_GetPixelFormatHAL(LTDC_PixelFormat_t format) {
 
 
 /* New helper: set pixel by linear index (row-major) where framebuffer base is a byte pointer */
+/* NOTE: RGB888 (3 bytes per pixel) is discouraged due to 32-bit DMA/LTDC fetch alignment.
+ * Use RGB565 or ARGB8888 for best performance and correct DMA behavior. RGB888 support
+ * is intentionally rejected at layer configuration time, but this helper keeps the
+ * conversion logic for completeness.
+ */
 static void LTDC_SetPixelByIndex(uint8_t *fbBase, uint32_t index, uint32_t color, LTDC_PixelFormat_t format) {
     switch (format) {
         case LTDC_PIXEL_FORMAT_RGB565_ENUM: {
@@ -1070,6 +1097,7 @@ static void LTDC_SetPixelByIndex(uint8_t *fbBase, uint32_t index, uint32_t color
             break;
         }
         case LTDC_PIXEL_FORMAT_RGB888_ENUM: {
+            /* Packed 24-bit; kept for completeness but discouraged. */
             uint8_t *p = fbBase + index * 3;
             p[0] = (color) & 0xFF;        /* Blue */
             p[1] = (color >> 8) & 0xFF;  /* Green */

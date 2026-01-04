@@ -51,16 +51,21 @@ int main(void)
         .rcdDelay = 2
     };
 
-    FMC_Driver_SDRAM_Init(&fmcHandle, &sdramConfig);
+    /* Initialize SDRAM and verify return status */
+    HAL_StatusTypeDef sdram_status = FMC_Driver_SDRAM_Init(&fmcHandle, &sdramConfig);
+    if (sdram_status != HAL_OK) {
+        printf("ERROR: SDRAM init failed\n");
+        Error_Handler();
+    }
 
     /*-------------------------------------------------------------------------
-     * STEP 2.1: Clear BOTH SDRAM Framebuffers
+     * STEP 2.1: Clear BOTH SDRAM Framebuffers (use centralized LTDC FB macros)
      *-----------------------------------------------------------------------*/
-    #define FB_SIZE (240 * 320)
-    #define FB_BYTES (FB_SIZE * 2)
+    #define FB_SIZE (LTDC_FB_SIZE_RGB565 / LTDC_BYTES_PER_PIXEL_RGB565) /* pixels */
+    #define FB_BYTES (LTDC_FB_SIZE_RGB565)
 
-    volatile uint16_t *fb1 = (volatile uint16_t *)0xD0000000;
-    volatile uint16_t *fb2 = (volatile uint16_t *)(0xD0000000 + FB_BYTES);
+    volatile uint16_t *fb1 = (volatile uint16_t *)LTDC_FB_BASE_ADDR;
+    volatile uint16_t *fb2 = (volatile uint16_t *)(LTDC_FB_BASE_ADDR + FB_BYTES);
 
     /* Clear buffer 0 */
     for(int i = 0; i < FB_SIZE; i++) {
@@ -72,9 +77,10 @@ int main(void)
         fb2[i] = 0x0000;
     }
 
-    /* Verify SDRAM works */
+    /* Verify SDRAM works by checking written locations */
     if (fb1[0] != 0x0000 || fb1[100] != 0x0000 || fb2[0] != 0x0000) {
-        while (1) { /* SDRAM error - hang here */ }
+        printf("ERROR: SDRAM verification failed after clear\n");
+        Error_Handler();
     }
 
     /*-------------------------------------------------------------------------
@@ -82,10 +88,20 @@ int main(void)
      *-----------------------------------------------------------------------*/
     ili9341_Init();  /* Configure LCD via SPI, switch to RGB mode */
 
+    /* Ensure panel ENABLE is driven */
+    HAL_Delay(10);
+    HAL_GPIO_WritePin(ENABLE_GPIO_Port, ENABLE_Pin, GPIO_PIN_SET);
+
     /*-------------------------------------------------------------------------
      * STEP 4: Initialize LTDC Display Controller
      *-----------------------------------------------------------------------*/
     LTDC_HW_Init();
+
+    /* Simple smoke test: set LTDC to show framebuffer 0 and log for diagnostics */
+    HAL_LTDC_SetAddress(&hltdc, LTDC_FB_BASE_ADDR, 0);
+    __HAL_LTDC_RELOAD_CONFIG(&hltdc);
+    HAL_Delay(50);
+    printf("INFO: SDRAM smoke test - LTDC address set to 0x%08lX\n", (unsigned long)LTDC_FB_BASE_ADDR);
 
     /*-------------------------------------------------------------------------
      * STEP 5: Initialize LVGL and Create GUI

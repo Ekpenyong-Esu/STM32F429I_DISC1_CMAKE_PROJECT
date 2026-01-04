@@ -495,6 +495,8 @@ void SDRAM_Init(void) {
 | RGB888 | 24 | Medium | Medium | Excellent |
 | ARGB8888 | 32 | High | Low | Excellent |
 
+**Note:** Avoid using packed **RGB888 (24-bit)** framebuffers on the STM32 LTDC unless you explicitly handle stride/padding and DMA alignment. The LTDC and DMA engines fetch 32-bit-aligned bursts; packed 3-byte pixels can cause inefficient transfers or require per-line padding. Prefer **RGB565** (16-bit) or **ARGB8888** (32-bit) unless you have a specific need for 24-bit-packed memory and a well-tested stride implementation.
+
 ### Drawing Optimization
 - **Batch Operations**: Group similar drawing operations together
 - **Clipping**: Use layer windows to limit drawing areas
