@@ -15,6 +15,7 @@ extern "C" {
 #include "stm32f4xx.h"
 #include <stdint.h>
 #include <stdbool.h>
+#include "fmc.h"
 
 /* Display specifications for STM32F429I-DISC1 ------------------------------*/
 #define LTDC_DISPLAY_WIDTH          240     /*!< Display width in pixels */
@@ -40,10 +41,7 @@ extern "C" {
 #define LTDC_FB_SIZE_RGB888         (LTDC_DISPLAY_WIDTH * LTDC_DISPLAY_HEIGHT * LTDC_BYTES_PER_PIXEL_RGB888)
 #define LTDC_FB_SIZE_ARGB8888       (LTDC_DISPLAY_WIDTH * LTDC_DISPLAY_HEIGHT * LTDC_BYTES_PER_PIXEL_ARGB8888)
 
-/* Framebuffer base address (external SDRAM Bank 2) */
-#define LTDC_FB_BASE_ADDR           ((uint32_t)0xD0000000U)
-#define LTDC_FB0_ADDR               (LTDC_FB_BASE_ADDR)
-#define LTDC_FB1_ADDR               (LTDC_FB_BASE_ADDR + LTDC_FB_SIZE_RGB565)  /* second buffer for double buffering */
+  /* second buffer for double buffering */
 
 /* Default colors in RGB565 format ------------------------------------------*/
 #define LTDC_COLOR_BLACK            0x0000  /*!< Black color */

@@ -47,7 +47,7 @@ int main(void)
         .exitSelfRefreshDelay = 7,
         .selfRefreshTime = 4,
         .rowCycleDelay = 7,
-        .writeRecoveryTime = 3,
+        .writeRecoveryTime = 2,
         .rpDelay = 2,
         .rcdDelay = 2
     };
@@ -59,7 +59,7 @@ int main(void)
         Error_Handler();
     }
 
-    if(FMC_Driver_SDRAM_Test(&fmcHandle, LTDC_FB_BASE_ADDR, LTDC_FB_SIZE_RGB565 ) != true) {
+    if(FMC_Driver_SDRAM_Test(&fmcHandle, SDRAM_DEVICE_ADDR, SDRAM_DEVICE_SIZE ) != true) {
         printf("ERROR: SDRAM test failed\n");
         Error_Handler();
     }
@@ -70,20 +70,11 @@ int main(void)
      *-----------------------------------------------------------------------*/
     ili9341_Init();  /* Configure LCD via SPI, switch to RGB mode */
 
-    /* Ensure panel ENABLE is driven */
-    HAL_Delay(10);
-    HAL_GPIO_WritePin(ENABLE_GPIO_Port, ENABLE_Pin, GPIO_PIN_SET);
 
     /*-------------------------------------------------------------------------
      * STEP 4: Initialize LTDC Display Controller
      *-----------------------------------------------------------------------*/
     LTDC_HW_Init();
-
-    /* Simple smoke test: set LTDC to show framebuffer 0 and log for diagnostics */
-    HAL_LTDC_SetAddress(&hltdc, LTDC_FB_BASE_ADDR, 0);
-    __HAL_LTDC_RELOAD_CONFIG(&hltdc);
-    HAL_Delay(50);
-    printf("INFO: SDRAM smoke test - LTDC address set to 0x%08lX\n", (unsigned long)LTDC_FB_BASE_ADDR);
 
     /*-------------------------------------------------------------------------
      * STEP 5: Initialize LVGL and Create GUI

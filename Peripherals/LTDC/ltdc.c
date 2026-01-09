@@ -22,6 +22,7 @@
 
 LTDC_HandleTypeDef hltdc;                   /*!< LTDC HAL handle */
 
+static volatile uint16_t *fb_ptr = (volatile uint16_t *)(SDRAM_DEVICE_ADDR); /*!< Framebuffer pointer in SDRAM */
 
 
 /* Private function prototypes -----------------------------------------------*/
@@ -947,6 +948,8 @@ HAL_StatusTypeDef LTDC_HW_Init(void) {
         return HAL_ERROR;
     }
 
+    memset((void *)fb_ptr, 0x1234, LTDC_FB_SIZE_RGB565);
+
     /* Configure Layer 1 */
     LTDC_LayerCfgTypeDef layerCfg = {0};
     layerCfg.WindowX0 = 0;
@@ -958,7 +961,7 @@ HAL_StatusTypeDef LTDC_HW_Init(void) {
     layerCfg.Alpha0 = 0;
     layerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_PAxCA;
     layerCfg.BlendingFactor2 = LTDC_BLENDING_FACTOR2_PAxCA;
-    layerCfg.FBStartAdress = LTDC_FB_BASE_ADDR;  // SDRAM framebuffer
+    layerCfg.FBStartAdress = (uint32_t)fb_ptr;  // SDRAM framebuffer
     layerCfg.ImageWidth = LTDC_DISPLAY_WIDTH;
     layerCfg.ImageHeight = LTDC_DISPLAY_HEIGHT;
     layerCfg.Backcolor.Blue = 0;

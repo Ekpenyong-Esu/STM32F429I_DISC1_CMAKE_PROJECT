@@ -20,6 +20,8 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "stm32f4xx_hal_gpio.h"
+#include "stm32f4xx_hal_rcc_ex.h"
 /* USER CODE BEGIN Includes */
 
 /* USER CODE END Includes */
@@ -199,14 +201,14 @@ void HAL_I2C_MspInit(I2C_HandleTypeDef* hi2c)
     GPIO_InitStruct.Pin = I2C3_SDA_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;
     GPIO_InitStruct.Pull = GPIO_PULLUP;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_MEDIUM;
     GPIO_InitStruct.Alternate = GPIO_AF4_I2C3;
     HAL_GPIO_Init(I2C3_SDA_GPIO_Port, &GPIO_InitStruct);
 
     GPIO_InitStruct.Pin = I2C3_SCL_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;
     GPIO_InitStruct.Pull = GPIO_PULLUP;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_MEDIUM;
     GPIO_InitStruct.Alternate = GPIO_AF4_I2C3;
     HAL_GPIO_Init(I2C3_SCL_GPIO_Port, &GPIO_InitStruct);
 
@@ -277,9 +279,9 @@ void HAL_LTDC_MspInit(LTDC_HandleTypeDef* hltdc)
      * LTDC Clock = PLLSAIR / PLLSAIDivR = 76.8MHz / 4 = 19.2MHz
      * LTDC uses pixel clock = LTDC_CLK/2 = 9.6MHz (matches ST BSP for STM32F429I-DISC1).
      */
-    PeriphClkInitStruct.PLLSAI.PLLSAIN = 192;
-    PeriphClkInitStruct.PLLSAI.PLLSAIR = 5;
-    PeriphClkInitStruct.PLLSAIDivR = RCC_PLLSAIDIVR_4;
+    PeriphClkInitStruct.PLLSAI.PLLSAIN = 50;
+    PeriphClkInitStruct.PLLSAI.PLLSAIR = 2;
+    PeriphClkInitStruct.PLLSAIDivR = RCC_PLLSAIDIVR_8;
     if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
     {
       Error_Handler();
@@ -479,7 +481,7 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef* hspi)
     GPIO_InitStruct.Pin = SPI5_SCK_Pin|SPI5_MISO_Pin|SPI5_MOSI_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_PULLDOWN;        /* ST BSP uses PULLDOWN for SPI5 LCD/Gyro */
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_MEDIUM;  /* ST BSP uses MEDIUM speed */
+    GPIO_InitStruct.Speed =                                                                                                     GPIO_SPEED_FREQ_MEDIUM;  /* ST BSP uses MEDIUM speed */
     GPIO_InitStruct.Alternate = GPIO_AF5_SPI5;
     HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
 

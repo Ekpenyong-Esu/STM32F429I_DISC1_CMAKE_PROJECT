@@ -53,7 +53,7 @@
 TS_HandleTypeDef *g_hts = NULL;
 
 /* Private function prototypes -----------------------------------------------*/
-static TS_StatusTypeDef TS_InitGPIO(void);
+
 static TS_StatusTypeDef TS_InitI2C(TS_HandleTypeDef *hts);
 static TS_StatusTypeDef TS_CheckDevice(TS_HandleTypeDef *hts);
 static TS_StatusTypeDef TS_ConfigureController(TS_HandleTypeDef *hts);
@@ -84,12 +84,6 @@ TS_StatusTypeDef TS_Init(TS_HandleTypeDef *hts, I2C_HandleTypeDef *hi2c)
     memset(hts, 0, sizeof(TS_HandleTypeDef));
     hts->hi2c = hi2c;
     g_hts = hts;
-
-    /* Initialize GPIO pins */
-    status = TS_InitGPIO();
-    if (status != TS_OK) {
-        return status;
-    }
 
     /* Initialize I2C peripheral */
     status = TS_InitI2C(hts);
@@ -633,31 +627,6 @@ TS_ConfigTypeDef TS_GetDefaultConfig(void)
 
 /* Private functions ---------------------------------------------------------*/
 
-/**
- * @brief Initialize GPIO pins
- * @retval TS_StatusTypeDef Status of the operation
- */
-static TS_StatusTypeDef TS_InitGPIO(void)
-{
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
-
-    /* Enable GPIO clocks */
-    __HAL_RCC_GPIOA_CLK_ENABLE();
-    __HAL_RCC_GPIOC_CLK_ENABLE();
-
-    /* Configure I2C pins */
-    GPIO_InitStruct.Pin = TS_I2C_SCL_PIN;
-    GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;
-    GPIO_InitStruct.Pull = GPIO_PULLUP;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-    GPIO_InitStruct.Alternate = GPIO_AF4_I2C3;
-    HAL_GPIO_Init(TS_I2C_SCL_GPIO_PORT, &GPIO_InitStruct);
-
-    GPIO_InitStruct.Pin = TS_I2C_SDA_PIN;
-    HAL_GPIO_Init(TS_I2C_SDA_GPIO_PORT, &GPIO_InitStruct);
-
-    return TS_OK;
-}
 
 /**
  * @brief Initialize I2C peripheral
@@ -668,7 +637,7 @@ static TS_StatusTypeDef TS_InitI2C(TS_HandleTypeDef *hts)
 {
     /* If application already provided an I2C handle, assume it's configured and ready.
        Otherwise use the central I2C driver (I2C_Init which configures hi2c3) */
-    if (hts->hi2c == NULL) {
+    if (hts->hi2c->Instance == NULL) {
         I2C_Init(); /* initializes hi2c3 */
         hts->hi2c = &hi2c3; /* use central handle */
     }

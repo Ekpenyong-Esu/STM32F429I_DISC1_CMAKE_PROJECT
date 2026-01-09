@@ -28,7 +28,6 @@ void ILI9341_MspInit(void)
         /* Enable clocks */
         __HAL_RCC_GPIOC_CLK_ENABLE();
         __HAL_RCC_GPIOD_CLK_ENABLE();
-        __HAL_RCC_GPIOF_CLK_ENABLE();
         __HAL_RCC_SPI5_CLK_ENABLE();
 
         GPIO_InitTypeDef GPIO_InitStruct = {0};

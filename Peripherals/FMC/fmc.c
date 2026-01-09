@@ -13,17 +13,8 @@
 #include <string.h>
 
 /* Private defines -----------------------------------------------------------*/
-#define FMC_SDRAM_TIMEOUT       0x1000
-#define FMC_NOR_TIMEOUT         1000U
-#define FMC_NAND_TIMEOUT        1000U
-#define SDRAM_MODEREG_BURST_LENGTH_1             ((uint16_t)0x0000)
-#define SDRAM_MODEREG_BURST_LENGTH_2             ((uint16_t)0x0001)
-#define SDRAM_MODEREG_BURST_LENGTH_4             ((uint16_t)0x0002)
-#define SDRAM_MODEREG_BURST_TYPE_SEQUENTIAL      ((uint16_t)0x0000)
-#define SDRAM_MODEREG_CAS_LATENCY_2              ((uint16_t)0x0020)
-#define SDRAM_MODEREG_CAS_LATENCY_3              ((uint16_t)0x0030)
-#define SDRAM_MODEREG_OPERATING_MODE_STANDARD    ((uint16_t)0x0000)
-#define SDRAM_MODEREG_WRITEBURST_MODE_SINGLE     ((uint16_t)0x0200)
+
+
 
 /* Private function prototypes -----------------------------------------------*/
 
@@ -39,8 +30,10 @@ HAL_StatusTypeDef FMC_Driver_SDRAM_Init(FMC_Driver_Handle_t *handle, FMC_Driver_
         return HAL_ERROR;
     }
 
+    /* Clear the handle to avoid using uninitialized fields */
+    memset(handle, 0, sizeof(FMC_Driver_Handle_t));
 
-    /* Configure SDRAM device */
+    /* Configure SDRAM device instance */
     handle->hsdram.Instance = FMC_SDRAM_DEVICE;
     handle->hsdram.Init.SDBank = config->bank;
     handle->hsdram.Init.ColumnBitsNumber = config->columnBits;
@@ -91,7 +84,7 @@ HAL_StatusTypeDef FMC_Driver_SDRAM_Init(FMC_Driver_Handle_t *handle, FMC_Driver_
     }
 
     /* Delay (100µs minimum) */
-    HAL_Delay(1);
+    HAL_Delay(100);
 
     /* Step 2: Configure PALL (precharge all) command */
     command.CommandMode = FMC_SDRAM_CMD_PALL;
@@ -190,29 +183,29 @@ bool FMC_Driver_SDRAM_Test(FMC_Driver_Handle_t *handle, uint32_t startAddr, uint
         return false;
     }
 
-    /* Pattern test */
-    uint32_t *pMem = (uint32_t *)startAddr;
-    uint32_t numWords = size / 4;
+    /* Pattern test using 16-bit accesses (SDRAM is 16-bit wide) */
+    uint16_t *pMem = (uint16_t *)startAddr;
+    uint32_t numWords = size / 2;
 
     /* Write test pattern */
     for (uint32_t i = 0; i < numWords; i++) {
-        pMem[i] = 0x55AA55AA;
+        pMem[i] = 0x55AA;
     }
 
     /* Read and verify */
     for (uint32_t i = 0; i < numWords; i++) {
-        if (pMem[i] != 0x55AA55AA) {
+        if (pMem[i] != 0x55AA) {
             return false;
         }
     }
 
     /* Inverse pattern test */
     for (uint32_t i = 0; i < numWords; i++) {
-        pMem[i] = 0xAA55AA55;
+        pMem[i] = 0xAA55;
     }
 
     for (uint32_t i = 0; i < numWords; i++) {
-        if (pMem[i] != 0xAA55AA55) {
+        if (pMem[i] != 0xAA55) {
             return false;
         }
     }
@@ -232,8 +225,6 @@ HAL_StatusTypeDef FMC_Driver_NOR_Init(FMC_Driver_Handle_t *handle, FMC_Driver_NO
         return HAL_ERROR;
     }
 
-    /* Enable FMC clock */
-    __HAL_RCC_FMC_CLK_ENABLE();
 
     /* Configure NOR Flash device */
     handle->hsram.Instance = FMC_NORSRAM_DEVICE;
@@ -476,15 +467,4 @@ uint32_t FMC_Driver_GetError(FMC_Driver_Handle_t *handle) {
     return handle->errorCode;
 }
 
-/**
- * @brief Legacy init function for backward compatibility
- */
-void FMC_Init(void) {
-    /* Enable FMC clock */
-    __HAL_RCC_FMC_CLK_ENABLE();
-}
 
-/*=============================================================================
- * Private Functions
- *===========================================================================*/
-/* All private functions have been inlined or replaced with HAL calls */
