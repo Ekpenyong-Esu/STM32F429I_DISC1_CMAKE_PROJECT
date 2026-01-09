@@ -969,9 +969,6 @@ HAL_StatusTypeDef LTDC_HW_Init(void) {
         return HAL_ERROR;
     }
 
-    /* Enable Layer 1 */
-    __HAL_LTDC_LAYER_ENABLE(&hltdc, 0);
-    __HAL_LTDC_RELOAD_CONFIG(&hltdc);  // Reload at VSYNC
 
     return HAL_OK;
 }

@@ -10,6 +10,7 @@
 #include "SEGGER_SYSVIEW.h"
 #include "stm32f4xx.h"
 #include "main.h"
+#include "stm32f4xx_hal_def.h"
 #include "sys.h"
 #include <stdint.h>
 #include "lvgl.h"
@@ -46,7 +47,7 @@ int main(void)
         .exitSelfRefreshDelay = 7,
         .selfRefreshTime = 4,
         .rowCycleDelay = 7,
-        .writeRecoveryTime = 2,
+        .writeRecoveryTime = 3,
         .rpDelay = 2,
         .rcdDelay = 2
     };
@@ -58,30 +59,11 @@ int main(void)
         Error_Handler();
     }
 
-    /*-------------------------------------------------------------------------
-     * STEP 2.1: Clear BOTH SDRAM Framebuffers (use centralized LTDC FB macros)
-     *-----------------------------------------------------------------------*/
-    #define FB_SIZE (LTDC_FB_SIZE_RGB565 / LTDC_BYTES_PER_PIXEL_RGB565) /* pixels */
-    #define FB_BYTES (LTDC_FB_SIZE_RGB565)
-
-    volatile uint16_t *fb1 = (volatile uint16_t *)LTDC_FB_BASE_ADDR;
-    volatile uint16_t *fb2 = (volatile uint16_t *)(LTDC_FB_BASE_ADDR + FB_BYTES);
-
-    /* Clear buffer 0 */
-    for(int i = 0; i < FB_SIZE; i++) {
-        fb1[i] = 0x0000;
-    }
-
-    /* Clear buffer 1 */
-    for(int i = 0; i < FB_SIZE; i++) {
-        fb2[i] = 0x0000;
-    }
-
-    /* Verify SDRAM works by checking written locations */
-    if (fb1[0] != 0x0000 || fb1[100] != 0x0000 || fb2[0] != 0x0000) {
-        printf("ERROR: SDRAM verification failed after clear\n");
+    if(FMC_Driver_SDRAM_Test(&fmcHandle, LTDC_FB_BASE_ADDR, LTDC_FB_SIZE_RGB565 ) != true) {
+        printf("ERROR: SDRAM test failed\n");
         Error_Handler();
     }
+
 
     /*-------------------------------------------------------------------------
      * STEP 3: Initialize ILI9341 LCD Controller (CRITICAL!)

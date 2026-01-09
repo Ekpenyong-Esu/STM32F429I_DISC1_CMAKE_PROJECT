@@ -76,6 +76,7 @@ html/
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
+Working-lvgl-project/
 
 # Mono auto generated files
 mono_crash.*

@@ -69,9 +69,18 @@ add_subdirectory(cmake/stm32cubemx)
 # ------------------------------------------------------------------------------
 # LVGL Graphics Library
 # ------------------------------------------------------------------------------
-# Automatically fetch and configure LVGL v8.3.11 from GitHub
-# See cmake/lvgl.cmake for details
-include("cmake/lvgl.cmake")
+# Allow choosing between local LVGL checkout or the automatic FetchContent
+# Default is to use the fetched LVGL. To use a local copy set LVGL_USE_LOCAL
+# to ON and optionally set LVGL_LOCAL_DIR to the path of your local lvgl.
+option(LVGL_USE_LOCAL "Use a local LVGL checkout instead of FetchContent" ON)
+
+if(LVGL_USE_LOCAL)
+    message(STATUS "Config: Using local LVGL checkout")
+    include("cmake/lvgl-local.cmake")
+else()
+    message(STATUS "Config: Using FetchContent to download LVGL")
+    include("cmake/lvgl-fetch.cmake")
+endif()
 
 # ------------------------------------------------------------------------------
 # Additional Link Directories (Currently None)

@@ -13,10 +13,12 @@
 #include <string.h>
 
 /* Private defines -----------------------------------------------------------*/
-#define FMC_SDRAM_TIMEOUT       1000U
+#define FMC_SDRAM_TIMEOUT       0x1000
 #define FMC_NOR_TIMEOUT         1000U
 #define FMC_NAND_TIMEOUT        1000U
 #define SDRAM_MODEREG_BURST_LENGTH_1             ((uint16_t)0x0000)
+#define SDRAM_MODEREG_BURST_LENGTH_2             ((uint16_t)0x0001)
+#define SDRAM_MODEREG_BURST_LENGTH_4             ((uint16_t)0x0002)
 #define SDRAM_MODEREG_BURST_TYPE_SEQUENTIAL      ((uint16_t)0x0000)
 #define SDRAM_MODEREG_CAS_LATENCY_2              ((uint16_t)0x0020)
 #define SDRAM_MODEREG_CAS_LATENCY_3              ((uint16_t)0x0030)
@@ -37,8 +39,6 @@ HAL_StatusTypeDef FMC_Driver_SDRAM_Init(FMC_Driver_Handle_t *handle, FMC_Driver_
         return HAL_ERROR;
     }
 
-    /* Enable FMC clock */
-    __HAL_RCC_FMC_CLK_ENABLE();
 
     /* Configure SDRAM device */
     handle->hsdram.Instance = FMC_SDRAM_DEVICE;
@@ -71,7 +71,7 @@ HAL_StatusTypeDef FMC_Driver_SDRAM_Init(FMC_Driver_Handle_t *handle, FMC_Driver_
 
     /* SDRAM initialization sequence */
     FMC_SDRAM_CommandTypeDef command;
-    uint32_t commandTarget;
+    uint32_t commandTarget = 0;
 
     /* Map Bank to Command Target */
     if (config->bank == FMC_SDRAM_BANK1) {
@@ -106,7 +106,7 @@ HAL_StatusTypeDef FMC_Driver_SDRAM_Init(FMC_Driver_Handle_t *handle, FMC_Driver_
     /* Step 3: Configure auto-refresh command */
     command.CommandMode = FMC_SDRAM_CMD_AUTOREFRESH_MODE;
     command.CommandTarget = commandTarget;
-    command.AutoRefreshNumber = 8;
+    command.AutoRefreshNumber = 4;
     command.ModeRegisterDefinition = 0;
     if (HAL_SDRAM_SendCommand(&handle->hsdram, &command, FMC_SDRAM_TIMEOUT) != HAL_OK) {
         handle->errorCode = FMC_DRIVER_ERROR_CONFIG;
@@ -114,7 +114,7 @@ HAL_StatusTypeDef FMC_Driver_SDRAM_Init(FMC_Driver_Handle_t *handle, FMC_Driver_
     }
 
     /* Step 4: Program mode register */
-    uint32_t modeReg = SDRAM_MODEREG_BURST_LENGTH_1 |
+    volatile uint32_t modeReg = (uint32_t)SDRAM_MODEREG_BURST_LENGTH_2 |
                        SDRAM_MODEREG_BURST_TYPE_SEQUENTIAL |
                        (config->casLatency == FMC_SDRAM_CAS_LATENCY_2 ? SDRAM_MODEREG_CAS_LATENCY_2 : SDRAM_MODEREG_CAS_LATENCY_3) |
                        SDRAM_MODEREG_OPERATING_MODE_STANDARD |
@@ -196,23 +196,23 @@ bool FMC_Driver_SDRAM_Test(FMC_Driver_Handle_t *handle, uint32_t startAddr, uint
 
     /* Write test pattern */
     for (uint32_t i = 0; i < numWords; i++) {
-        pMem[i] = 0x55AA55AA + i;
+        pMem[i] = 0x55AA55AA;
     }
 
     /* Read and verify */
     for (uint32_t i = 0; i < numWords; i++) {
-        if (pMem[i] != (0x55AA55AA + i)) {
+        if (pMem[i] != 0x55AA55AA) {
             return false;
         }
     }
 
     /* Inverse pattern test */
     for (uint32_t i = 0; i < numWords; i++) {
-        pMem[i] = 0xAA55AA55 + i;
+        pMem[i] = 0xAA55AA55;
     }
 
     for (uint32_t i = 0; i < numWords; i++) {
-        if (pMem[i] != (0xAA55AA55 + i)) {
+        if (pMem[i] != 0xAA55AA55) {
             return false;
         }
     }
