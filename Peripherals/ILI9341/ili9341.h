@@ -66,7 +66,7 @@ extern "C" {
 #define ILI9341_BYTE_MASK          0xFFU
 #define ILI9341_WORD_MASK          0xFFFFU
 #define ILI9341_INIT_DELAY_MS      200U
-#define ILI9341_WAKE_DELAY_MS      120U
+#define ILI9341_WAKE_DELAY_MS      200U
 
 /* Column / Page end markers (ST constants used during init sequence) */
 #define ILI9341_COL_END            0xEF

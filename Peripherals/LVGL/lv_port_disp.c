@@ -14,6 +14,7 @@
 #include <stdint.h>
 #include <string.h>
 #include "stm32f4xx_hal.h"  /* Add for DMA */
+#include "cachel1_armv7.h"
 
 /*-----------------------------------------------------------------------------
  * Display Configuration
@@ -34,7 +35,7 @@
 
 /** Framebuffer addresses for double-buffering */
 #define FB0_ADDR        FB_BASE_ADDR
-#define FB1_ADDR        (FB_BASE_ADDR + FB_SIZE)
+// #define FB1_ADDR        (FB_BASE_ADDR + FB_SIZE)
 
 /*-----------------------------------------------------------------------------
  * DMA Configuration for Display Flush
@@ -63,8 +64,8 @@ static lv_color_t draw_buf[DRAW_BUF_SIZE] __attribute__((aligned(4)));
  * Private Variables
  *---------------------------------------------------------------------------*/
 
-/** Current active framebuffer (0 or 1) */
-static uint8_t active_fb = 0;
+// /** Current active framebuffer (0 or 1) */
+// static uint8_t active_fb = 0;
 
 /** DMA handle for display flush */
 static DMA_HandleTypeDef dmaHandle;
@@ -85,26 +86,26 @@ static lv_display_t *current_display = NULL;
  * @brief   Get current backbuffer address (for rendering)
  * @retval  Backbuffer address in SDRAM
  */
-static inline uint32_t get_backbuffer_addr(void)
-{
-    return (active_fb == 0) ? FB1_ADDR : FB0_ADDR;
-}
+// static inline uint32_t get_backbuffer_addr(void)
+// {
+//     return (active_fb == 0) ? FB1_ADDR : FB0_ADDR;
+// }
 
 /**
  * @brief   Swap framebuffers (update LTDC to show backbuffer)
  */
-static void swap_buffers(void)
-{
-    /* Toggle active buffer */
-    active_fb = (active_fb == 0) ? 1 : 0;
+// static void swap_buffers(void)
+// {
+//     /* Toggle active buffer */
+//     active_fb = (active_fb == 0) ? 1 : 0;
 
-    /* Update LTDC layer 0 address to new frontbuffer */
-    uint32_t fb_addr = (active_fb == 0) ? FB0_ADDR : FB1_ADDR;
-    HAL_LTDC_SetAddress(&hltdc, fb_addr, 0);
+//     /* Update LTDC layer 0 address to new frontbuffer */
+//     uint32_t fb_addr = (active_fb == 0) ? FB0_ADDR : FB1_ADDR;
+//     HAL_LTDC_SetAddress(&hltdc, fb_addr, 0);
 
-    /* Request vertical blanking reload for tear-free update */
-    __HAL_LTDC_VERTICAL_BLANKING_RELOAD_CONFIG(&hltdc);
-}
+//     /* Request vertical blanking reload for tear-free update */
+//     __HAL_LTDC_VERTICAL_BLANKING_RELOAD_CONFIG(&hltdc);
+// }
 
 /**
  * @brief   DMA transfer complete callback
@@ -162,50 +163,25 @@ static void dma_config(void)
  */
 static void disp_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map)
 {
-    /* Get area dimensions */
-    int32_t width = lv_area_get_width(area);
-    int32_t height = lv_area_get_height(area);
-
-    /* Calculate destination address in SDRAM backbuffer */
-    uint32_t backbuf = get_backbuffer_addr();
-    uint16_t *dst = (uint16_t *)(backbuf + (area->y1 * DISP_HOR_RES + area->x1) * DISP_BPP);
+    uint16_t *fb = (uint16_t *)FB_BASE_ADDR;
     uint16_t *src = (uint16_t *)px_map;
 
-    /* For partial rendering, we need to handle line-by-line copy */
-    /* Start DMA transfer for first line */
-    dma_transfer_complete = 0;
-    current_display = disp;
 
-    /* Copy line by line using DMA */
-    for (int32_t y = 0; y < height; y++) {
-        /* Wait for previous transfer to complete */
-        while (!dma_transfer_complete && y > 0);
+    int32_t w = area->x2 - area->x1 + 1;
 
-        dma_transfer_complete = 0;
 
-        /* Start DMA transfer for this line */
-        if (HAL_DMA_Start_IT(&dmaHandle, (uint32_t)src, (uint32_t)dst, width) != HAL_OK) {
-            /* Fallback to memcpy if DMA fails */
-            memcpy(dst, src, width * DISP_BPP);
-            dma_transfer_complete = 1;
-        }
-
-        dst += DISP_HOR_RES;  /* Next line in framebuffer */
-        src += width;         /* Next line in source */
+    for (int32_t y = area->y1; y <= area->y2; y++) {
+        memcpy(&fb[y * DISP_HOR_RES + area->x1], src, w * DISP_BPP);
+        src += w;
     }
 
-    /* Wait for final transfer to complete */
-    while (!dma_transfer_complete);
 
-    /* Swap buffers only on last flush of frame */
-    if (lv_display_flush_is_last(disp)) {
-        swap_buffers();
-    }
+    /* Ensure LTDC sees updated SDRAM content */
+    SCB_CleanDCache_by_Addr((uint32_t *)FB_BASE_ADDR, FB_SIZE);
 
-    /* Notify LVGL flush is complete */
+
     lv_display_flush_ready(disp);
 }
-
 /*-----------------------------------------------------------------------------
  * Public Functions
  *---------------------------------------------------------------------------*/
@@ -216,31 +192,33 @@ static void disp_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px
  */
 void lv_port_disp_init(void)
 {
-    /* Configure DMA for display flush */
-    dma_config();
+    /* Clear framebuffer */
+    memset((void *)FB_BASE_ADDR, 0x00, FB_SIZE);
 
-    /* Clear both framebuffers to black */
-    memset((void *)FB0_ADDR, 0x00, FB_SIZE);
-    memset((void *)FB1_ADDR, 0x00, FB_SIZE);
 
-    /* Set LTDC to show framebuffer 0 initially */
-    active_fb = 0;
-    HAL_LTDC_SetAddress(&hltdc, FB0_ADDR, 0);
+    /* Point LTDC to framebuffer */
+    HAL_LTDC_SetAddress(&hltdc, FB_BASE_ADDR, 0);
 
     /* Create LVGL display (v9 API) */
     lv_display_t *disp = lv_display_create(DISP_HOR_RES, DISP_VER_RES);
-    if (disp == NULL) {
-        return;  /* Display creation failed */
+    if (!disp) {
+        while (1);
     }
+
 
     /* Set flush callback */
     lv_display_set_flush_cb(disp, disp_flush_cb);
 
-    /* Configure draw buffers for partial rendering */
-    lv_display_set_buffers(disp, draw_buf, NULL, sizeof(draw_buf),
-                           LV_DISPLAY_RENDER_MODE_PARTIAL);
 
-    /* Set color format to RGB565 */
+    /* Configure partial draw buffer */
+    lv_display_set_buffers(disp,
+    draw_buf,
+    NULL,
+    sizeof(draw_buf),
+    LV_DISPLAY_RENDER_MODE_PARTIAL);
+
+
+    /* Set color format */
     lv_display_set_color_format(disp, LV_COLOR_FORMAT_RGB565);
 }
 

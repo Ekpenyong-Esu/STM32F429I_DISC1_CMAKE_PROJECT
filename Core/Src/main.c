@@ -18,6 +18,7 @@
 #include "ltdc.h"
 #include "fmc.h"
 #include "ili9341.h"  /* ILI9341 driver */
+#include "i2c.h"      /* I2C driver for touchscreen */
 
 int main(void)
 {
@@ -27,6 +28,9 @@ int main(void)
     SYS_Init();
     SEGGER_SYSVIEW_Conf();
     SEGGER_SYSVIEW_Start();
+
+    /* Initialize I2C for touchscreen */
+    I2C_Init();
 
     /*-------------------------------------------------------------------------
      * STEP 2: Initialize External SDRAM (for framebuffer)
@@ -59,10 +63,10 @@ int main(void)
         Error_Handler();
     }
 
-    if(FMC_Driver_SDRAM_Test(&fmcHandle, SDRAM_DEVICE_ADDR, SDRAM_DEVICE_SIZE ) != true) {
-        printf("ERROR: SDRAM test failed\n");
-        Error_Handler();
-    }
+    // if(FMC_Driver_SDRAM_Test(&fmcHandle, SDRAM_DEVICE_ADDR, SDRAM_DEVICE_SIZE ) != true) {
+    //     printf("ERROR: SDRAM test failed\n");
+    //     Error_Handler();
+    // }
 
 
     /*-------------------------------------------------------------------------
@@ -121,8 +125,7 @@ int main(void)
             last_update = current_time;
         }
 
-        /* Small delay to prevent CPU overload */
-        HAL_Delay(5);
+
     }
 }
 

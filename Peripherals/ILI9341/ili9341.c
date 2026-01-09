@@ -210,14 +210,15 @@ void ili9341_Init(void)
     ili9341_WriteData(0x00);
     ili9341_WriteData(0x01);
     ili9341_WriteData(ILI9341_PAGE_END);
+
     ili9341_WriteReg(ILI9341_INTERFACE);
     ili9341_WriteData(0x01);
     ili9341_WriteData(0x00);
     ili9341_WriteData(0x06);
 
-    /* in ili9341_Init(), after selecting RGB interface and before GRAM */
-    ili9341_WriteReg(ILI9341_PIXEL_FORMAT);
-    ili9341_WriteData(0x55); /* 0x55 = 16-bit/pixel (RGB565) on ILI9341 */
+    // /* in ili9341_Init(), after selecting RGB interface and before GRAM */
+    // ili9341_WriteReg(ILI9341_PIXEL_FORMAT);
+    // ili9341_WriteData(0x55); /* 0x55 = 16-bit/pixel (RGB565) on ILI9341 */
 
     ili9341_WriteReg(ILI9341_GRAM);
     HAL_Delay(ILI9341_INIT_DELAY_MS);

@@ -21,6 +21,12 @@
 #include <stdint.h>
 #include "lvgl.h"
 #include "lv_port_indev.h"
+#include "touchscreen.h"
+#include "i2c.h"
+
+/* Touchscreen handle */
+static TS_HandleTypeDef hts;
+static I2C_HandleTypeDef *hi2c_touch = NULL;
 
 /*-----------------------------------------------------------------------------
  * Touch Read Callback - Get Current Touch State
@@ -51,19 +57,22 @@ static void touch_read(lv_indev_t *indev, lv_indev_data_t *data)
 {
     (void)indev;  /* Unused parameter */
 
-    /* ⚠️ TODO: Replace this with actual touch driver code!
-     *
-     * Placeholder behavior: Always report "not touched"
-     * This allows the code to compile without touch hardware.
-     *
-     * Next steps:
-     * 1. Initialize your touch controller (FT6206 or STMPE811) via I2C
-     * 2. Add touch reading function (see Peripherals/TOUCHSCREEN/)
-     * 3. Replace the code below with actual touch reading
-     */
-    data->state = LV_INDEV_STATE_RELEASED;  /* Not touched */
-    data->point.x = 0;                      /* X coordinate (0 = left) */
-    data->point.y = 0;                      /* Y coordinate (0 = top) */
+    /* Check if touchscreen is initialized */
+    if (!hts.IsInitialized) {
+        data->state = LV_INDEV_STATE_RELEASED;
+        return;
+    }
+
+    /* Read touch data from STMPE811 */
+    uint16_t x;
+    uint16_t y;
+    if (TS_GetSingleTouch(&hts, &x, &y) == TS_OK) {
+        data->state = LV_INDEV_STATE_PRESSED;
+        data->point.x = x;
+        data->point.y = y;
+    } else {
+        data->state = LV_INDEV_STATE_RELEASED;
+    }
 }
 
 /*-----------------------------------------------------------------------------
@@ -74,11 +83,16 @@ static void touch_read(lv_indev_t *indev, lv_indev_data_t *data)
  */
 void lv_port_indev_init(void)
 {
+    /* Initialize touchscreen with I2C3 */
+    if (TS_Init(&hts, &hi2c3) != TS_OK) {
+        /* Touchscreen initialization failed */
+        return;
+    }
+
     /* Create and configure the input device driver (v9 API) */
     lv_indev_t * indev = lv_indev_create();
     lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER);  /* Pointer = touchscreen or mouse */
     lv_indev_set_read_cb(indev, touch_read);          /* Our touch reading function */
 
-    /* Note: Touch hardware initialization (I2C, GPIO) should be done
-     * in your main.c or in a separate touch driver init function */
+    /* Note: Touch hardware initialization is done above */
 }
