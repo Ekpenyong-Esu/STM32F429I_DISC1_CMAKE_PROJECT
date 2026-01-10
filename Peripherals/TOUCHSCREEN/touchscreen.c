@@ -25,7 +25,7 @@
 #define TS_DOUBLE_TAP_TIME              300     /* Maximum time between taps (ms) */
 #define TS_LONG_PRESS_TIME              1000    /* Minimum time for long press (ms) */
 #define TS_DEBOUNCE_TIME                50      /* Debounce time (ms) */
-#define TS_PRESSURE_THRESHOLD           10      /* Default pressure threshold */
+#define TS_PRESSURE_THRESHOLD           2      /* Default pressure threshold */
 #define TS_COORDINATE_FILTER_SIZE       3       /* Moving average filter size */
 #define TS_DEFAULT_MIN_COORD            200     /* Default minimum coordinate */
 #define TS_DEFAULT_MAX_COORD            3900    /* Default maximum coordinate */
@@ -170,7 +170,7 @@ TS_StatusTypeDef TS_Reset(TS_HandleTypeDef *hts)
     }
 
     /* Software reset */
-    TS_WriteRegister(hts, STMPE811_REG_SYS_CTRL1, STMPE811_SYS_CTRL1_HIBERNATE);
+    TS_WriteRegister(hts, STMPE811_REG_SYS_CTRL1, 2);
     TS_DELAY_MS(10);
     TS_WriteRegister(hts, STMPE811_REG_SYS_CTRL1, 0x00);
     TS_DELAY_MS(10);
@@ -459,9 +459,35 @@ TS_StatusTypeDef TS_ConvertCoordinates(TS_HandleTypeDef *hts, uint16_t raw_x, ui
     }
 
     if (!hts->Calibration.IsCalibrated) {
-        /* Default conversion with rotation for STM32F429 Discovery */
-        *display_x = (raw_y * TS_DISPLAY_WIDTH) / STMPE811_MAX_Y;
-        *display_y = TS_DISPLAY_HEIGHT - ((raw_x * TS_DISPLAY_HEIGHT) / STMPE811_MAX_X);
+        /* Tuned conversion from Working-lvgl-project for accurate mapping */
+        int16_t xr;
+        int16_t yr;
+
+        /* Y value first correction */
+        yr = (int16_t)raw_y - TS_DISPLAY_HEIGHT;
+
+        /* Y value second correction */
+        yr = yr / 11;
+
+        /* Return y_raw position value */
+        if(yr <= 0) yr = 0;
+        else if (yr > TS_DISPLAY_HEIGHT - 1) yr = TS_DISPLAY_HEIGHT - 1;
+
+        /* X value first correction */
+        xr = (int16_t)raw_x;
+        if(xr <= 3000) xr = 3870 - xr;
+        else xr = 3800 - xr;
+
+        /* X value second correction */
+        xr = xr / 15;
+
+        /* Return X position value */
+        if(xr <= 0) xr = 0;
+        else if (xr > TS_DISPLAY_WIDTH - 1) xr = TS_DISPLAY_WIDTH - 1;
+
+        /* Invert coordinates for rotated LCD */
+        *display_x = TS_DISPLAY_WIDTH - 1 - (uint16_t)xr;
+        *display_y = TS_DISPLAY_HEIGHT - 1 - (uint16_t)yr;
     } else {
         /* Calibrated conversion */
         int32_t xPos = (int32_t)raw_y + (int32_t)hts->Calibration.OffsetY;  /* Swap x/y for rotation */
@@ -748,6 +774,11 @@ static TS_StatusTypeDef TS_ConfigureController(TS_HandleTypeDef *hts)
     /* Configure interrupts if enabled */
     if (hts->Config.InterruptEnable) {
         TS_EnableInterrupt(hts, true);
+        TS_ITConfig(hts);
+
+    }
+    else {
+        TS_EnableInterrupt(hts, false);
     }
 
     return TS_OK;
@@ -766,16 +797,19 @@ static TS_StatusTypeDef TS_ConfigureController(TS_HandleTypeDef *hts)
 static TS_StatusTypeDef TS_ReadRawCoordinates(TS_HandleTypeDef *hts, uint16_t *raw_x, uint16_t *raw_y, uint16_t *pressure)
 {
     (void)hts; /* Unused - I2C access uses central driver */
-    uint8_t data_xyz[4] = {0};
+    uint8_t dataXYZ[4];
+    uint32_t uldataXYZ;
 
-    /* Read XYZ data */
-    if (I2C_Mem_Read(STMPE811_I2C_ADDRESS, STMPE811_REG_TSC_CTRL , I2C_MEMADD_SIZE_8BIT, data_xyz, 4, TS_TIMEOUT) != I2C_OK) {
+    /* Read XYZ data using non-incremental register like working project */
+    if (I2C_Mem_Read(STMPE811_I2C_ADDRESS, STMPE811_REG_TSC_DATA_NON_INC, I2C_MEMADD_SIZE_8BIT, dataXYZ, 4, TS_TIMEOUT) != I2C_OK) {
         return TS_COMMUNICATION_ERROR;
     }
 
-    *raw_x = (data_xyz[0] << 4) | ((data_xyz[1] & TS_COORD_HIGH_MASK) >> 4);
-    *raw_y = ((data_xyz[1] & TS_COORD_LOW_MASK) << 8) | data_xyz[2];
-    *pressure = data_xyz[3];
+    /* Calculate positions values like working project */
+    uldataXYZ = (dataXYZ[0] << 24) | (dataXYZ[1] << 16) | (dataXYZ[2] << 8) | (dataXYZ[3] << 0);
+    *raw_x = (uldataXYZ >> 20) & 0x00000FFF;
+    *raw_y = (uldataXYZ >>  8) & 0x00000FFF;
+    *pressure = dataXYZ[3]; /* Z value is in lowest byte */
 
     return TS_OK;
 }
@@ -794,6 +828,17 @@ static void TS_ProcessTouchData(TS_HandleTypeDef *hts)
 
     hts->PrevTouchData = hts->TouchData;
 
+    /* Check if FIFO has data before reading */
+    uint8_t fifo_size = 0;
+    if (TS_ReadRegister(hts, STMPE811_REG_FIFO_SIZE, &fifo_size) != TS_OK) {
+        hts->TouchData.TouchCount = 0;
+        return;
+    }
+    if (fifo_size == 0) {
+        hts->TouchData.TouchCount = 0;
+        return;
+    }
+
     if (TS_ReadRawCoordinates(hts, &raw_x, &raw_y, &pressure) != TS_OK) {
         hts->TouchData.TouchCount = 0;
         return;
@@ -809,6 +854,8 @@ static void TS_ProcessTouchData(TS_HandleTypeDef *hts)
     TS_ConvertCoordinates(hts, raw_x, raw_y, &x, &y);
     TS_FilterCoordinates(hts, &x, &y);
 
+
+
     hts->TouchData.TouchCount = 1;
     hts->TouchData.Points[0].X = x;
     hts->TouchData.Points[0].Y = y;
@@ -822,36 +869,31 @@ static void TS_ProcessTouchData(TS_HandleTypeDef *hts)
 }
 
 /**
- * @brief Filter coordinates using moving average
+ * @brief Filter coordinates using threshold-based update (matches working project)
  * @param hts Pointer to touchscreen handle structure
  * @param xPos Pointer to X coordinate
  * @param yPos Pointer to Y coordinate
  */
 static void TS_FilterCoordinates(TS_HandleTypeDef *hts, uint16_t *xPos, uint16_t *yPos)
 {
-    /* Simple filtering - in a real implementation, you might use
-       a more sophisticated filter like Kalman filter */
     (void)hts;  /* Suppress unused parameter warning */
 
-    static uint16_t x_history[TS_COORDINATE_FILTER_SIZE] = {0};
-    static uint16_t y_history[TS_COORDINATE_FILTER_SIZE] = {0};
-    static uint8_t filter_index = 0;
+    static int32_t last_x = 0;
+    static int32_t last_y = 0;
 
-    /* Add to history */
-    x_history[filter_index] = *xPos;
-    y_history[filter_index] = *yPos;
-    filter_index = (filter_index + 1) % TS_COORDINATE_FILTER_SIZE;
+    /* Calculate differences */
+    int16_t xDiff = (*xPos > last_x) ? (*xPos - last_x) : (last_x - *xPos);
+    int16_t yDiff = (*yPos > last_y) ? (*yPos - last_y) : (last_y - *yPos);
 
-    /* Calculate average */
-    uint32_t x_sum = 0;
-    uint32_t y_sum = 0;
-    for (uint8_t i = 0; i < TS_COORDINATE_FILTER_SIZE; i++) {
-        x_sum += x_history[i];
-        y_sum += y_history[i];
+    /* Update position only if movement exceeds threshold (matches working project) */
+    if (xDiff + yDiff > TS_SMOOTHING_THRESHOLD) {
+        last_x = *xPos;
+        last_y = *yPos;
     }
 
-    *xPos = (uint16_t)(x_sum / TS_COORDINATE_FILTER_SIZE);
-    *yPos = (uint16_t)(y_sum / TS_COORDINATE_FILTER_SIZE);
+    /* Return filtered/stable position */
+    *xPos = (uint16_t)last_x;
+    *yPos = (uint16_t)last_y;
 }
 
 /**

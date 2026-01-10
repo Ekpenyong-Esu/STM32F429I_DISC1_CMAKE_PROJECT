@@ -98,9 +98,9 @@ void lv_port_indev_init(void)
     }
     printf("Touchscreen initialized successfully\n");
 
-    /* Configure touchscreen interrupts for better responsiveness */
-    TS_ITConfig(&hts);
-    TS_EnableInterrupt(&hts, true);
+    // /* Configure touchscreen interrupts for better responsiveness */
+    // TS_ITConfig(&hts);
+    // TS_EnableInterrupt(&hts, true);
 
     /* Create and configure the input device driver (v9 API) */
     lv_indev_t * indev = lv_indev_create();
