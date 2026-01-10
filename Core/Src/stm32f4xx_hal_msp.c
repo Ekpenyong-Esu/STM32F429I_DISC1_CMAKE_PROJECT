@@ -215,8 +215,17 @@ void HAL_I2C_MspInit(I2C_HandleTypeDef* hi2c)
     /* Peripheral clock enable */
     __HAL_RCC_I2C3_CLK_ENABLE();
     /* USER CODE BEGIN I2C3_MspInit 1 */
-
+    __HAL_RCC_I2C3_FORCE_RESET();
+    __HAL_RCC_I2C3_RELEASE_RESET();
     /* USER CODE END I2C3_MspInit 1 */
+
+    /* Enable and set Discovery I2Cx Interrupt to the lowest priority */
+    HAL_NVIC_SetPriority(I2C3_EV_IRQn, 0x0F, 0);
+    HAL_NVIC_EnableIRQ(I2C3_EV_IRQn);
+
+    /* Enable and set Discovery I2Cx Interrupt to the lowest priority */
+    HAL_NVIC_SetPriority(I2C3_ER_IRQn, 0x0F, 0);
+    HAL_NVIC_EnableIRQ(I2C3_ER_IRQn);
 
   }
 

@@ -87,6 +87,15 @@ extern "C" {
 #define STMPE811_REG_TSC_DATA           0x57
 #define STMPE811_REG_TSC_I_DRIVE        0x58
 #define STMPE811_REG_TSC_SHIELD         0x59
+#define STMPE811_REG_TSC_DATA_NON_INC   0xD7
+
+#define STMPE811_REG_IO_AF              0x17
+
+#define STMPE811_PIN_4                  0x10
+#define STMPE811_PIN_5                  0x20
+#define STMPE811_PIN_6                  0x40
+#define STMPE811_PIN_7                  0x80
+
 
 /* Control Register Bit Definitions */
 #define STMPE811_SYS_CTRL1_HIBERNATE    0x01
@@ -114,6 +123,8 @@ extern "C" {
 #define STMPE811_TSC_CTRL_EN            0x01
 #define STMPE811_TSC_CTRL_XYZ           0x00
 #define STMPE811_TSC_CTRL_XY            0x02
+
+#define STMPE811_TS_CTRL_STATUS         0x80
 
 #define STMPE811_TSC_CFG_1_SAMPLE       0x00
 #define STMPE811_TSC_CFG_2_SAMPLE       0x40

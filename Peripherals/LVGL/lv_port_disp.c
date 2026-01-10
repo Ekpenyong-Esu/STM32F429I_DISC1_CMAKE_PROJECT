@@ -33,10 +33,6 @@
 /** Single framebuffer size in bytes */
 #define FB_SIZE         LTDC_FB_SIZE_RGB565
 
-/** Framebuffer addresses for double-buffering */
-#define FB0_ADDR        FB_BASE_ADDR
-// #define FB1_ADDR        (FB_BASE_ADDR + FB_SIZE)
-
 /*-----------------------------------------------------------------------------
  * DMA Configuration for Display Flush
  *---------------------------------------------------------------------------*/
@@ -64,14 +60,8 @@ static lv_color_t draw_buf[DRAW_BUF_SIZE] __attribute__((aligned(4)));
  * Private Variables
  *---------------------------------------------------------------------------*/
 
-// /** Current active framebuffer (0 or 1) */
-// static uint8_t active_fb = 0;
-
 /** DMA handle for display flush */
 static DMA_HandleTypeDef dmaHandle;
-
-/** LTDC handle reference (defined in ltdc.c) */
-extern LTDC_HandleTypeDef hltdc;
 
 /** Flush state variables */
 static volatile uint8_t dma_transfer_complete = 0;
@@ -81,31 +71,6 @@ static lv_display_t *current_display = NULL;
 /*-----------------------------------------------------------------------------
  * Private Functions
  *---------------------------------------------------------------------------*/
-
-/**
- * @brief   Get current backbuffer address (for rendering)
- * @retval  Backbuffer address in SDRAM
- */
-// static inline uint32_t get_backbuffer_addr(void)
-// {
-//     return (active_fb == 0) ? FB1_ADDR : FB0_ADDR;
-// }
-
-/**
- * @brief   Swap framebuffers (update LTDC to show backbuffer)
- */
-// static void swap_buffers(void)
-// {
-//     /* Toggle active buffer */
-//     active_fb = (active_fb == 0) ? 1 : 0;
-
-//     /* Update LTDC layer 0 address to new frontbuffer */
-//     uint32_t fb_addr = (active_fb == 0) ? FB0_ADDR : FB1_ADDR;
-//     HAL_LTDC_SetAddress(&hltdc, fb_addr, 0);
-
-//     /* Request vertical blanking reload for tear-free update */
-//     __HAL_LTDC_VERTICAL_BLANKING_RELOAD_CONFIG(&hltdc);
-// }
 
 /**
  * @brief   DMA transfer complete callback

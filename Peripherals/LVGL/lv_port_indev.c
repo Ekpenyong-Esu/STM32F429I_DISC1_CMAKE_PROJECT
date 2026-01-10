@@ -19,6 +19,7 @@
  ******************************************************************************/
 
 #include <stdint.h>
+#include <stdio.h>
 #include "lvgl.h"
 #include "lv_port_indev.h"
 #include "touchscreen.h"
@@ -60,8 +61,12 @@ static void touch_read(lv_indev_t *indev, lv_indev_data_t *data)
     /* Check if touchscreen is initialized */
     if (!hts.IsInitialized) {
         data->state = LV_INDEV_STATE_RELEASED;
+        printf("Touchscreen not initialized\n");
         return;
     }
+
+
+    TS_ReadTouchData(&hts);
 
     /* Read touch data from STMPE811 */
     uint16_t x;
@@ -70,8 +75,10 @@ static void touch_read(lv_indev_t *indev, lv_indev_data_t *data)
         data->state = LV_INDEV_STATE_PRESSED;
         data->point.x = x;
         data->point.y = y;
+        printf("Touch detected: x=%d, y=%d\n", x, y);
     } else {
         data->state = LV_INDEV_STATE_RELEASED;
+        printf("Touch released\n");
     }
 }
 
@@ -86,8 +93,14 @@ void lv_port_indev_init(void)
     /* Initialize touchscreen with I2C3 */
     if (TS_Init(&hts, &hi2c3) != TS_OK) {
         /* Touchscreen initialization failed */
+        printf("ERROR: Touchscreen init failed\n");
         return;
     }
+    printf("Touchscreen initialized successfully\n");
+
+    /* Configure touchscreen interrupts for better responsiveness */
+    TS_ITConfig(&hts);
+    TS_EnableInterrupt(&hts, true);
 
     /* Create and configure the input device driver (v9 API) */
     lv_indev_t * indev = lv_indev_create();
