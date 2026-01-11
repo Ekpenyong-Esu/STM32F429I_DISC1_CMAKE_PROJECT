@@ -128,22 +128,42 @@ static void dma_config(void)
  */
 static void disp_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map)
 {
+    /* Return if the area is completely outside the screen */
+    if (area->x2 < 0) return;
+    if (area->y2 < 0) return;
+    if (area->x1 > DISP_HOR_RES - 1) return;
+    if (area->y1 > DISP_VER_RES - 1) return;
+
+    /* Truncate the area to the visible screen */
+    int32_t act_x1 = area->x1 < 0 ? 0 : area->x1;
+    int32_t act_y1 = area->y1 < 0 ? 0 : area->y1;
+    int32_t act_x2 = area->x2 > DISP_HOR_RES - 1 ? DISP_HOR_RES - 1 : area->x2;
+    int32_t act_y2 = area->y2 > DISP_VER_RES - 1 ? DISP_VER_RES - 1 : area->y2;
+
     uint16_t *fb = (uint16_t *)FB_BASE_ADDR;
-    uint16_t *src = (uint16_t *)px_map;
 
+    /* Source width (pixels) of the original px_map lines */
+    int32_t src_w = area->x2 - area->x1 + 1;
 
-    int32_t w = area->x2 - area->x1 + 1;
+    /* Number of pixels to skip at the left/top of the px_map when clipped */
+    int32_t skip_x = act_x1 - area->x1;
+    int32_t skip_y = act_y1 - area->y1;
 
+    /* Starting source pointer after skipping clipped pixels/lines */
+    uint16_t *src = (uint16_t *)px_map + (skip_y * src_w) + skip_x;
 
-    for (int32_t y = area->y1; y <= area->y2; y++) {
-        memcpy(&fb[y * DISP_HOR_RES + area->x1], src, w * DISP_BPP);
-        src += w;
+    /* Width (pixels) actually written per line */
+    int32_t w = act_x2 - act_x1 + 1;
+
+    for (int32_t y = act_y1; y <= act_y2; y++) {
+        memcpy(&fb[y * DISP_HOR_RES + act_x1], src, (size_t)(w * DISP_BPP));
+        src += src_w; /* advance to next source line */
     }
 
-
-    // /* Ensure LTDC sees updated SDRAM content */
-    // SCB_CleanDCache_by_Addr((uint32_t *)FB_BASE_ADDR, FB_SIZE);
-
+    /* Ensure LTDC sees updated SDRAM content for the written rectangle */
+    uint32_t *clean_addr = (uint32_t *)&fb[act_y1 * DISP_HOR_RES + act_x1];
+    int32_t clean_size = (int32_t)(w * DISP_BPP * (act_y2 - act_y1 + 1));
+    SCB_CleanDCache_by_Addr(clean_addr, clean_size);
 
     lv_display_flush_ready(disp);
 }

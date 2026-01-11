@@ -13,6 +13,7 @@
 #include "touchscreen.h"
 #include "i2c.h"
 #include "stdbool.h"
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
@@ -226,10 +227,10 @@ TS_StatusTypeDef TS_GetSingleTouch(TS_HandleTypeDef *hts,
                                   uint16_t *xPos,
                                   uint16_t *yPos)
 {
-    uint16_t raw_x;
-    uint16_t raw_y;
-    uint16_t disp_x;
-    uint16_t disp_y;
+    uint16_t raw_x = 0;
+    uint16_t raw_y = 0;
+    uint16_t disp_x = 0;
+    uint16_t disp_y = 0;
 
     if(hts == NULL || xPos == NULL || yPos == NULL) {
         return TS_INVALID_PARAM;
@@ -238,14 +239,22 @@ TS_StatusTypeDef TS_GetSingleTouch(TS_HandleTypeDef *hts,
     *xPos = 0;
     *yPos = 0;
     uint8_t fifo_size = 0;
+    uint8_t status = 0;
 
     if(!hts->IsInitialized) {
         return TS_NOT_INITIALIZED;
     }
 
-    // Check FIFO size first
-    if(TS_ReadRegister(hts, STMPE811_REG_FIFO_SIZE, &fifo_size) != TS_OK) return TS_ERROR;
-    if(fifo_size == 0) return TS_ERROR;   // No touch
+    if (TS_ReadRegister(hts, STMPE811_REG_TSC_CTRL, &status) != TS_OK ) return TS_ERROR;
+
+    if (status & (uint8_t)STMPE811_TS_CTRL_STATUS)
+    {
+        if (TS_ReadRegister(hts, STMPE811_REG_FIFO_SIZE, &fifo_size) != TS_OK) return TS_ERROR;
+    }
+    else {
+        return TS_ERROR;
+    }
+
 
     if(TS_ReadRawCoordinates(&raw_x, &raw_y, NULL) != TS_OK) {
         return TS_ERROR;
@@ -269,7 +278,7 @@ TS_StatusTypeDef TS_GetTouchState(TS_HandleTypeDef *hts,
                                  uint16_t *y,
                                  uint8_t *pressed)
 {
-    uint16_t raw_x;
+    uint16_t raw_x = 0;
     uint16_t raw_y;
     uint16_t disp_x;
     uint16_t disp_y;
@@ -529,16 +538,33 @@ static TS_StatusTypeDef TS_ConvertCoordinates(uint16_t raw_x,
         return TS_INVALID_PARAM;
     }
 
-    /* BSP-correct DISC1 mapping (portrait mode) */
-    uint32_t x = (raw_y * TS_DISPLAY_WIDTH)  / 4095U;
-    uint32_t y = TS_DISPLAY_HEIGHT - ((raw_x * TS_DISPLAY_HEIGHT) / 4095U);
+    /* Apply calibration mapping from working project */
+    int32_t y_raw = (int32_t)raw_y;
 
-    /* Clamp */
-    if(x >= TS_DISPLAY_WIDTH)  x = TS_DISPLAY_WIDTH  - 1;
-    if(y >= TS_DISPLAY_HEIGHT) y = TS_DISPLAY_HEIGHT - 1;
+    /* Y value first correction */
+    y_raw -= 360;
 
-    *disp_x = (uint16_t)x;
-    *disp_y = (uint16_t)y;
+    /* Y value second correction */
+    int32_t yr = y_raw / 11;
+
+    /* Return y_raw position value (clamped to display height) */
+    if (yr <= 0) yr = 0;
+    else if (yr >= (int32_t)TS_DISPLAY_HEIGHT) yr = (int32_t)TS_DISPLAY_HEIGHT - 1;
+
+    /* X value first correction */
+    int32_t x_raw = (int32_t)raw_x;
+    if (x_raw <= 3000) x_raw = 3870 - x_raw;
+    else x_raw = 3800 - x_raw;
+
+    /* X value second correction */
+    int32_t xr = x_raw / 15;
+
+    /* Return X position value (clamped to display width) */
+    if (xr <= 0) xr = 0;
+    else if (xr >= (int32_t)TS_DISPLAY_WIDTH) xr = (int32_t)TS_DISPLAY_WIDTH - 1;
+
+    *disp_x = (uint16_t)xr;
+    *disp_y = (uint16_t)yr;
 
     return TS_OK;
 }
@@ -788,17 +814,17 @@ static TS_StatusTypeDef TS_ConfigureController(TS_HandleTypeDef *hts)
     TS_DELAY_MS(2);
 
     /* Configure ADC clock speed: 3.25 MHz */
-    TS_WriteRegister(hts, STMPE811_REG_ADC_CTRL2, 0x01U);
+    TS_WriteRegister(hts, STMPE811_REG_ADC_CTRL2, 0x01);
 
     /* Configure touchscreen:
        - 4 samples averaging (0x80)
        - 500us touch detect delay (0x18)
        - 500us panel driver settling time (0x02)
        = 0x9A */
-    TS_WriteRegister(hts, STMPE811_REG_TSC_CFG, 0x9AU);
+    TS_WriteRegister(hts, STMPE811_REG_TSC_CFG, 0x9A);
 
     /* Configure FIFO threshold: single point reading */
-    TS_WriteRegister(hts, STMPE811_REG_FIFO_TH, 0x01U);
+    TS_WriteRegister(hts, STMPE811_REG_FIFO_TH, 0x01);
 
     /* Clear the FIFO memory content */
     TS_WriteRegister(hts, STMPE811_REG_FIFO_STA, 0x01U);
@@ -887,19 +913,23 @@ static TS_StatusTypeDef TS_ReadRawCoordinates(uint16_t *raw_x,
 static void TS_FilterCoordinates(uint16_t *x,
                                  uint16_t *y)
 {
-    static uint16_t last_x = 0;
-    static uint16_t last_y = 0;
+    static uint16_t _x = 0;
+    static uint16_t _y = 0;
 
-    int16_t dx = (int16_t)(*x - last_x);
-    int16_t dy = (int16_t)(*y - last_y);
+    int32_t x_raw = (int32_t)*x;
+    int32_t y_raw = (int32_t)*y;
 
-    if((abs(dx) + abs(dy)) > TS_SMOOTHING_THRESHOLD) {
-        last_x = *x;
-        last_y = *y;
+    int32_t xDiff = x_raw > _x ? (x_raw - _x) : (_x - x_raw);
+    int32_t yDiff = y_raw > _y ? (y_raw - _y) : (_y - y_raw);
+
+    /* Threshold-based smoothing (matches working project) */
+    if ((xDiff + yDiff) > 5) {
+        _x = (uint16_t)x_raw;
+        _y = (uint16_t)y_raw;
     }
 
-    *x = last_x;
-    *y = last_y;
+    *x = _x;
+    *y = _y;
 }
 
 /**

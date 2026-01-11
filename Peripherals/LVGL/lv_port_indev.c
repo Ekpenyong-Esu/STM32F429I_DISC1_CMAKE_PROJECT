@@ -82,13 +82,15 @@ static void touch_read(lv_indev_t *indev, lv_indev_data_t *data)
     data->point.x = x;
     data->point.y = y;
 
-    last_x = x;
-    last_y = y;
+    last_x = data->point.x;
+    last_y = data->point.y;
     } else {
     data->state   = LV_INDEV_STATE_RELEASED;
     data->point.x = last_x;
     data->point.y = last_y;
     }
+
+
 }
 
 /*-----------------------------------------------------------------------------
@@ -102,7 +104,7 @@ void lv_port_indev_init(void)
 {
     /* Initialize touchscreen with I2C3 handle */
     if (TS_Init(&hts, &hi2c3) != TS_OK) {
-
+        return;
     }
 
     /* Optional: configure touchscreen interrupts */
