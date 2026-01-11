@@ -189,6 +189,11 @@ I2C_StatusTypeDef I2C_Mem_Read(uint16_t DevAddress, uint16_t MemAddress,
                               uint16_t MemAddSize, uint8_t* pData,
                               uint16_t Size, uint32_t Timeout);
 
+
+I2C_StatusTypeDef I2C_Mem_Read_Multi(uint16_t DevAddress, uint16_t MemAddress,
+                              uint16_t MemAddSize, uint8_t* pData,
+                              uint16_t Size, uint32_t Timeout);
+
 /** @} */ /* End of I2C_Memory_Operations */
 
 /** @defgroup I2C_Utility_Functions Utility Functions

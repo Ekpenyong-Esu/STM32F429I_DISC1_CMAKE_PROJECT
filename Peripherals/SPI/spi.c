@@ -25,6 +25,47 @@
 SPI_HandleTypeDef hspi5;
 
 /* Private function prototypes -----------------------------------------------*/
+static SPI_StatusTypeDef SPI_ConvertHALStatus(HAL_StatusTypeDef halStatus);
+static void SPIx_Error(void);
+
+/* Private functions ---------------------------------------------------------*/
+
+/**
+ * @brief   Convert HAL status to SPI status
+ * @param   halStatus HAL status code
+ * @retval  SPI_StatusTypeDef Converted status
+ */
+static SPI_StatusTypeDef SPI_ConvertHALStatus(HAL_StatusTypeDef halStatus)
+{
+    switch (halStatus)
+    {
+        case HAL_OK:
+            return SPI_OK;
+        case HAL_ERROR:
+            return SPI_ERROR;
+        case HAL_BUSY:
+            return SPI_BUSY;
+        case HAL_TIMEOUT:
+            return SPI_TIMEOUT;
+        default:
+            return SPI_ERROR;
+    }
+}
+
+/**
+ * @brief   SPI error recovery function
+ * @details Deinitializes and reinitializes SPI peripheral on error
+ * @param   None
+ * @retval  None
+ */
+static void SPIx_Error(void)
+{
+    /* De-initialize the SPI communication BUS */
+    SPI_DeInit();
+
+    /* Re-Initialize the SPI communication BUS */
+    SPI_Init();
+}
 
 /**
   * @brief  SPI Initialization Function
@@ -67,10 +108,7 @@ void SPI_Init(void)
   hspi5.Init.CRCPolynomial = SPI_CRC_POLYNOMIAL_DEFAULT;                        /* CRC polynomial (not used) */
 
   /* Initialize the SPI peripheral with the specified parameters */
-  if (HAL_SPI_Init(&hspi5) != HAL_OK)
-  {
-    Error_Handler();  /* Call error handler if initialization fails */
-  }
+   HAL_SPI_Init(&hspi5);
 }
 
 /**
@@ -101,13 +139,10 @@ SPI_StatusTypeDef SPI_Init_Custom(const SPI_ConfigTypeDef* config)
   hspi5.Init.CRCPolynomial = config->CRCPolynomial;
 
   /* Initialize the SPI peripheral with the specified parameters */
-  if (HAL_SPI_Init(&hspi5) != HAL_OK)
-  {
-    return SPI_ERROR;
-  }
-
-  return SPI_OK;
+   HAL_SPI_Init(&hspi5);
+   return SPI_OK;
 }
+
 
 /**
  * @brief   Deinitializes SPI peripheral
@@ -127,11 +162,12 @@ SPI_StatusTypeDef SPI_DeInit(void)
 
 /**
  * @brief   Transmit data via SPI
- * @details Sends data buffer via SPI
+ * @details Sends data buffer via SPI with automatic error recovery
  * @param   pData Pointer to data buffer to transmit
  * @param   Size Number of bytes to transmit
  * @param   Timeout Timeout duration in milliseconds
  * @retval  SPI_StatusTypeDef Operation status
+ * @note    On HAL error, automatically calls SPIx_Error() to reset the SPI bus
  */
 SPI_StatusTypeDef SPI_Transmit(uint8_t* pData, uint16_t Size, uint32_t Timeout)
 {
@@ -140,9 +176,12 @@ SPI_StatusTypeDef SPI_Transmit(uint8_t* pData, uint16_t Size, uint32_t Timeout)
     return SPI_INVALID_PARAM;
   }
 
-  if (HAL_SPI_Transmit(&hspi5, pData, Size, Timeout) != HAL_OK)
+  HAL_StatusTypeDef halStatus = HAL_SPI_Transmit(&hspi5, pData, Size, Timeout);
+  if (halStatus != HAL_OK)
   {
-    return SPI_ERROR;
+    /* Re-Initialize the BUS on error for automatic recovery */
+    SPIx_Error();
+    return SPI_ConvertHALStatus(halStatus);
   }
 
   return SPI_OK;
@@ -150,11 +189,12 @@ SPI_StatusTypeDef SPI_Transmit(uint8_t* pData, uint16_t Size, uint32_t Timeout)
 
 /**
  * @brief   Receive data via SPI
- * @details Receives data via SPI
+ * @details Receives data via SPI with automatic error recovery
  * @param   pData Pointer to data buffer to receive
  * @param   Size Number of bytes to receive
  * @param   Timeout Timeout duration in milliseconds
  * @retval  SPI_StatusTypeDef Operation status
+ * @note    On HAL error, automatically calls SPIx_Error() to reset the SPI bus
  */
 SPI_StatusTypeDef SPI_Receive(uint8_t* pData, uint16_t Size, uint32_t Timeout)
 {
@@ -163,9 +203,12 @@ SPI_StatusTypeDef SPI_Receive(uint8_t* pData, uint16_t Size, uint32_t Timeout)
     return SPI_INVALID_PARAM;
   }
 
-  if (HAL_SPI_Receive(&hspi5, pData, Size, Timeout) != HAL_OK)
+  HAL_StatusTypeDef halStatus = HAL_SPI_Receive(&hspi5, pData, Size, Timeout);
+  if (halStatus != HAL_OK)
   {
-    return SPI_ERROR;
+    /* Re-Initialize the BUS on error for automatic recovery */
+    SPIx_Error();
+    return SPI_ConvertHALStatus(halStatus);
   }
 
   return SPI_OK;
@@ -173,12 +216,13 @@ SPI_StatusTypeDef SPI_Receive(uint8_t* pData, uint16_t Size, uint32_t Timeout)
 
 /**
  * @brief   Transmit and receive data simultaneously
- * @details Performs full-duplex SPI communication
+ * @details Performs full-duplex SPI communication with automatic error recovery
  * @param   pTxData Pointer to transmit data buffer
  * @param   pRxData Pointer to receive data buffer
  * @param   Size Number of bytes to transmit/receive
  * @param   Timeout Timeout duration in milliseconds
  * @retval  SPI_StatusTypeDef Operation status
+ * @note    On HAL error, automatically calls SPIx_Error() to reset the SPI bus
  */
 SPI_StatusTypeDef SPI_TransmitReceive(uint8_t* pTxData, uint8_t* pRxData, uint16_t Size, uint32_t Timeout)
 {
@@ -187,9 +231,12 @@ SPI_StatusTypeDef SPI_TransmitReceive(uint8_t* pTxData, uint8_t* pRxData, uint16
     return SPI_INVALID_PARAM;
   }
 
-  if (HAL_SPI_TransmitReceive(&hspi5, pTxData, pRxData, Size, Timeout) != HAL_OK)
+  HAL_StatusTypeDef halStatus = HAL_SPI_TransmitReceive(&hspi5, pTxData, pRxData, Size, Timeout);
+  if (halStatus != HAL_OK)
   {
-    return SPI_ERROR;
+    /* Re-Initialize the BUS on error for automatic recovery */
+    SPIx_Error();
+    return SPI_ConvertHALStatus(halStatus);
   }
 
   return SPI_OK;

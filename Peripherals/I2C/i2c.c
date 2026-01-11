@@ -31,6 +31,7 @@ I2C_HandleTypeDef hi2c3;
 
 /* Private function prototypes -----------------------------------------------*/
 static I2C_StatusTypeDef I2C_ConvertHALStatus(HAL_StatusTypeDef halStatus);
+static void I2Cx_Error(void);
 
 /* Private functions ---------------------------------------------------------*/
 
@@ -87,10 +88,7 @@ void I2C_Init(void)
   hi2c3.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;    /* Clock stretching enabled */
 
   /* Initialize the I2C peripheral with the specified parameters */
-  if (HAL_I2C_Init(&hi2c3) != HAL_OK)
-  {
-    Error_Handler();  /* Call error handler if initialization fails */
-  }
+  HAL_I2C_Init(&hi2c3);
 }
 
 /**
@@ -135,12 +133,13 @@ I2C_StatusTypeDef I2C_DeInit(void)
 
 /**
  * @brief   Transmit data to I2C slave device
- * @details Sends data buffer to specified I2C slave address
+ * @details Sends data buffer to specified I2C slave address with automatic error recovery
  * @param   DevAddress Target device address (7-bit or 10-bit)
  * @param   pData Pointer to data buffer to transmit
  * @param   Size Number of bytes to transmit
  * @param   Timeout Timeout duration in milliseconds
  * @retval  I2C_StatusTypeDef Operation status
+ * @note    On HAL error, automatically calls I2Cx_Error() to reset the I2C bus
  */
 I2C_StatusTypeDef I2C_Master_Transmit(uint16_t DevAddress, uint8_t* pData, uint16_t Size, uint32_t Timeout)
 {
@@ -150,17 +149,25 @@ I2C_StatusTypeDef I2C_Master_Transmit(uint16_t DevAddress, uint8_t* pData, uint1
     }
 
     HAL_StatusTypeDef halStatus = HAL_I2C_Master_Transmit(&hi2c3, DevAddress, pData, Size, Timeout);
-    return I2C_ConvertHALStatus(halStatus);
+    if (halStatus != HAL_OK)
+    {
+        /* Re-Initialize the BUS on error for automatic recovery */
+        I2Cx_Error();
+        return I2C_ConvertHALStatus(halStatus);
+    }
+
+    return I2C_OK;
 }
 
 /**
  * @brief   Receive data from I2C slave device
- * @details Receives data from specified I2C slave address
+ * @details Receives data from specified I2C slave address with automatic error recovery
  * @param   DevAddress Target device address (7-bit or 10-bit)
  * @param   pData Pointer to data buffer to receive
  * @param   Size Number of bytes to receive
  * @param   Timeout Timeout duration in milliseconds
  * @retval  I2C_StatusTypeDef Operation status
+ * @note    On HAL error, automatically calls I2Cx_Error() to reset the I2C bus
  */
 I2C_StatusTypeDef I2C_Master_Receive(uint16_t DevAddress, uint8_t* pData, uint16_t Size, uint32_t Timeout)
 {
@@ -170,12 +177,19 @@ I2C_StatusTypeDef I2C_Master_Receive(uint16_t DevAddress, uint8_t* pData, uint16
     }
 
     HAL_StatusTypeDef halStatus = HAL_I2C_Master_Receive(&hi2c3, DevAddress, pData, Size, Timeout);
-    return I2C_ConvertHALStatus(halStatus);
+    if (halStatus != HAL_OK)
+    {
+        /* Re-Initialize the BUS on error for automatic recovery */
+        I2Cx_Error();
+        return I2C_ConvertHALStatus(halStatus);
+    }
+
+    return I2C_OK;
 }
 
 /**
  * @brief   Transmit and receive data in single transaction
- * @details Performs write followed by read operation
+ * @details Performs write followed by read operation with automatic error recovery
  * @param   DevAddress Target device address (7-bit or 10-bit)
  * @param   pTxData Pointer to transmit data buffer
  * @param   TxSize Number of bytes to transmit
@@ -183,6 +197,7 @@ I2C_StatusTypeDef I2C_Master_Receive(uint16_t DevAddress, uint8_t* pData, uint16
  * @param   RxSize Number of bytes to receive
  * @param   Timeout Timeout duration in milliseconds
  * @retval  I2C_StatusTypeDef Operation status
+ * @note    On HAL error, automatically calls I2Cx_Error() to reset the I2C bus
  */
 I2C_StatusTypeDef I2C_Master_TransmitReceive(uint16_t DevAddress,
                                            uint8_t* pTxData, uint16_t TxSize,
@@ -197,16 +212,26 @@ I2C_StatusTypeDef I2C_Master_TransmitReceive(uint16_t DevAddress,
     HAL_StatusTypeDef halStatus = HAL_I2C_Master_Transmit(&hi2c3, DevAddress, pTxData, TxSize, Timeout);
     if (halStatus != HAL_OK)
     {
+        /* Re-Initialize the BUS on error for automatic recovery */
+        I2Cx_Error();
         return I2C_ConvertHALStatus(halStatus);
     }
 
     halStatus = HAL_I2C_Master_Receive(&hi2c3, DevAddress, pRxData, RxSize, Timeout);
-    return I2C_ConvertHALStatus(halStatus);
+    if (halStatus != HAL_OK)
+    {
+        /* Re-Initialize the BUS on error for automatic recovery */
+        I2Cx_Error();
+        return I2C_ConvertHALStatus(halStatus);
+    }
+
+    return I2C_OK;
 }
 
 /**
  * @brief   Write data to I2C memory device
- * @details Writes data to specified memory address in I2C EEPROM/Memory device
+ * @details Writes data to specified memory address in I2C EEPROM/Memory device.
+ *          Includes automatic bus re-initialization on communication errors for robustness.
  * @param   DevAddress Target device address
  * @param   MemAddress Memory address to write to
  * @param   MemAddSize Size of memory address (1 or 2 bytes)
@@ -214,6 +239,7 @@ I2C_StatusTypeDef I2C_Master_TransmitReceive(uint16_t DevAddress,
  * @param   Size Number of bytes to write
  * @param   Timeout Timeout duration in milliseconds
  * @retval  I2C_StatusTypeDef Operation status
+ * @note    On HAL error, automatically calls I2Cx_Error() to reset the I2C bus
  */
 I2C_StatusTypeDef I2C_Mem_Write(uint16_t DevAddress, uint16_t MemAddress,
                                uint16_t MemAddSize, uint8_t* pData,
@@ -226,12 +252,23 @@ I2C_StatusTypeDef I2C_Mem_Write(uint16_t DevAddress, uint16_t MemAddress,
 
     HAL_StatusTypeDef halStatus = HAL_I2C_Mem_Write(&hi2c3, DevAddress, MemAddress,
                                                    MemAddSize, pData, Size, Timeout);
-    return I2C_ConvertHALStatus(halStatus);
+
+    if (halStatus == HAL_OK)
+    {
+        return I2C_OK;
+    }
+    else
+    {
+        /* Re-Initialize the BUS on error for automatic recovery */
+        I2Cx_Error();
+        return I2C_ConvertHALStatus(halStatus);
+    }
 }
 
 /**
  * @brief   Read data from I2C memory device
- * @details Reads data from specified memory address in I2C EEPROM/Memory device
+ * @details Reads data from specified memory address in I2C EEPROM/Memory device.
+ *          Includes automatic bus re-initialization on communication errors for robustness.
  * @param   DevAddress Target device address
  * @param   MemAddress Memory address to read from
  * @param   MemAddSize Size of memory address (1 or 2 bytes)
@@ -239,6 +276,7 @@ I2C_StatusTypeDef I2C_Mem_Write(uint16_t DevAddress, uint16_t MemAddress,
  * @param   Size Number of bytes to read
  * @param   Timeout Timeout duration in milliseconds
  * @retval  I2C_StatusTypeDef Operation status
+ * @note    On HAL error, automatically calls I2Cx_Error() to reset the I2C bus
  */
 I2C_StatusTypeDef I2C_Mem_Read(uint16_t DevAddress, uint16_t MemAddress,
                               uint16_t MemAddSize, uint8_t* pData,
@@ -251,8 +289,57 @@ I2C_StatusTypeDef I2C_Mem_Read(uint16_t DevAddress, uint16_t MemAddress,
 
     HAL_StatusTypeDef halStatus = HAL_I2C_Mem_Read(&hi2c3, DevAddress, MemAddress,
                                                   MemAddSize, pData, Size, Timeout);
-    return I2C_ConvertHALStatus(halStatus);
+
+    if (halStatus == HAL_OK)
+    {
+        return I2C_OK;
+    }
+    else
+    {
+        /* Re-Initialize the BUS on error for automatic recovery */
+        I2Cx_Error();
+        return I2C_ConvertHALStatus(halStatus);
+    }
 }
+
+
+/**
+ * @brief   Read data from I2C memory device with error recovery
+ * @details Reads data from specified memory address in I2C EEPROM/Memory device.
+ *          Includes automatic bus re-initialization on communication errors for robustness.
+ * @param   DevAddress Target device address
+ * @param   MemAddress Memory address to read from
+ * @param   MemAddSize Size of memory address (1 or 2 bytes)
+ * @param   pData Pointer to data buffer to read into
+ * @param   Size Number of bytes to read
+ * @param   Timeout Timeout duration in milliseconds
+ * @retval  I2C_StatusTypeDef Operation status
+ * @note    On HAL error, automatically calls I2Cx_Error() to reset the I2C bus
+ */
+I2C_StatusTypeDef I2C_Mem_Read_Multi(uint16_t DevAddress, uint16_t MemAddress,
+                              uint16_t MemAddSize, uint8_t* pData,
+                              uint16_t Size, uint32_t Timeout)
+{
+    if (pData == NULL || Size == 0)
+    {
+        return I2C_INVALID_PARAM;
+    }
+
+    HAL_StatusTypeDef halStatus = HAL_I2C_Mem_Read(&hi2c3, DevAddress, MemAddress,
+                                                  MemAddSize, pData, Size, Timeout);
+
+    if (halStatus == HAL_OK)
+    {
+        return I2C_OK;
+    }
+    else
+    {
+        /* Re-Initialize the BUS on error for automatic recovery */
+        I2Cx_Error();
+        return I2C_ConvertHALStatus(halStatus);
+    }
+}
+
 
 /**
  * @brief   Check if I2C device is ready/responding
@@ -309,6 +396,16 @@ uint8_t I2C_ScanBus(uint8_t* pDevices, uint8_t MaxDevices, uint32_t Timeout)
 uint32_t I2C_GetError(void)
 {
     return HAL_I2C_GetError(&hi2c3);
+}
+
+
+static void I2Cx_Error(void)
+{
+  /* De-initialize the I2C communication BUS */
+  I2C_DeInit();
+
+  /* Re-Initialize the I2C communication BUS */
+  I2C_Init();
 }
 
 /**
