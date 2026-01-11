@@ -141,8 +141,8 @@ static void disp_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px
     }
 
 
-    /* Ensure LTDC sees updated SDRAM content */
-    SCB_CleanDCache_by_Addr((uint32_t *)FB_BASE_ADDR, FB_SIZE);
+    // /* Ensure LTDC sees updated SDRAM content */
+    // SCB_CleanDCache_by_Addr((uint32_t *)FB_BASE_ADDR, FB_SIZE);
 
 
     lv_display_flush_ready(disp);

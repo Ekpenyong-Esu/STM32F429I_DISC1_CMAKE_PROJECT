@@ -96,6 +96,11 @@ extern "C" {
 #define STMPE811_PIN_6                  0x40
 #define STMPE811_PIN_7                  0x80
 
+#define TS_DISPLAY_WIDTH   240
+#define TS_DISPLAY_HEIGHT  320
+#define TS_SMOOTHING_THRESHOLD  4
+
+
 
 /* Control Register Bit Definitions */
 #define STMPE811_SYS_CTRL1_HIBERNATE    0x01
@@ -236,6 +241,7 @@ typedef struct {
     uint8_t FIFOThreshold;              /**< FIFO threshold */
 } TS_ConfigTypeDef;
 
+
 /**
  * @brief Touchscreen handle structure
  */
@@ -265,7 +271,9 @@ TS_StatusTypeDef TS_Reset(TS_HandleTypeDef *hts);
 /* Touch detection and reading functions */
 TS_StatusTypeDef TS_ReadTouchData(TS_HandleTypeDef *hts);
 TS_StatusTypeDef TS_GetTouchData(TS_HandleTypeDef *hts, TS_TouchDataTypeDef *touch_data);
-TS_StatusTypeDef TS_GetSingleTouch(TS_HandleTypeDef *hts, uint16_t *xPos, uint16_t *yPos);
+TS_StatusTypeDef TS_GetSingleTouch(TS_HandleTypeDef *hts,
+                                  uint16_t *xPos,
+                                  uint16_t *yPos);
 bool TS_IsTouched(TS_HandleTypeDef *hts);
 uint8_t TS_GetTouchCount(TS_HandleTypeDef *hts);
 
@@ -297,8 +305,11 @@ TS_StatusTypeDef TS_RegisterCallbacks(TS_HandleTypeDef *hts,
 
 /* Utility functions */
 TS_StatusTypeDef TS_GetDeviceInfo(TS_HandleTypeDef *hts, uint16_t *device_id, uint8_t *version);
-TS_StatusTypeDef TS_ConvertCoordinates(TS_HandleTypeDef *hts, uint16_t raw_x, uint16_t raw_y,
-                                      uint16_t *display_x, uint16_t *display_y);
+//TS_StatusTypeDef TS_ConvertCoordinates(TS_HandleTypeDef *hts, uint16_t raw_x, uint16_t raw_y,
+ //                                     uint16_t *display_x, uint16_t *display_y);
+ TS_StatusTypeDef TS_GetTouchState(TS_HandleTypeDef *hts,
+                                  uint16_t *x, uint16_t *y,
+                                  uint8_t *pressed);
 TS_StatusTypeDef TS_SetThreshold(TS_HandleTypeDef *hts, uint16_t threshold);
 TS_StatusTypeDef TS_GetPressure(TS_HandleTypeDef *hts, uint16_t *pressure);
 

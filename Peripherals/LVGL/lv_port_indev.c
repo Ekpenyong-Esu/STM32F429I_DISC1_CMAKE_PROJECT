@@ -27,8 +27,10 @@
 
 /* Touchscreen handle */
 static TS_HandleTypeDef hts;
-static I2C_HandleTypeDef *hi2c_touch = NULL;
 
+/* Last known touch position */
+static int16_t last_x = 0;
+static int16_t last_y = 0;
 /*-----------------------------------------------------------------------------
  * Touch Read Callback - Get Current Touch State
  *---------------------------------------------------------------------------*/
@@ -54,31 +56,38 @@ static I2C_HandleTypeDef *hi2c_touch = NULL;
  *     data->state = LV_INDEV_STATE_RELEASED;
  *   }
  */
+/* LVGL input device read callback */
 static void touch_read(lv_indev_t *indev, lv_indev_data_t *data)
 {
-    (void)indev;  /* Unused parameter */
+    (void)indev;  /* Unused */
 
-    /* Check if touchscreen is initialized */
+    uint16_t x = 0;
+    uint16_t y = 0;
+
     if (!hts.IsInitialized) {
         data->state = LV_INDEV_STATE_RELEASED;
-        printf("Touchscreen not initialized\n");
+        data->point.x = last_x;
+        data->point.y = last_y;
         return;
     }
 
-
-    TS_ReadTouchData(&hts);
-
-    /* Read touch data from STMPE811 */
-    uint16_t x;
-    uint16_t y;
+    /* Read touchscreen data */
     if (TS_GetSingleTouch(&hts, &x, &y) == TS_OK) {
-        data->state = LV_INDEV_STATE_PRESSED;
-        data->point.x = x;
-        data->point.y = y;
-        printf("Touch detected: x=%d, y=%d\n", x, y);
+
+    /* Clamp coordinates to LVGL display bounds */
+    if (x >= TS_DISPLAY_WIDTH)  x = TS_DISPLAY_WIDTH  - 1;
+    if (y >= TS_DISPLAY_HEIGHT) y = TS_DISPLAY_HEIGHT - 1;
+
+    data->state   = LV_INDEV_STATE_PRESSED;
+    data->point.x = x;
+    data->point.y = y;
+
+    last_x = x;
+    last_y = y;
     } else {
-        data->state = LV_INDEV_STATE_RELEASED;
-        printf("Touch released\n");
+    data->state   = LV_INDEV_STATE_RELEASED;
+    data->point.x = last_x;
+    data->point.y = last_y;
     }
 }
 
@@ -88,24 +97,20 @@ static void touch_read(lv_indev_t *indev, lv_indev_data_t *data)
 /* Call this function once during startup (after lv_init()).
  * It registers the touchscreen with LVGL.
  */
+/* LVGL input device initialization */
 void lv_port_indev_init(void)
 {
-    /* Initialize touchscreen with I2C3 */
+    /* Initialize touchscreen with I2C3 handle */
     if (TS_Init(&hts, &hi2c3) != TS_OK) {
-        /* Touchscreen initialization failed */
-        printf("ERROR: Touchscreen init failed\n");
-        return;
-    }
-    printf("Touchscreen initialized successfully\n");
 
-    // /* Configure touchscreen interrupts for better responsiveness */
+    }
+
+    /* Optional: configure touchscreen interrupts */
     // TS_ITConfig(&hts);
     // TS_EnableInterrupt(&hts, true);
 
-    /* Create and configure the input device driver (v9 API) */
-    lv_indev_t * indev = lv_indev_create();
-    lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER);  /* Pointer = touchscreen or mouse */
-    lv_indev_set_read_cb(indev, touch_read);          /* Our touch reading function */
-
-    /* Note: Touch hardware initialization is done above */
+    /* Create LVGL input device driver */
+    lv_indev_t *indev = lv_indev_create();
+    lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER);
+    lv_indev_set_read_cb(indev, touch_read);
 }

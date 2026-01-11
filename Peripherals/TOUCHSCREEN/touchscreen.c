@@ -11,7 +11,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "touchscreen.h"
-#include "../I2C/i2c.h"
+#include "i2c.h"
 #include "stdbool.h"
 #include <stdio.h>
 #include <string.h>
@@ -47,8 +47,6 @@
 #define TS_PRESSURE_SCALE               255U
 #define TS_BYTE_MASK                    0xFFU
 
-/* Smoothing */
-#define TS_SMOOTHING_THRESHOLD          5U
 
 /* Private variables ---------------------------------------------------------*/
 /* Global touchscreen handle */
@@ -59,9 +57,19 @@ TS_HandleTypeDef *g_hts = NULL;
 static TS_StatusTypeDef TS_InitI2C(TS_HandleTypeDef *hts);
 static TS_StatusTypeDef TS_CheckDevice(TS_HandleTypeDef *hts);
 static TS_StatusTypeDef TS_ConfigureController(TS_HandleTypeDef *hts);
-static TS_StatusTypeDef TS_ReadRawCoordinates(TS_HandleTypeDef *hts, uint16_t *raw_x, uint16_t *raw_y, uint16_t *pressure);
+//static TS_StatusTypeDef TS_ReadRawCoordinates(TS_HandleTypeDef *hts, uint16_t *raw_x, uint16_t *raw_y, uint16_t *pressure);
+static TS_StatusTypeDef TS_ReadRawCoordinates(uint16_t *raw_x,
+                                              uint16_t *raw_y,
+                                              uint16_t *pressure);
+
+static TS_StatusTypeDef TS_ConvertCoordinates(uint16_t raw_x,
+                                              uint16_t raw_y,
+                                              uint16_t *disp_x,
+                                              uint16_t *disp_y);
 static void TS_ProcessTouchData(TS_HandleTypeDef *hts);
-static void TS_FilterCoordinates(TS_HandleTypeDef *hts, uint16_t *xPos, uint16_t *yPos);
+//static void TS_FilterCoordinates(TS_HandleTypeDef *hts, uint16_t *xPos, uint16_t *yPos);
+static void TS_FilterCoordinates(uint16_t *x,
+                                 uint16_t *y);
 static TS_GestureTypeDef TS_AnalyzeGesture(TS_HandleTypeDef *hts);
 static bool TS_IsValidTouch(uint16_t pressure);
 
@@ -106,10 +114,22 @@ TS_StatusTypeDef TS_Init(TS_HandleTypeDef *hts, I2C_HandleTypeDef *hi2c)
         return status;
     }
 
+
+
     /* Configure STMPE811 controller */
     status = TS_ConfigureController(hts);
     if (status != TS_OK) {
         return status;
+    }
+
+    /* Configure interrupts if enabled */
+    if (hts->Config.InterruptEnable) {
+        TS_EnableInterrupt(hts, true);
+        TS_ITConfig(hts);
+
+    }
+    else {
+        TS_EnableInterrupt(hts, false);
     }
 
     hts->IsInitialized = true;
@@ -223,20 +243,88 @@ TS_StatusTypeDef TS_GetTouchData(TS_HandleTypeDef *hts, TS_TouchDataTypeDef *tou
  * @param yPos Pointer to store Y coordinate
  * @retval TS_StatusTypeDef Status of the operation
  */
-TS_StatusTypeDef TS_GetSingleTouch(TS_HandleTypeDef *hts, uint16_t *xPos, uint16_t *yPos)
+TS_StatusTypeDef TS_GetSingleTouch(TS_HandleTypeDef *hts,
+                                  uint16_t *xPos,
+                                  uint16_t *yPos)
 {
-    if (hts == NULL || xPos == NULL || yPos == NULL) {
+    uint16_t raw_x;
+    uint16_t raw_y;
+    uint16_t disp_x;
+    uint16_t disp_y;
+
+    if(hts == NULL || xPos == NULL || yPos == NULL) {
         return TS_INVALID_PARAM;
     }
 
-    if (hts->TouchData.TouchCount > 0) {
-        *xPos = hts->TouchData.Points[0].X;
-        *yPos = hts->TouchData.Points[0].Y;
+    *xPos = 0;
+    *yPos = 0;
+    uint8_t fifo_size = 0;
+
+    if(!hts->IsInitialized) {
+        return TS_NOT_INITIALIZED;
+    }
+
+    // Check FIFO size first
+    if(TS_ReadRegister(hts, STMPE811_REG_FIFO_SIZE, &fifo_size) != TS_OK) return TS_ERROR;
+    if(fifo_size == 0) return TS_ERROR;   // No touch
+
+    if(TS_ReadRawCoordinates(&raw_x, &raw_y, NULL) != TS_OK) {
+        return TS_ERROR;
+    }
+
+    if(TS_ConvertCoordinates(raw_x, raw_y, &disp_x, &disp_y) != TS_OK) {
+        return TS_ERROR;
+    }
+
+    TS_FilterCoordinates(&disp_x, &disp_y);
+
+    *xPos = disp_x;
+    *yPos = disp_y;
+
+    return TS_OK;
+}
+
+
+TS_StatusTypeDef TS_GetTouchState(TS_HandleTypeDef *hts,
+                                 uint16_t *x,
+                                 uint16_t *y,
+                                 uint8_t *pressed)
+{
+    uint16_t raw_x;
+    uint16_t raw_y;
+    uint16_t disp_x;
+    uint16_t disp_y;
+
+    if(hts == NULL || x == NULL || y == NULL || pressed == NULL) {
+        return TS_INVALID_PARAM;
+    }
+
+    *pressed = 0;
+    *x = 0;
+    *y = 0;
+
+    if(!hts->IsInitialized) {
+        return TS_NOT_INITIALIZED;
+    }
+
+    if(TS_ReadRawCoordinates(&raw_x, &raw_y, NULL) != TS_OK) {
         return TS_OK;
     }
 
-    return TS_ERROR;
+    if(TS_ConvertCoordinates(raw_x, raw_y, &disp_x, &disp_y) != TS_OK) {
+        return TS_OK;
+    }
+
+    TS_FilterCoordinates(&disp_x, &disp_y);
+
+    *x = disp_x;
+    *y = disp_y;
+    *pressed = 1;
+
+    return TS_OK;
 }
+
+
 
 /**
  * @brief Check if touchscreen is currently touched
@@ -451,71 +539,100 @@ TS_StatusTypeDef TS_RegisterCallbacks(TS_HandleTypeDef *hts,
  * @param display_y Pointer to store display Y coordinate
  * @retval TS_StatusTypeDef Status of the operation
  */
-TS_StatusTypeDef TS_ConvertCoordinates(TS_HandleTypeDef *hts, uint16_t raw_x, uint16_t raw_y,
-                                      uint16_t *display_x, uint16_t *display_y)
+// TS_StatusTypeDef TS_ConvertCoordinates(TS_HandleTypeDef *hts, uint16_t raw_x, uint16_t raw_y,
+//                                       uint16_t *display_x, uint16_t *display_y)
+// {
+//     if (hts == NULL || display_x == NULL || display_y == NULL) {
+//         return TS_INVALID_PARAM;
+//     }
+
+//     if (!hts->Calibration.IsCalibrated) {
+//         /* Tuned conversion from Working-lvgl-project for accurate mapping */
+//         int16_t xr;
+//         int16_t yr;
+
+//         // /* Swap raw_x and raw_y for rotation (touchscreen is rotated 90 degrees) */
+//         // uint16_t temp = raw_x;
+//         // raw_x = raw_y;
+//         // raw_y = temp;
+
+//         /* Y value first correction */
+//         yr = raw_y - 360;
+
+//         /* Y value second correction */
+//         yr = yr / 11;
+
+//         /* Return y_raw position value */
+//         if(yr <= 0) yr = 0;
+//         else if (yr > TS_DISPLAY_HEIGHT - 1) yr = TS_DISPLAY_HEIGHT - 1;
+
+//         *display_y = yr;
+
+//         /* X value first correction */
+//         xr = (int16_t)raw_x;
+//         if(xr <= 3000) xr = 3870 - xr;
+//         else xr = 3800 - xr;
+
+//         /* X value second correction */
+//         xr = xr / 15;
+
+//         /* Return X position value */
+//         if(xr <= 0) xr = 0;
+//         else if (xr > TS_DISPLAY_WIDTH - 1) xr = TS_DISPLAY_WIDTH - 1;
+
+//         *display_x = xr;
+//     } else {
+//         /* Calibrated conversion */
+//         int32_t xPos = raw_y + hts->Calibration.OffsetY;  /* Swap x/y for rotation */
+//         int32_t yPos = raw_x + hts->Calibration.OffsetX;
+
+//         xPos = (int32_t)((float)xPos * hts->Calibration.ScaleY);
+//         yPos = TS_DISPLAY_HEIGHT - (int32_t)((float)yPos * hts->Calibration.ScaleX);  /* Invert Y */
+
+//         /* Clamp to display bounds */
+//         if (xPos < 0) {
+//             xPos = 0;
+//         }
+//         if (xPos >= TS_DISPLAY_WIDTH) {
+//             xPos = TS_DISPLAY_WIDTH - 1;
+//         }
+//         if (yPos < 0) {
+//             yPos = 0;
+//         }
+//         if (yPos >= TS_DISPLAY_HEIGHT) {
+//             yPos = TS_DISPLAY_HEIGHT - 1;
+//         }
+
+//         *display_x = (uint16_t)xPos;
+//         *display_y = (uint16_t)yPos;
+//     }
+
+//     return TS_OK;
+// }
+
+static TS_StatusTypeDef TS_ConvertCoordinates(uint16_t raw_x,
+                                              uint16_t raw_y,
+                                              uint16_t *disp_x,
+                                              uint16_t *disp_y)
 {
-    if (hts == NULL || display_x == NULL || display_y == NULL) {
+    if(disp_x == NULL || disp_y == NULL) {
         return TS_INVALID_PARAM;
     }
 
-    if (!hts->Calibration.IsCalibrated) {
-        /* Tuned conversion from Working-lvgl-project for accurate mapping */
-        int16_t xr;
-        int16_t yr;
+    /* BSP-correct DISC1 mapping (portrait mode) */
+    uint32_t x = (raw_y * TS_DISPLAY_WIDTH)  / 4095U;
+    uint32_t y = TS_DISPLAY_HEIGHT - ((raw_x * TS_DISPLAY_HEIGHT) / 4095U);
 
-        /* Y value first correction */
-        yr = (int16_t)raw_y - TS_DISPLAY_HEIGHT;
+    /* Clamp */
+    if(x >= TS_DISPLAY_WIDTH)  x = TS_DISPLAY_WIDTH  - 1;
+    if(y >= TS_DISPLAY_HEIGHT) y = TS_DISPLAY_HEIGHT - 1;
 
-        /* Y value second correction */
-        yr = yr / 11;
-
-        /* Return y_raw position value */
-        if(yr <= 0) yr = 0;
-        else if (yr > TS_DISPLAY_HEIGHT - 1) yr = TS_DISPLAY_HEIGHT - 1;
-
-        /* X value first correction */
-        xr = (int16_t)raw_x;
-        if(xr <= 3000) xr = 3870 - xr;
-        else xr = 3800 - xr;
-
-        /* X value second correction */
-        xr = xr / 15;
-
-        /* Return X position value */
-        if(xr <= 0) xr = 0;
-        else if (xr > TS_DISPLAY_WIDTH - 1) xr = TS_DISPLAY_WIDTH - 1;
-
-        /* Invert coordinates for rotated LCD */
-        *display_x = TS_DISPLAY_WIDTH - 1 - (uint16_t)xr;
-        *display_y = TS_DISPLAY_HEIGHT - 1 - (uint16_t)yr;
-    } else {
-        /* Calibrated conversion */
-        int32_t xPos = (int32_t)raw_y + (int32_t)hts->Calibration.OffsetY;  /* Swap x/y for rotation */
-        int32_t yPos = (int32_t)raw_x + (int32_t)hts->Calibration.OffsetX;
-
-        xPos = (int32_t)((float)xPos * hts->Calibration.ScaleY);
-        yPos = TS_DISPLAY_HEIGHT - (int32_t)((float)yPos * hts->Calibration.ScaleX);  /* Invert Y */
-
-        /* Clamp to display bounds */
-        if (xPos < 0) {
-            xPos = 0;
-        }
-        if (xPos >= TS_DISPLAY_WIDTH) {
-            xPos = TS_DISPLAY_WIDTH - 1;
-        }
-        if (yPos < 0) {
-            yPos = 0;
-        }
-        if (yPos >= TS_DISPLAY_HEIGHT) {
-            yPos = TS_DISPLAY_HEIGHT - 1;
-        }
-
-        *display_x = (uint16_t)xPos;
-        *display_y = (uint16_t)yPos;
-    }
+    *disp_x = (uint16_t)x;
+    *disp_y = (uint16_t)y;
 
     return TS_OK;
 }
+
 
 /**
  * @brief Read register from STMPE811
@@ -724,7 +841,7 @@ static TS_StatusTypeDef TS_ConfigureController(TS_HandleTypeDef *hts)
     TS_WriteRegister(hts, STMPE811_REG_IO_AF, tmp);
 
     /* Now enable TSC and ADC functions in SYS_CTRL2 by clearing their OFF bits */
-    TS_ReadRegister(hts, STMPE811_REG_SYS_CTRL2, &tmp);
+    //TS_ReadRegister(hts, STMPE811_REG_SYS_CTRL2, &tmp);
     tmp &= ~(STMPE811_SYS_CTRL2_TSC_OFF | STMPE811_SYS_CTRL2_ADC_OFF);
     TS_WriteRegister(hts, STMPE811_REG_SYS_CTRL2, tmp);
 
@@ -771,15 +888,7 @@ static TS_StatusTypeDef TS_ConfigureController(TS_HandleTypeDef *hts)
     /* Wait for configuration to settle */
     TS_DELAY_MS(2);
 
-    /* Configure interrupts if enabled */
-    if (hts->Config.InterruptEnable) {
-        TS_EnableInterrupt(hts, true);
-        TS_ITConfig(hts);
 
-    }
-    else {
-        TS_EnableInterrupt(hts, false);
-    }
 
     return TS_OK;
 }
@@ -788,31 +897,53 @@ static TS_StatusTypeDef TS_ConfigureController(TS_HandleTypeDef *hts)
 
 /**
  * @brief Read raw coordinates from controller
- * @param hts Pointer to touchscreen handle structure
+
  * @param raw_x Pointer to store raw X coordinate
  * @param raw_y Pointer to store raw Y coordinate
  * @param pressure Pointer to store pressure value
  * @retval TS_StatusTypeDef Status of the operation
  */
-static TS_StatusTypeDef TS_ReadRawCoordinates(TS_HandleTypeDef *hts, uint16_t *raw_x, uint16_t *raw_y, uint16_t *pressure)
-{
-    (void)hts; /* Unused - I2C access uses central driver */
-    uint8_t dataXYZ[4];
-    uint32_t uldataXYZ;
 
-    /* Read XYZ data using non-incremental register like working project */
-    if (I2C_Mem_Read(STMPE811_I2C_ADDRESS, STMPE811_REG_TSC_DATA_NON_INC, I2C_MEMADD_SIZE_8BIT, dataXYZ, 4, TS_TIMEOUT) != I2C_OK) {
-        return TS_COMMUNICATION_ERROR;
+
+static TS_StatusTypeDef TS_ReadRawCoordinates(uint16_t *raw_x,
+                                              uint16_t *raw_y,
+                                              uint16_t *pressure)
+{
+    uint8_t data[4];
+    uint32_t xyz;
+
+    if (raw_x == NULL || raw_y == NULL) {
+        return TS_INVALID_PARAM;
     }
 
-    /* Calculate positions values like working project */
-    uldataXYZ = (dataXYZ[0] << 24) | (dataXYZ[1] << 16) | (dataXYZ[2] << 8) | (dataXYZ[3] << 0);
-    *raw_x = (uldataXYZ >> 20) & 0x00000FFF;
-    *raw_y = (uldataXYZ >>  8) & 0x00000FFF;
-    *pressure = dataXYZ[3]; /* Z value is in lowest byte */
+    /* Read 4 bytes from TSC XYZ data register */
+    for (uint8_t i = 0; i < 4; i++) {
+        if (TS_ReadRegister(g_hts, STMPE811_REG_TSC_DATA_XYZ + i, &data[i]) != TS_OK) {
+            return TS_COMMUNICATION_ERROR;
+        }
+    }
+
+    xyz  = ((uint32_t)data[0] << 24);
+    xyz |= ((uint32_t)data[1] << 16);
+    xyz |= ((uint32_t)data[2] << 8);
+    xyz |=  (uint32_t)data[3];
+
+    /* Extract 12-bit coordinates (STMPE811 datasheet format) */
+    *raw_x = (xyz >> 20) & 0x0FFF;
+    *raw_y = (xyz >>  8) & 0x0FFF;
+
+    if (pressure != NULL) {
+        *pressure = xyz & 0xFF;
+    }
+
+    /* Reset FIFO (mandatory after reading) */
+    TS_WriteRegister(g_hts, STMPE811_REG_FIFO_STA, 0x01);
+    TS_WriteRegister(g_hts, STMPE811_REG_FIFO_STA, 0x00);
 
     return TS_OK;
 }
+
+
 
 /**
  * @brief Process touch data
@@ -820,52 +951,67 @@ static TS_StatusTypeDef TS_ReadRawCoordinates(TS_HandleTypeDef *hts, uint16_t *r
  */
 static void TS_ProcessTouchData(TS_HandleTypeDef *hts)
 {
-    uint16_t raw_x=0;
-    uint16_t raw_y=0;
-    uint16_t pressure=0;
-    uint16_t x=0;
-    uint16_t y=0;
+    uint16_t raw_x = 0;
+    uint16_t raw_y = 0;
+    uint16_t pressure = 0;
+    uint16_t x = 0;
+    uint16_t y = 0;
 
     hts->PrevTouchData = hts->TouchData;
 
-    /* Check if FIFO has data before reading */
-    uint8_t fifo_size = 0;
-    if (TS_ReadRegister(hts, STMPE811_REG_FIFO_SIZE, &fifo_size) != TS_OK) {
+    /* Adapted from stmpe811_TS_DetectTouch: Check TSC status first */
+    uint8_t tsc_status = 0;
+    if (TS_ReadRegister(hts, STMPE811_REG_TSC_CTRL, &tsc_status) != TS_OK) {
         hts->TouchData.TouchCount = 0;
         return;
     }
-    if (fifo_size == 0) {
+    uint8_t state = ((tsc_status & (uint8_t)STMPE811_TS_CTRL_STATUS) == (uint8_t)0x80);
+
+    if (state > 0) {
+        /* TSC active: Check if FIFO has data */
+        uint8_t fifo_size = 0;
+        if (TS_ReadRegister(hts, STMPE811_REG_FIFO_SIZE, &fifo_size) != TS_OK) {
+            hts->TouchData.TouchCount = 0;
+            return;
+        }
+        if (fifo_size == 0) {
+            hts->TouchData.TouchCount = 0;
+            return;
+        }
+
+        /* Proceed with reading coordinates */
+        if (TS_ReadRawCoordinates(&raw_x, &raw_y, &pressure) != TS_OK)
+ {
+            hts->TouchData.TouchCount = 0;
+            return;
+        }
+
+        printf("Raw touch: x=%d, y=%d, pressure=%d\n", raw_x, raw_y, pressure);
+
+        if (!TS_IsValidTouch(pressure)) {
+            hts->TouchData.TouchCount = 0;
+            return;
+        }
+
+        TS_ConvertCoordinates(raw_x, raw_y, &x, &y);
+        TS_FilterCoordinates(&x, &y);
+
+        hts->TouchData.TouchCount = 1;
+        hts->TouchData.Points[0].X = x;
+        hts->TouchData.Points[0].Y = y;
+        hts->TouchData.Points[0].Z = pressure;
+        hts->TouchData.Points[0].State = TS_TOUCH_PRESSED;
+        hts->TouchData.Points[0].Timestamp = HAL_GetTick();
+
+        /* Clear FIFO */
+        TS_WriteRegister(hts, STMPE811_REG_FIFO_STA, 0x01);
+        TS_WriteRegister(hts, STMPE811_REG_FIFO_STA, 0x00);
+    } else {
+        /* Adapted from stmpe811_TS_DetectTouch: TSC not active, reset FIFO */
+        TS_WriteRegister(hts, STMPE811_REG_FIFO_STA, 0x01);
+        TS_WriteRegister(hts, STMPE811_REG_FIFO_STA, 0x00);
         hts->TouchData.TouchCount = 0;
-        return;
     }
-
-    if (TS_ReadRawCoordinates(hts, &raw_x, &raw_y, &pressure) != TS_OK) {
-        hts->TouchData.TouchCount = 0;
-        return;
-    }
-
-    printf("Raw touch: x=%d, y=%d, pressure=%d\n", raw_x, raw_y, pressure);
-
-    if (!TS_IsValidTouch(pressure)) {
-        hts->TouchData.TouchCount = 0;
-        return;
-    }
-
-    TS_ConvertCoordinates(hts, raw_x, raw_y, &x, &y);
-    TS_FilterCoordinates(hts, &x, &y);
-
-
-
-    hts->TouchData.TouchCount = 1;
-    hts->TouchData.Points[0].X = x;
-    hts->TouchData.Points[0].Y = y;
-    hts->TouchData.Points[0].Z = pressure;
-    hts->TouchData.Points[0].State = TS_TOUCH_PRESSED;
-    hts->TouchData.Points[0].Timestamp = HAL_GetTick();
-
-    /* Clear FIFO */
-    TS_WriteRegister(hts, STMPE811_REG_FIFO_STA, 0x01);
-    TS_WriteRegister(hts, STMPE811_REG_FIFO_STA, 0x00);
 }
 
 /**
@@ -874,26 +1020,23 @@ static void TS_ProcessTouchData(TS_HandleTypeDef *hts)
  * @param xPos Pointer to X coordinate
  * @param yPos Pointer to Y coordinate
  */
-static void TS_FilterCoordinates(TS_HandleTypeDef *hts, uint16_t *xPos, uint16_t *yPos)
+//
+static void TS_FilterCoordinates(uint16_t *x,
+                                 uint16_t *y)
 {
-    (void)hts;  /* Suppress unused parameter warning */
+    static uint16_t last_x = 0;
+    static uint16_t last_y = 0;
 
-    static int32_t last_x = 0;
-    static int32_t last_y = 0;
+    int16_t dx = (int16_t)(*x - last_x);
+    int16_t dy = (int16_t)(*y - last_y);
 
-    /* Calculate differences */
-    int16_t xDiff = (*xPos > last_x) ? (*xPos - last_x) : (last_x - *xPos);
-    int16_t yDiff = (*yPos > last_y) ? (*yPos - last_y) : (last_y - *yPos);
-
-    /* Update position only if movement exceeds threshold (matches working project) */
-    if (xDiff + yDiff > TS_SMOOTHING_THRESHOLD) {
-        last_x = *xPos;
-        last_y = *yPos;
+    if((abs(dx) + abs(dy)) > TS_SMOOTHING_THRESHOLD) {
+        last_x = *x;
+        last_y = *y;
     }
 
-    /* Return filtered/stable position */
-    *xPos = (uint16_t)last_x;
-    *yPos = (uint16_t)last_y;
+    *x = last_x;
+    *y = last_y;
 }
 
 /**

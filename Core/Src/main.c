@@ -43,7 +43,7 @@ int main(void)
         .dataWidth = FMC_SDRAM_MEM_BUS_WIDTH_16,
         .internalBanks = FMC_SDRAM_INTERN_BANKS_NUM_4,
         .casLatency = FMC_SDRAM_CAS_LATENCY_3,
-        .clockPeriod = FMC_SDRAM_CLOCK_PERIOD_2,
+        .clockPeriod = FMC_SDRAM_CLOCK_PERIOD_3,
         .readBurst = FMC_SDRAM_RBURST_DISABLE,   /* ST BSP: DISABLE */
         .readPipeDelay = FMC_SDRAM_RPIPE_DELAY_1, /* ST BSP: DELAY_1 */
         .writeProtection = FMC_SDRAM_WRITE_PROTECTION_DISABLE,
@@ -62,11 +62,6 @@ int main(void)
         printf("ERROR: SDRAM init failed\n");
         Error_Handler();
     }
-
-    // if(FMC_Driver_SDRAM_Test(&fmcHandle, SDRAM_DEVICE_ADDR, SDRAM_DEVICE_SIZE ) != true) {
-    //     printf("ERROR: SDRAM test failed\n");
-    //     Error_Handler();
-    // }
 
 
     /*-------------------------------------------------------------------------

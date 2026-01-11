@@ -26,6 +26,7 @@ extern "C" {
  *---------------------------------------------------------------------------*/
 void lv_port_disp_init(void);
 
+
 #ifdef __cplusplus
 }
 #endif

@@ -68,7 +68,12 @@ static void nav_event_handler(lv_event_t *e)
     if(code == LV_EVENT_CLICKED) {
         void *user_data = lv_event_get_user_data(e);
         lv_obj_t *target_screen = (lv_obj_t *)user_data;
-        lv_screen_load_anim(target_screen, LV_SCR_LOAD_ANIM_FADE_ON, 300, 0, false);
+        lv_screen_load_anim(target_screen,
+                    LV_SCR_LOAD_ANIM_FADE_ON,
+                    300,
+                    0,
+                    false);
+
     }
 }
 
@@ -201,6 +206,7 @@ static void create_sensor_screen(void)
 
     /* Add data series */
     chart_series = lv_chart_add_series(chart_sensor, lv_color_hex(0x3be477), LV_CHART_AXIS_PRIMARY_Y);
+    lv_chart_set_point_count(chart_sensor, 10);
     uint16_t sample_data[] = {10, 20, 35, 45, 50, 55, 60, 70, 65, 50};
     for(int i = 0; i < 10; i++) {
         lv_chart_set_next_value(chart_sensor, chart_series, sample_data[i]);
@@ -361,7 +367,7 @@ static void create_info_screen(void)
         "Flash: 2 MB\n"
         "RAM: 256 KB\n"
         "Display: 240x320\n"
-        "LVGL: v8.3.x\n"
+        "LVGL: v9.4.x\n"
         "\n"
         "Status: Running");
     lv_obj_set_style_text_color(info_text, lv_color_hex(0x3be477), 0);
