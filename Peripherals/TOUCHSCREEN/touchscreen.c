@@ -18,6 +18,7 @@
 #include <string.h>
 #include <math.h>
 #include <stdlib.h>
+#include "log.h"
 
 /* Private constants ---------------------------------------------------------*/
 #define TS_DELAY_MS(x)                  HAL_Delay(x)
@@ -38,15 +39,20 @@
 /* ST-style mapping constants */
 #define TS_Y_CORRECTION_OFFSET          360U    /* Y offset applied before dividing */
 #define TS_Y_DIVISOR                    11U     /* Y scaling divisor */
-#define TS_X_THRESHOLD                  3000U  /* Decision threshold for X mapping */
-#define TS_X_SUB1                       3870U  /* X sub value for lower range */
-#define TS_X_SUB2                       3800U  /* X sub value for upper range */
 #define TS_X_DIVISOR                    15U    /* X scaling divisor */
 
 /* Pressure scaling */
 #define TS_PRESSURE_MAX_VALUE           0xFFU
 #define TS_PRESSURE_SCALE               255U
 #define TS_BYTE_MASK                    0xFFU
+
+/* Measured raw bounds (replace with your actual measured values).
+   NOTE: On this panel smaller raw X corresponds to the RIGHT side of the display,
+   and smaller raw Y corresponds to the BOTTOM of the display (hence mappings are inverted). */
+#define TS_RAW_X_MIN 301   // observed small raw X (right edge)
+#define TS_RAW_X_MAX 3796  // observed large raw X (left edge)
+#define TS_RAW_Y_MIN 151   // observed small raw Y (bottom edge)
+#define TS_RAW_Y_MAX 3605  // observed large raw Y (top edge)
 
 
 /* Private variables ---------------------------------------------------------*/
@@ -73,6 +79,30 @@ static void TS_FilterCoordinates(uint16_t *x,
                                  uint16_t *y);
 static TS_GestureTypeDef TS_AnalyzeGesture(TS_HandleTypeDef *hts);
 static bool TS_IsValidTouch(uint16_t pressure);
+
+ static int32_t map(int32_t val,
+                   int32_t in_min, int32_t in_max,
+                   int32_t out_min, int32_t out_max);
+
+/* Helper: integer-safe linear mapping with input clamping. Handles inverted output ranges. */
+static int32_t map(int32_t val,
+                   int32_t in_min, int32_t in_max,
+                   int32_t out_min, int32_t out_max)
+{
+    if (in_max == in_min) return out_min; /* avoid divide by zero */
+
+    /* Clamp input to expected raw range */
+    if (val < in_min) val = in_min;
+    if (val > in_max) val = in_max;
+
+    int64_t in_range = (int64_t)(in_max - in_min);
+    int64_t out_range = (int64_t)(out_max - out_min);
+
+    int64_t scaled = (int64_t)(val - in_min) * out_range;
+    int32_t result = (int32_t)(scaled / in_range + out_min);
+
+    return result;
+}
 
 /* Exported functions --------------------------------------------------------*/
 
@@ -245,13 +275,19 @@ TS_StatusTypeDef TS_GetSingleTouch(TS_HandleTypeDef *hts,
         return TS_NOT_INITIALIZED;
     }
 
-    if (TS_ReadRegister(hts, STMPE811_REG_TSC_CTRL, &status) != TS_OK ) return TS_ERROR;
+    if (TS_ReadRegister(hts, STMPE811_REG_TSC_CTRL, &status) != TS_OK ) {
+        return TS_ERROR;
+    }
 
     if (status & (uint8_t)STMPE811_TS_CTRL_STATUS)
     {
         if (TS_ReadRegister(hts, STMPE811_REG_FIFO_SIZE, &fifo_size) != TS_OK) return TS_ERROR;
     }
     else {
+
+        /* Reset FIFO (mandatory after reading) */
+        TS_WriteRegister(g_hts, STMPE811_REG_FIFO_STA, 0x01);
+        TS_WriteRegister(g_hts, STMPE811_REG_FIFO_STA, 0x00);
         return TS_ERROR;
     }
 
@@ -529,6 +565,7 @@ TS_StatusTypeDef TS_RegisterCallbacks(TS_HandleTypeDef *hts,
  * @param disp_y Pointer to store display Y coordinate
  * @retval TS_StatusTypeDef Status of the operation
  */
+
 static TS_StatusTypeDef TS_ConvertCoordinates(uint16_t raw_x,
                                               uint16_t raw_y,
                                               uint16_t *disp_x,
@@ -538,30 +575,22 @@ static TS_StatusTypeDef TS_ConvertCoordinates(uint16_t raw_x,
         return TS_INVALID_PARAM;
     }
 
-    /* Apply calibration mapping from working project */
-    int32_t y_raw = (int32_t)raw_y;
+    /* Use linear mapping between measured raw ranges and display coords.
+       Small raw_x -> RIGHT side of display (inverted X).
+       Small raw_y -> BOTTOM of display (inverted Y).
+       The 'map' helper clamps inputs and performs integer-safe scaling. */
+    int32_t xr = map((int32_t)raw_x, (int32_t)TS_RAW_X_MIN, (int32_t)TS_RAW_X_MAX,
+                     (int32_t)(TS_DISPLAY_WIDTH - 1), 0);
 
-    /* Y value first correction */
-    y_raw -= 360;
+    int32_t yr = map((int32_t)raw_y, (int32_t)TS_RAW_Y_MIN, (int32_t)TS_RAW_Y_MAX,
+                     (int32_t)(TS_DISPLAY_HEIGHT - 1), 0);
 
-    /* Y value second correction */
-    int32_t yr = y_raw / 11;
+    /* Clamp to display bounds */
+    if (xr < 0) xr = 0;
+    else if (xr >= TS_DISPLAY_WIDTH) xr = TS_DISPLAY_WIDTH - 1;
 
-    /* Return y_raw position value (clamped to display height) */
-    if (yr <= 0) yr = 0;
-    else if (yr >= (int32_t)TS_DISPLAY_HEIGHT) yr = (int32_t)TS_DISPLAY_HEIGHT - 1;
-
-    /* X value first correction */
-    int32_t x_raw = (int32_t)raw_x;
-    if (x_raw <= 3000) x_raw = 3870 - x_raw;
-    else x_raw = 3800 - x_raw;
-
-    /* X value second correction */
-    int32_t xr = x_raw / 15;
-
-    /* Return X position value (clamped to display width) */
-    if (xr <= 0) xr = 0;
-    else if (xr >= (int32_t)TS_DISPLAY_WIDTH) xr = (int32_t)TS_DISPLAY_WIDTH - 1;
+    if (yr < 0) yr = 0;
+    else if (yr >= TS_DISPLAY_HEIGHT) yr = TS_DISPLAY_HEIGHT - 1;
 
     *disp_x = (uint16_t)xr;
     *disp_y = (uint16_t)yr;
@@ -870,7 +899,7 @@ static TS_StatusTypeDef TS_ReadRawCoordinates(uint16_t *raw_x,
                                               uint16_t *raw_y,
                                               uint16_t *pressure)
 {
-    uint8_t data[4];
+    uint8_t data[4] = {0};
     uint32_t xyz = 0;
 
     if (raw_x == NULL || raw_y == NULL) {
@@ -885,7 +914,7 @@ static TS_StatusTypeDef TS_ReadRawCoordinates(uint16_t *raw_x,
     xyz  = ((uint32_t)data[0] << 24);
     xyz |= ((uint32_t)data[1] << 16);
     xyz |= ((uint32_t)data[2] << 8);
-    xyz |=  (uint32_t)data[3];
+    xyz |=  (uint32_t)data[3] << 0;
 
     /* Extract 12-bit coordinates (STMPE811 datasheet format) */
     *raw_x = (xyz >> 20) & 0x0FFF;
@@ -894,6 +923,8 @@ static TS_StatusTypeDef TS_ReadRawCoordinates(uint16_t *raw_x,
     if (pressure != NULL) {
         *pressure = xyz & 0xFF;
     }
+
+    log_debug("Raw X: %u, Raw Y: %u, Pressure: %u", *raw_x, *raw_y, pressure ? *pressure : 0);
 
     /* Reset FIFO (mandatory after reading) */
     TS_WriteRegister(g_hts, STMPE811_REG_FIFO_STA, 0x01);
@@ -930,6 +961,8 @@ static void TS_FilterCoordinates(uint16_t *x,
 
     *x = _x;
     *y = _y;
+
+    log_debug("Filter X = %u, Filter Y = %u", *x, *y);
 }
 
 /**

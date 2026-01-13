@@ -8,12 +8,11 @@
 /* USER CODE END Header */
 
 #include "SEGGER_SYSVIEW.h"
-#include "stm32f4xx.h"
 #include "main.h"
 #include "stm32f4xx_hal_def.h"
 #include "sys.h"
 #include <stdint.h>
-#include "lvgl.h"
+
 #include "lvgl_app.h"
 #include "ltdc.h"
 #include "fmc.h"
@@ -25,6 +24,7 @@ int main(void)
     /*-------------------------------------------------------------------------
      * STEP 1: Initialize System Hardware
      *-----------------------------------------------------------------------*/
+
     SYS_Init();
     SEGGER_SYSVIEW_Conf();
     SEGGER_SYSVIEW_Start();
@@ -113,7 +113,7 @@ int main(void)
 
             /* Update status every 2 seconds */
             if(demo_counter % 10 == 0) {
-                LVGL_App_UpdateStatus(LV_SYMBOL_OK " System Running");
+                LVGL_App_UpdateStatus("System Running");
             }
 
             demo_counter++;

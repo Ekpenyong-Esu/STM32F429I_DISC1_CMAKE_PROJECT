@@ -51,6 +51,14 @@ static lv_obj_t *humidity_label; /* Humidity label */
 static lv_obj_t *chart_sensor;   /* Sensor data chart */
 static lv_chart_series_t *chart_series; /* Chart data series */
 
+/* Navigation button handles (registered after screens created) */
+static lv_obj_t *btn_home_sensors;
+static lv_obj_t *btn_home_settings;
+static lv_obj_t *btn_sensors_back;
+static lv_obj_t *btn_settings_info;
+static lv_obj_t *btn_settings_back;
+static lv_obj_t *btn_info_back;
+
 /* Forward declarations */
 static void create_home_screen(void);
 static void create_sensor_screen(void);
@@ -68,6 +76,8 @@ static void nav_event_handler(lv_event_t *e)
     if(code == LV_EVENT_CLICKED) {
         void *user_data = lv_event_get_user_data(e);
         lv_obj_t *target_screen = (lv_obj_t *)user_data;
+        /* Safety: ignore clicks with NULL target to avoid passing NULL to LVGL */
+        if (target_screen == NULL) return;
         lv_screen_load_anim(target_screen,
                     LV_SCR_LOAD_ANIM_FADE_ON,
                     300,
@@ -108,23 +118,25 @@ static void create_home_screen(void)
     lv_obj_set_style_text_font(title, &lv_font_montserrat_14, 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
 
-    /* Status Card */
+    /* Status Card - Moved lower to avoid overlap with title */
     lv_obj_t *status_card = lv_obj_create(scr_home);
-    lv_obj_set_size(status_card, 200, 60);
-    lv_obj_align(status_card, LV_ALIGN_TOP_MID, 0, 40);
-    lv_obj_set_style_bg_color(status_card, lv_color_hex(0x16213e), 0);
+    lv_obj_set_size(status_card, 150, 40);  /* Smaller size for testing */
+    lv_obj_align(status_card, LV_ALIGN_TOP_MID, 0, 45);
+    lv_obj_set_style_bg_color(status_card, lv_color_hex(0x00ff00), 0);  /* Green background for debugging */
     lv_obj_set_style_border_color(status_card, lv_color_hex(0x0f4c75), 0);
     lv_obj_set_style_border_width(status_card, 2, 0);
 
     status_label = lv_label_create(status_card);
-    lv_label_set_text(status_label, LV_SYMBOL_OK " System Ready");
-    lv_obj_set_style_text_color(status_label, lv_color_hex(0x3be477), 0);
-    lv_obj_center(status_label);
+    lv_label_set_text(status_label, "System Ready");
+    lv_obj_set_style_text_color(status_label, lv_color_white(), 0);  /* White text for debugging */
+    lv_obj_set_style_text_font(status_label, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_align(status_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_pos(status_label, 10, 10);  /* Position at 10,10 within the card */
 
-    /* Temperature Arc Gauge */
+    /* Temperature Arc Gauge - Repositioned lower */
     temp_arc = lv_arc_create(scr_home);
-    lv_obj_set_size(temp_arc, 100, 100);
-    lv_obj_align(temp_arc, LV_ALIGN_CENTER, -60, -20);
+    lv_obj_set_size(temp_arc, 80, 80);
+    lv_obj_align(temp_arc, LV_ALIGN_TOP_LEFT, 20, 120);
     lv_arc_set_rotation(temp_arc, 135);
     lv_arc_set_bg_angles(temp_arc, 0, 270);
     lv_arc_set_value(temp_arc, 25);
@@ -137,15 +149,15 @@ static void create_home_screen(void)
     lv_obj_set_style_text_align(temp_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align_to(temp_label, temp_arc, LV_ALIGN_CENTER, 0, 0);
 
-    /* Humidity Bar */
+    /* Humidity Bar - Repositioned to avoid overlap */
     lv_obj_t *hum_container = lv_obj_create(scr_home);
-    lv_obj_set_size(hum_container, 100, 100);
-    lv_obj_align(hum_container, LV_ALIGN_CENTER, 60, -20);
+    lv_obj_set_size(hum_container, 80, 80);
+    lv_obj_align(hum_container, LV_ALIGN_TOP_RIGHT, -20, 120);
     lv_obj_set_style_bg_color(hum_container, lv_color_hex(0x16213e), 0);
     lv_obj_set_style_border_width(hum_container, 0, 0);
 
     humidity_bar = lv_bar_create(hum_container);
-    lv_obj_set_size(humidity_bar, 20, 80);
+    lv_obj_set_size(humidity_bar, 15, 60);
     lv_obj_center(humidity_bar);
     lv_bar_set_value(humidity_bar, 60, LV_ANIM_ON);
     lv_obj_set_style_bg_color(humidity_bar, lv_color_hex(0x4ecdc4), LV_PART_INDICATOR);
@@ -156,12 +168,13 @@ static void create_home_screen(void)
     lv_obj_set_style_text_align(humidity_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(humidity_label, LV_ALIGN_BOTTOM_MID, 0, -5);
 
-    /* Navigation Buttons */
+    /* Navigation Buttons - Repositioned lower */
     lv_obj_t *btn_sensors = lv_btn_create(scr_home);
     lv_obj_set_size(btn_sensors, 100, 40);
     lv_obj_align(btn_sensors, LV_ALIGN_BOTTOM_LEFT, 10, -10);
     lv_obj_set_style_bg_color(btn_sensors, lv_color_hex(0x3be477), 0);
-    lv_obj_add_event_cb(btn_sensors, nav_event_handler, LV_EVENT_CLICKED, scr_sensors);
+    /* Register callback after all screens are created */
+    btn_home_sensors = btn_sensors;
 
     lv_obj_t *lbl_sensors = lv_label_create(btn_sensors);
     lv_label_set_text(lbl_sensors, LV_SYMBOL_LIST " Sensors");
@@ -171,7 +184,8 @@ static void create_home_screen(void)
     lv_obj_set_size(btn_settings, 100, 40);
     lv_obj_align(btn_settings, LV_ALIGN_BOTTOM_RIGHT, -10, -10);
     lv_obj_set_style_bg_color(btn_settings, lv_color_hex(0xf7b731), 0);
-    lv_obj_add_event_cb(btn_settings, nav_event_handler, LV_EVENT_CLICKED, scr_settings);
+    /* Register callback after all screens are created */
+    btn_home_settings = btn_settings;
 
     lv_obj_t *lbl_settings = lv_label_create(btn_settings);
     lv_label_set_text(lbl_settings, LV_SYMBOL_SETTINGS " Config");
@@ -227,12 +241,12 @@ static void create_sensor_screen(void)
         lv_obj_t *name = lv_label_create(card);
         lv_label_set_text(name, sensor_names[i]);
         lv_obj_set_style_text_font(name, &lv_font_montserrat_14, 0);
-        lv_obj_align(name, LV_ALIGN_TOP_MID, 0, 2);
+        lv_obj_align(name, LV_ALIGN_TOP_MID, 0, -6);
 
         lv_obj_t *value = lv_label_create(card);
         lv_label_set_text(value, sensor_values[i]);
         lv_obj_set_style_text_font(value, &lv_font_montserrat_14, 0);
-        lv_obj_align(value, LV_ALIGN_BOTTOM_MID, 0, -2);
+        lv_obj_align(value, LV_ALIGN_BOTTOM_MID, 0, -0.5);
     }
 
     /* Back Button */
@@ -240,7 +254,8 @@ static void create_sensor_screen(void)
     lv_obj_set_size(btn_back, 60, 35);
     lv_obj_align(btn_back, LV_ALIGN_TOP_LEFT, 5, 5);
     lv_obj_set_style_bg_color(btn_back, lv_color_hex(0x5f6368), 0);
-    lv_obj_add_event_cb(btn_back, nav_event_handler, LV_EVENT_CLICKED, scr_home);
+    /* Register callback after all screens are created */
+    btn_sensors_back = btn_back;
 
     lv_obj_t *lbl_back = lv_label_create(btn_back);
     lv_label_set_text(lbl_back, LV_SYMBOL_LEFT " Back");
@@ -313,9 +328,10 @@ static void create_settings_screen(void)
     /* Info Button */
     lv_obj_t *btn_info = lv_btn_create(scr_settings);
     lv_obj_set_size(btn_info, 200, 40);
-    lv_obj_align(btn_info, LV_ALIGN_BOTTOM_MID, 0, -60);
+    lv_obj_align(btn_info, LV_ALIGN_BOTTOM_MID, 0, -20);
     lv_obj_set_style_bg_color(btn_info, lv_color_hex(0xa29bfe), 0);
-    lv_obj_add_event_cb(btn_info, nav_event_handler, LV_EVENT_CLICKED, scr_info);
+    /* Register callback after all screens are created */
+    btn_settings_info = btn_info;
 
     lv_obj_t *lbl_info = lv_label_create(btn_info);
     lv_label_set_text(lbl_info, LV_SYMBOL_CALL " System Info");
@@ -326,7 +342,8 @@ static void create_settings_screen(void)
     lv_obj_set_size(btn_back, 60, 35);
     lv_obj_align(btn_back, LV_ALIGN_TOP_LEFT, 5, 5);
     lv_obj_set_style_bg_color(btn_back, lv_color_hex(0x5f6368), 0);
-    lv_obj_add_event_cb(btn_back, nav_event_handler, LV_EVENT_CLICKED, scr_home);
+    /* Register callback after all screens are created */
+    btn_settings_back = btn_back;
 
     lv_obj_t *lbl_back = lv_label_create(btn_back);
     lv_label_set_text(lbl_back, LV_SYMBOL_LEFT " Back");
@@ -379,7 +396,8 @@ static void create_info_screen(void)
     lv_obj_set_size(btn_back, 60, 35);
     lv_obj_align(btn_back, LV_ALIGN_TOP_LEFT, 5, 5);
     lv_obj_set_style_bg_color(btn_back, lv_color_hex(0x5f6368), 0);
-    lv_obj_add_event_cb(btn_back, nav_event_handler, LV_EVENT_CLICKED, scr_settings);
+    /* Register callback after all screens are created */
+    btn_info_back = btn_back;
 
     lv_obj_t *lbl_back = lv_label_create(btn_back);
     lv_label_set_text(lbl_back, LV_SYMBOL_LEFT " Back");
@@ -413,14 +431,37 @@ void LVGL_App_Init(void)
     lv_port_disp_init();   /* Connect to display (LCD) */
     lv_port_indev_init();  /* Connect to input (touchscreen) */
 
-    /* Step 3: Create all screens */
-    create_home_screen();
+    /* Step 3: Create all screens (order doesn't matter since callbacks are registered afterwards) */
     create_sensor_screen();
     create_settings_screen();
     create_info_screen();
+    create_home_screen();
+
+    /* Register navigation callbacks now that all screen objects exist */
+    if (btn_home_sensors) {
+        lv_obj_add_event_cb(btn_home_sensors, nav_event_handler, LV_EVENT_CLICKED, scr_sensors);
+    }
+    if (btn_home_settings) {
+        lv_obj_add_event_cb(btn_home_settings, nav_event_handler, LV_EVENT_CLICKED, scr_settings);
+    }
+    if (btn_sensors_back) {
+        lv_obj_add_event_cb(btn_sensors_back, nav_event_handler, LV_EVENT_CLICKED, scr_home);
+    }
+    if (btn_settings_info) {
+        lv_obj_add_event_cb(btn_settings_info, nav_event_handler, LV_EVENT_CLICKED, scr_info);
+    }
+    if (btn_settings_back) {
+        lv_obj_add_event_cb(btn_settings_back, nav_event_handler, LV_EVENT_CLICKED, scr_home);
+    }
+    if (btn_info_back) {
+        lv_obj_add_event_cb(btn_info_back, nav_event_handler, LV_EVENT_CLICKED, scr_settings);
+    }
 
     /* Step 4: Load home screen as default */
     lv_screen_load(scr_home);
+
+    /* Force a refresh to ensure the screen is displayed */
+    lv_refr_now(NULL);
 }
 
 /*-----------------------------------------------------------------------------
@@ -494,6 +535,8 @@ void LVGL_App_UpdateStatus(const char *status)
 {
     if(status_label != NULL && status != NULL) {
         lv_label_set_text(status_label, status);
+        /* Force a refresh of the label */
+        lv_obj_invalidate(status_label);
     }
 }
 

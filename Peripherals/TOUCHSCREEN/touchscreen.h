@@ -96,8 +96,6 @@ extern "C" {
 #define STMPE811_PIN_6                  0x40
 #define STMPE811_PIN_7                  0x80
 
-#define TS_DISPLAY_WIDTH   240
-#define TS_DISPLAY_HEIGHT  320
 #define TS_SMOOTHING_THRESHOLD  4
 
 

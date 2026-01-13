@@ -83,12 +83,147 @@ else()
 endif()
 
 # ------------------------------------------------------------------------------
-# Additional Link Directories (Currently None)
+# External Libraries - Choose which ones to include
 # ------------------------------------------------------------------------------
-# Uncomment to add custom library search paths if needed
-# target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
-#     ${CMAKE_SOURCE_DIR}/lib
-# )
+# Core utility libraries
+option(USE_LITTLEFS "Include LittleFS filesystem" ON)
+option(LITTLEFS_USE_LOCAL "Use local LittleFS checkout instead of FetchContent" OFF)
+option(USE_UNITY "Include Unity testing framework" ON)
+option(USE_PRINTF "Include lightweight printf" ON)
+option(USE_MININI "Include minIni configuration parser" OFF)
+option(USE_CMOCK "Include CMock mocking framework" OFF)
+
+# Sensor Libraries (enable based on your hardware)
+option(USE_BMP280 "Include BMP280 pressure/temperature sensor" OFF)
+option(USE_HTS221 "Include HTS221 humidity/temperature sensor" OFF)
+option(USE_LSM6DSL "Include LSM6DSL 6-axis IMU" OFF)
+option(USE_LIS3MDL "Include LIS3MDL 3-axis magnetometer" OFF)
+option(USE_VL53L1X "Include VL53L1X time-of-flight sensor" OFF)
+option(USE_LPS22HB "Include LPS22HB barometric pressure sensor" OFF)
+option(USE_APDS9960 "Include APDS-9960 gesture/proximity sensor" OFF)
+
+# Communication Libraries
+option(USE_CAN "Include CAN bus communication" OFF)
+
+# System Libraries
+option(USE_EEPROM "Include EEPROM emulation" OFF)
+option(USE_RTC "Include RTC timekeeping" OFF)
+
+# Display/TFT Libraries (enable based on your display hardware)
+option(USE_ILI9341 "Include ILI9341 TFT display driver" OFF)
+option(USE_ST7735 "Include ST7735 TFT display driver" OFF)
+option(USE_SSD1306 "Include SSD1306 OLED display driver" OFF)
+option(USE_ST7789 "Include ST7789 IPS TFT display driver" OFF)
+option(USE_ILI9488 "Include ILI9488 high-res TFT display driver" OFF)
+option(USE_XPT2046 "Include XPT2046 resistive touchscreen" OFF)
+option(USE_U8G2 "Include U8g2 universal graphics library" OFF)
+option(USE_STMPE "Include STMPE touchscreen controller" OFF)
+
+# ------------------------------------------------------------------------------
+# Include External Library Fetch Scripts
+# ------------------------------------------------------------------------------
+# Core utility libraries
+if(USE_LITTLEFS)
+    if(LITTLEFS_USE_LOCAL)
+        message(STATUS "Config: Using local LittleFS checkout")
+        include("cmake/littlefs-local.cmake")
+    else()
+        message(STATUS "Config: Using FetchContent to download LittleFS")
+        include("cmake/littlefs-fetch.cmake")
+    endif()
+endif()
+
+if(USE_UNITY)
+    include("cmake/unity-fetch.cmake")
+endif()
+
+if(USE_PRINTF)
+    include("cmake/printf-fetch.cmake")
+endif()
+
+if(USE_MININI)
+    include("cmake/minini-fetch.cmake")
+endif()
+
+if(USE_CMOCK)
+    include("cmake/cmock-fetch.cmake")
+endif()
+
+# Sensor Libraries
+if(USE_BMP280)
+    include("cmake/bmp280-fetch.cmake")
+endif()
+
+if(USE_HTS221)
+    include("cmake/hts221-fetch.cmake")
+endif()
+
+if(USE_LSM6DSL)
+    include("cmake/lsm6dsl-fetch.cmake")
+endif()
+
+if(USE_LIS3MDL)
+    include("cmake/lis3mdl-fetch.cmake")
+endif()
+
+if(USE_VL53L1X)
+    include("cmake/vl53l1x-fetch.cmake")
+endif()
+
+if(USE_LPS22HB)
+    include("cmake/lps22hb-fetch.cmake")
+endif()
+
+if(USE_APDS9960)
+    include("cmake/apds9960-fetch.cmake")
+endif()
+
+# Communication Libraries
+if(USE_CAN)
+    include("cmake/can-fetch.cmake")
+endif()
+
+# System Libraries
+if(USE_EEPROM)
+    include("cmake/eeprom-fetch.cmake")
+endif()
+
+if(USE_RTC)
+    include("cmake/rtc-fetch.cmake")
+endif()
+
+# Display/TFT Libraries
+if(USE_ILI9341)
+    include("cmake/ili9341-fetch.cmake")
+endif()
+
+if(USE_ST7735)
+    include("cmake/st7735-fetch.cmake")
+endif()
+
+if(USE_SSD1306)
+    include("cmake/ssd1306-fetch.cmake")
+endif()
+
+if(USE_ST7789)
+    include("cmake/st7789-fetch.cmake")
+endif()
+
+if(USE_ILI9488)
+    include("cmake/ili9488-fetch.cmake")
+endif()
+
+if(USE_XPT2046)
+    include("cmake/xpt2046-fetch.cmake")
+endif()
+
+if(USE_U8G2)
+    include("cmake/u8g2-fetch.cmake")
+endif()
+
+if(USE_STMPE)
+    include("cmake/stmpe-fetch.cmake")
+endif()
 
 # ------------------------------------------------------------------------------
 # User Application Sources (Add Your Main Code Here)
@@ -125,9 +260,38 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     stm32cubemx      # STM32 HAL, middleware (FreeRTOS, USB), startup code
     ${LVGL_TARGET}   # LVGL graphics library (auto-resolved target name)
 
-    # Add additional libraries here:
-    # my_custom_lib
-    # m  # Math library (if using floating point math functions)
+    # Core utility libraries
+    $<$<BOOL:${USE_LITTLEFS}>:littlefs>
+    $<$<BOOL:${USE_UNITY}>:unity>
+    $<$<BOOL:${USE_PRINTF}>:printf>
+    $<$<BOOL:${USE_MININI}>:minini>
+    $<$<BOOL:${USE_CMOCK}>:cmock>
+
+    # Sensor libraries
+    $<$<BOOL:${USE_BMP280}>:BMP280>
+    $<$<BOOL:${USE_HTS221}>:HTS221>
+    $<$<BOOL:${USE_LSM6DSL}>:LSM6DSL>
+    $<$<BOOL:${USE_LIS3MDL}>:LIS3MDL>
+    $<$<BOOL:${USE_VL53L1X}>:VL53L1X>
+    $<$<BOOL:${USE_LPS22HB}>:LPS22HB>
+    $<$<BOOL:${USE_APDS9960}>:APDS9960>
+
+    # Communication libraries
+    $<$<BOOL:${USE_CAN}>:CAN>
+
+    # System libraries
+    $<$<BOOL:${USE_EEPROM}>:EEPROM>
+    $<$<BOOL:${USE_RTC}>:RTC>
+
+    # Display/TFT libraries
+    $<$<BOOL:${USE_ILI9341}>:ILI9341>
+    $<$<BOOL:${USE_ST7735}>:ST7735>
+    $<$<BOOL:${USE_SSD1306}>:SSD1306>
+    $<$<BOOL:${USE_ST7789}>:ST7789>
+    $<$<BOOL:${USE_ILI9488}>:ILI9488>
+    $<$<BOOL:${USE_XPT2046}>:XPT2046>
+    $<$<BOOL:${USE_U8G2}>:U8G2>
+    $<$<BOOL:${USE_STMPE}>:STMPE>
 )
 
 # ------------------------------------------------------------------------------

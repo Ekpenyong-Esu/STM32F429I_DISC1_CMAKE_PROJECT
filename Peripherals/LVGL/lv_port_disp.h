@@ -13,6 +13,8 @@
 #ifndef LV_PORT_DISP_H
 #define LV_PORT_DISP_H
 
+#include "lvgl.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif

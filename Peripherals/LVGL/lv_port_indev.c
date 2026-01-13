@@ -78,9 +78,35 @@ static void touch_read(lv_indev_t *indev, lv_indev_data_t *data)
     if (x >= TS_DISPLAY_WIDTH)  x = TS_DISPLAY_WIDTH  - 1;
     if (y >= TS_DISPLAY_HEIGHT) y = TS_DISPLAY_HEIGHT - 1;
 
-    data->state   = LV_INDEV_STATE_PRESSED;
+    /* Apply coordinate transformation if needed */
+    /* For STM32F429I-DISC1, the touchscreen may need X/Y swap and/or rotation */
+    /* Try different transformations based on your touchscreen orientation */
+
+    // Option 1: No transformation (current)
     data->point.x = x;
     data->point.y = y;
+
+    // Option 2: Swap X and Y coordinates
+    // data->point.x = y;
+    // data->point.y = x;
+
+    // Option 3: Rotate 90 degrees clockwise
+    // data->point.x = TS_DISPLAY_HEIGHT - 1 - y;
+    // data->point.y = x;
+
+    // Option 4: Rotate 90 degrees counter-clockwise
+    // data->point.x = y;
+    // data->point.y = TS_DISPLAY_WIDTH - 1 - x;
+
+    // Option 5: Rotate 180 degrees
+    // data->point.x = TS_DISPLAY_WIDTH - 1 - x;
+    // data->point.y = TS_DISPLAY_HEIGHT - 1 - y;
+
+    /* Default: try swapping X and Y first */
+    // data->point.x = y;
+    // data->point.y = x;
+
+    data->state   = LV_INDEV_STATE_PRESSED;
 
     last_x = data->point.x;
     last_y = data->point.y;
@@ -115,4 +141,5 @@ void lv_port_indev_init(void)
     lv_indev_t *indev = lv_indev_create();
     lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER);
     lv_indev_set_read_cb(indev, touch_read);
+
 }
