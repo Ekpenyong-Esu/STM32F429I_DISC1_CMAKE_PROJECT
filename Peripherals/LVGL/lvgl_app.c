@@ -33,6 +33,7 @@
 #include "lvgl_app.h"
 #include "lv_port_disp.h"
 #include "lv_port_indev.h"
+#include "../LOG/log.h"
 
 /*-----------------------------------------------------------------------------
  * Global Variables & Forward Declarations
@@ -131,7 +132,7 @@ static void create_home_screen(void)
     lv_obj_set_style_text_color(status_label, lv_color_white(), 0);  /* White text for debugging */
     lv_obj_set_style_text_font(status_label, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_align(status_label, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_pos(status_label, 10, 10);  /* Position at 10,10 within the card */
+    lv_obj_set_pos(status_label, 10, 8);  /* Position at 10,10 within the card */
 
     /* Temperature Arc Gauge - Repositioned lower */
     temp_arc = lv_arc_create(scr_home);
@@ -424,6 +425,7 @@ static void create_info_screen(void)
  */
 void LVGL_App_Init(void)
 {
+    log_debug("LVGL: Initializing application");
     /* Step 1: Initialize LVGL core */
     lv_init();
 
@@ -462,6 +464,7 @@ void LVGL_App_Init(void)
 
     /* Force a refresh to ensure the screen is displayed */
     lv_refr_now(NULL);
+    log_debug("LVGL: Application initialized successfully");
 }
 
 /*-----------------------------------------------------------------------------

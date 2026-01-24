@@ -20,8 +20,8 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "stm32f4xx_hal_gpio.h"
-#include "stm32f4xx_hal_rcc_ex.h"
+#include "stm32f4xx.h"
+
 /* USER CODE BEGIN Includes */
 
 /* USER CODE END Includes */
@@ -795,5 +795,105 @@ void HAL_SDRAM_MspDeInit(SDRAM_HandleTypeDef* hsdram){
 }
 
 /* USER CODE BEGIN 1 */
+
+/**
+  * @brief  Initializes the DCMI MSP.
+  * @param  hdcmi pointer to a DCMI_HandleTypeDef structure that contains
+  *                the configuration information for DCMI.
+  * @retval None
+  */
+void HAL_DCMI_MspInit(DCMI_HandleTypeDef* hdcmi)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+  /* DCMI clock enable */
+  __HAL_RCC_DCMI_CLK_ENABLE();
+
+  /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_GPIOC_CLK_ENABLE();
+  __HAL_RCC_GPIOE_CLK_ENABLE();
+
+  /* Configure DCMI GPIO pins */
+  /* DCMI_D0-D7: PC6, PC7, PC8, PC9, PE0, PE1, PE4, PE5 */
+  GPIO_InitStruct.Pin = GPIO_PIN_6 | GPIO_PIN_7 | GPIO_PIN_8 | GPIO_PIN_9;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  GPIO_InitStruct.Alternate = GPIO_AF13_DCMI;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_4 | GPIO_PIN_5;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  GPIO_InitStruct.Alternate = GPIO_AF13_DCMI;
+  HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+
+  /* DCMI_HSYNC: PA4 */
+  GPIO_InitStruct.Pin = GPIO_PIN_4;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  GPIO_InitStruct.Alternate = GPIO_AF13_DCMI;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /* DCMI_VSYNC: PB7 */
+  GPIO_InitStruct.Pin = GPIO_PIN_7;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  GPIO_InitStruct.Alternate = GPIO_AF13_DCMI;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /* DCMI_PCLK: PA6 */
+  GPIO_InitStruct.Pin = GPIO_PIN_6;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  GPIO_InitStruct.Alternate = GPIO_AF13_DCMI;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /* DCMI DMA Init */
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA2_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA2_Stream1_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Stream1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream1_IRQn);
+}
+
+/**
+  * @brief  DeInitializes the DCMI MSP.
+  * @param  hdcmi pointer to a DCMI_HandleTypeDef structure that contains
+  *                the configuration information for DCMI.
+  * @retval None
+  */
+void HAL_DCMI_MspDeInit(DCMI_HandleTypeDef* hdcmi)
+{
+  /* DCMI clock disable */
+  __HAL_RCC_DCMI_CLK_DISABLE();
+
+  /* GPIO Ports Clock Disable */
+  __HAL_RCC_GPIOA_CLK_DISABLE();
+  __HAL_RCC_GPIOB_CLK_DISABLE();
+  __HAL_RCC_GPIOC_CLK_DISABLE();
+  __HAL_RCC_GPIOE_CLK_DISABLE();
+
+  /* Deconfigure DCMI GPIO pins */
+  HAL_GPIO_DeInit(GPIOA, GPIO_PIN_4 | GPIO_PIN_6);
+  HAL_GPIO_DeInit(GPIOB, GPIO_PIN_7);
+  HAL_GPIO_DeInit(GPIOC, GPIO_PIN_6 | GPIO_PIN_7 | GPIO_PIN_8 | GPIO_PIN_9);
+  HAL_GPIO_DeInit(GPIOE, GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_4 | GPIO_PIN_5);
+
+  /* DCMI DMA DeInit */
+  /* DMA controller clock disable */
+  __HAL_RCC_DMA2_CLK_DISABLE();
+
+  /* DMA interrupt deinit */
+  HAL_NVIC_DisableIRQ(DMA2_Stream1_IRQn);
+}
 
 /* USER CODE END 1 */

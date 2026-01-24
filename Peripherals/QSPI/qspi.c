@@ -13,6 +13,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "qspi.h"
+#include "log.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -44,7 +45,6 @@ static QSPI_StatusTypeDef QSPI_SendData(QSPI_HandleStructTypeDef *hqspi_struct,
 static QSPI_StatusTypeDef QSPI_ReceiveData(QSPI_HandleStructTypeDef *hqspi_struct,
                                           uint8_t *data, uint16_t size);
 static void QSPI_ChipSelect(bool select);
-static bool QSPI_IsBusy(QSPI_HandleStructTypeDef *hqspi_struct);
 static QSPI_StatusTypeDef QSPI_AutoDetectMemory(QSPI_HandleStructTypeDef *hqspi_struct);
 
 /* Exported functions --------------------------------------------------------*/
@@ -56,6 +56,8 @@ static QSPI_StatusTypeDef QSPI_AutoDetectMemory(QSPI_HandleStructTypeDef *hqspi_
  */
 QSPI_StatusTypeDef QSPI_Init(QSPI_HandleStructTypeDef *hqspi_struct)
 {
+    log_debug("QSPI: Initializing QSPI");
+
     QSPI_StatusTypeDef status = QSPI_OK;
 
     /* Check parameters */
@@ -98,6 +100,9 @@ QSPI_StatusTypeDef QSPI_Init(QSPI_HandleStructTypeDef *hqspi_struct)
     }
 
     hqspi_struct->IsInitialized = true;
+
+    log_debug("QSPI: QSPI initialized successfully");
+
     return QSPI_OK;
 }
 
@@ -643,20 +648,6 @@ static void QSPI_ChipSelect(bool select)
 }
 
 /**
- * @brief Check if Flash memory is busy
- * @param hqspi_struct Pointer to QSPI handle structure
- * @retval true if busy, false if ready
- */
-static bool QSPI_IsBusy(QSPI_HandleStructTypeDef *hqspi_struct)
-{
-    uint8_t status;
-    if (QSPI_GetStatus(hqspi_struct, &status) == QSPI_OK) {
-        return (status & QSPI_SR_BUSY) != 0;
-    }
-    return true;  /* Assume busy on error */
-}
-
-/**
  * @brief Auto-detect Flash memory type
  * @param hqspi_struct Pointer to QSPI handle structure
  * @retval QSPI_StatusTypeDef Status of the operation
@@ -1079,6 +1070,9 @@ QSPI_StatusTypeDef QSPI_EraseChip(QSPI_HandleStructTypeDef *hqspi_struct)
  */
 QSPI_StatusTypeDef QSPI_EnableMemoryMappedMode(QSPI_HandleStructTypeDef *hqspi_struct)
 {
+    /* Suppress unused parameter warning */
+    (void)hqspi_struct;
+
     /* Not supported on STM32F429 without hardware QSPI */
     return QSPI_NOT_SUPPORTED;
 }
@@ -1090,6 +1084,9 @@ QSPI_StatusTypeDef QSPI_EnableMemoryMappedMode(QSPI_HandleStructTypeDef *hqspi_s
  */
 QSPI_StatusTypeDef QSPI_DisableMemoryMappedMode(QSPI_HandleStructTypeDef *hqspi_struct)
 {
+    /* Suppress unused parameter warning */
+    (void)hqspi_struct;
+
     /* Not supported on STM32F429 without hardware QSPI */
     return QSPI_NOT_SUPPORTED;
 }

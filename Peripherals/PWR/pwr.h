@@ -95,6 +95,27 @@ typedef struct {
     bool enableWakeupPin;               /**< Enable WKUP pin */
 } PWR_ConfigTypeDef;
 
+/**
+ * @brief Low power mode levels
+ */
+typedef enum {
+    PWR_LOW_POWER_MODE_LIGHT = 0,      /**< Light sleep - CPU sleep, peripherals active */
+    PWR_LOW_POWER_MODE_DEEP,            /**< Deep sleep - Stop mode with low power regulator */
+    PWR_LOW_POWER_MODE_STANDBY,         /**< Standby - Lowest power, RAM lost */
+    PWR_LOW_POWER_MODE_AUTO             /**< Auto-select based on wakeup time and peripherals */
+} PWR_LowPowerModeTypeDef;
+
+/**
+ * @brief Low power configuration structure
+ */
+typedef struct {
+    PWR_LowPowerModeTypeDef mode;       /**< Low power mode to enter */
+    uint32_t wakeupTimeMs;              /**< Expected wakeup time (for auto mode) */
+    bool keepPeripherals;               /**< Keep critical peripherals active */
+    PWR_WakeupSourceTypeDef wakeupSources; /**< Wakeup sources to enable */
+    bool optimizeVoltage;               /**< Optimize voltage regulator for low power */
+} PWR_LowPowerConfigTypeDef;
+
 /* Exported constants --------------------------------------------------------*/
 
 /** @defgroup PWR_Constants PWR Driver Constants
@@ -226,6 +247,117 @@ bool PWR_WasStandbyWakeup(void);
  * @retval  None
  */
 void PWR_ClearStandbyFlag(void);
+
+/** @} */
+
+/** @defgroup PWR_LowPower_Functions Low Power Mode Functions
+ * @{
+ */
+
+/**
+ * @brief   Enter low power mode with configuration
+ * @details Unified interface for all low power modes
+ * @param   config Pointer to low power configuration
+ * @retval  PWR_StatusTypeDef Operation status
+ */
+PWR_StatusTypeDef PWR_EnterLowPowerMode(const PWR_LowPowerConfigTypeDef* config);
+
+/**
+ * @brief   Enter light low power mode (Sleep)
+ * @details CPU sleeps, peripherals remain active
+ * @param   wakeupSources Wakeup sources to configure
+ * @retval  PWR_StatusTypeDef Operation status
+ */
+PWR_StatusTypeDef PWR_EnterLightLowPower(PWR_WakeupSourceTypeDef wakeupSources);
+
+/**
+ * @brief   Enter deep low power mode (Stop)
+ * @details Most clocks stopped, RAM retained
+ * @param   wakeupSources Wakeup sources to configure
+ * @param   keepPeripherals Keep critical peripherals active
+ * @retval  PWR_StatusTypeDef Operation status
+ */
+PWR_StatusTypeDef PWR_EnterDeepLowPower(PWR_WakeupSourceTypeDef wakeupSources, bool keepPeripherals);
+
+/**
+ * @brief   Enter standby low power mode
+ * @details Lowest power consumption, RAM content lost
+ * @param   wakeupSources Wakeup sources to configure
+ * @retval  PWR_StatusTypeDef Operation status
+ */
+PWR_StatusTypeDef PWR_EnterStandbyLowPower(PWR_WakeupSourceTypeDef wakeupSources);
+
+/**
+ * @brief   Auto-select and enter optimal low power mode
+ * @details Chooses mode based on wakeup time and peripheral requirements
+ * @param   wakeupTimeMs Expected time until wakeup (milliseconds)
+ * @param   keepPeripherals Keep critical peripherals active
+ * @param   wakeupSources Wakeup sources to configure
+ * @retval  PWR_StatusTypeDef Operation status
+ */
+PWR_StatusTypeDef PWR_AutoLowPowerMode(uint32_t wakeupTimeMs, bool keepPeripherals, PWR_WakeupSourceTypeDef wakeupSources);
+
+/**
+ * @brief   Configure wakeup sources for low power modes
+ * @param   sources Wakeup sources to enable
+ * @retval  PWR_StatusTypeDef Operation status
+ */
+PWR_StatusTypeDef PWR_ConfigureWakeupSources(PWR_WakeupSourceTypeDef sources);
+
+/**
+ * @brief   Get default low power configuration
+ * @param   config Pointer to configuration structure
+ * @retval  PWR_StatusTypeDef Operation status
+ */
+PWR_StatusTypeDef PWR_GetDefaultLowPowerConfig(PWR_LowPowerConfigTypeDef* config);
+
+/**
+ * @brief   Optimize system for low power consumption
+ * @details Disables unnecessary clocks and peripherals
+ * @note    This function is declared as weak - applications can override
+ *          with their own optimization strategy based on specific requirements
+ * @param   keepPeripherals Keep critical peripherals active
+ * @retval  PWR_StatusTypeDef Operation status
+ */
+PWR_StatusTypeDef PWR_OptimizeForLowPower(bool keepPeripherals);
+
+/**
+ * @brief   Restore system after low power wakeup
+ * @details Re-enables clocks and peripherals as needed
+ * @note    This function is declared as weak - applications can override
+ *          with their own restoration sequence based on specific requirements.
+ *          The default implementation provides basic peripheral re-enabling.
+ * @retval  PWR_StatusTypeDef Operation status
+ */
+PWR_StatusTypeDef PWR_RestoreFromLowPower(void);
+
+/**
+ * @brief   Get current low power mode status
+ * @details Returns information about current power state
+ * @param   mode Pointer to store current mode
+ * @param   wakeupSource Pointer to store wakeup source (if applicable)
+ * @retval  PWR_StatusTypeDef Operation status
+ */
+PWR_StatusTypeDef PWR_GetLowPowerStatus(PWR_LowPowerModeTypeDef* mode, PWR_WakeupSourceTypeDef* wakeupSource);
+
+/**
+ * @brief   Configure advanced low power settings
+ * @details Fine-tune power consumption vs performance tradeoffs
+ * @param   flashPowerDown Enable flash power down in sleep
+ * @param   disableBackupWrites Disable backup register writes to save power
+ * @param   enableUltraLowPower Enable ultra low power features (if available)
+ * @retval  PWR_StatusTypeDef Operation status
+ */
+PWR_StatusTypeDef PWR_ConfigureAdvancedLowPower(bool flashPowerDown, bool disableBackupWrites, bool enableUltraLowPower);
+
+/**
+ * @brief   Calculate power savings for a low power mode
+ * @details Estimates power savings compared to normal operation
+ * @param   mode Low power mode to evaluate
+ * @param   wakeupTimeMs Expected wakeup time
+ * @retval  uint32_t Estimated power savings in microamps
+ */
+uint32_t PWR_CalculatePowerSavings(PWR_LowPowerModeTypeDef mode, uint32_t wakeupTimeMs);
 
 /** @} */
 

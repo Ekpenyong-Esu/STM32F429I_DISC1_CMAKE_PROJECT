@@ -24,6 +24,7 @@
 #include "lv_port_indev.h"
 #include "touchscreen.h"
 #include "i2c.h"
+#include "app_low_power.h"  /* Application low power management */
 
 /* Touchscreen handle */
 static TS_HandleTypeDef hts;
@@ -72,48 +73,43 @@ static void touch_read(lv_indev_t *indev, lv_indev_data_t *data)
     }
 
     /* Read touchscreen data */
+    /* Debounce touch: require two consecutive touch reads to confirm a real touch */
+    static uint8_t touch_confirm_count = 0;
+
     if (TS_GetSingleTouch(&hts, &x, &y) == TS_OK) {
 
-    /* Clamp coordinates to LVGL display bounds */
-    if (x >= TS_DISPLAY_WIDTH)  x = TS_DISPLAY_WIDTH  - 1;
-    if (y >= TS_DISPLAY_HEIGHT) y = TS_DISPLAY_HEIGHT - 1;
+        /* Clamp coordinates to LVGL display bounds */
+        if (x >= TS_DISPLAY_WIDTH)  x = TS_DISPLAY_WIDTH  - 1;
+        if (y >= TS_DISPLAY_HEIGHT) y = TS_DISPLAY_HEIGHT - 1;
 
-    /* Apply coordinate transformation if needed */
-    /* For STM32F429I-DISC1, the touchscreen may need X/Y swap and/or rotation */
-    /* Try different transformations based on your touchscreen orientation */
+        /* Apply coordinate transformation if needed */
+        /* For STM32F429I-DISC1, the touchscreen may need X/Y swap and/or rotation */
 
-    // Option 1: No transformation (current)
-    data->point.x = x;
-    data->point.y = y;
+        /* Option 1: No transformation (current) */
+        data->point.x = x;
+        data->point.y = y;
 
-    // Option 2: Swap X and Y coordinates
-    // data->point.x = y;
-    // data->point.y = x;
+        touch_confirm_count++;
+        if (touch_confirm_count >= 2) {
+            /* Confirmed touch - report pressed and update activity */
+            data->state   = LV_INDEV_STATE_PRESSED;
 
-    // Option 3: Rotate 90 degrees clockwise
-    // data->point.x = TS_DISPLAY_HEIGHT - 1 - y;
-    // data->point.y = x;
+            /* Update activity timestamp only when touch is confirmed */
+            APP_TouchActivity();
 
-    // Option 4: Rotate 90 degrees counter-clockwise
-    // data->point.x = y;
-    // data->point.y = TS_DISPLAY_WIDTH - 1 - x;
-
-    // Option 5: Rotate 180 degrees
-    // data->point.x = TS_DISPLAY_WIDTH - 1 - x;
-    // data->point.y = TS_DISPLAY_HEIGHT - 1 - y;
-
-    /* Default: try swapping X and Y first */
-    // data->point.x = y;
-    // data->point.y = x;
-
-    data->state   = LV_INDEV_STATE_PRESSED;
-
-    last_x = data->point.x;
-    last_y = data->point.y;
+            last_x = data->point.x;
+            last_y = data->point.y;
+        } else {
+            /* Not yet confirmed - report previous state to avoid false presses */
+            data->state   = LV_INDEV_STATE_RELEASED;
+            data->point.x = last_x;
+            data->point.y = last_y;
+        }
     } else {
-    data->state   = LV_INDEV_STATE_RELEASED;
-    data->point.x = last_x;
-    data->point.y = last_y;
+        touch_confirm_count = 0;
+        data->state   = LV_INDEV_STATE_RELEASED;
+        data->point.x = last_x;
+        data->point.y = last_y;
     }
 
 

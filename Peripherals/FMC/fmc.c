@@ -11,6 +11,7 @@
 
 #include "fmc.h"
 #include <string.h>
+#include "../LOG/log.h"
 
 /* Private defines -----------------------------------------------------------*/
 
@@ -26,7 +27,9 @@
  * @brief Initialize FMC driver with SDRAM configuration
  */
 HAL_StatusTypeDef FMC_Driver_SDRAM_Init(FMC_Driver_Handle_t *handle, FMC_Driver_SDRAM_Config_t *config) {
+    log_debug("FMC: Initializing SDRAM");
     if (handle == NULL || config == NULL) {
+        log_error("FMC: Invalid SDRAM init parameters");
         return HAL_ERROR;
     }
 
@@ -136,6 +139,7 @@ HAL_StatusTypeDef FMC_Driver_SDRAM_Init(FMC_Driver_Handle_t *handle, FMC_Driver_
     handle->initialized = true;
     handle->errorCode = FMC_DRIVER_ERROR_NONE;
 
+    log_debug("FMC: SDRAM initialized successfully");
     return HAL_OK;
 }
 

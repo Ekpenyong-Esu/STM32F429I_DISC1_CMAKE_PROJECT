@@ -6,6 +6,7 @@
  */
 
 #include "crc.h"
+#include "../LOG/log.h"
 #include <string.h>
 
 /* Private defines */
@@ -41,6 +42,8 @@ HAL_StatusTypeDef CRC_Init(const CRC_Config *config)
 {
     HAL_StatusTypeDef status = HAL_ERROR;
 
+    log_debug("CRC: Initializing CRC");
+
     if (config == NULL) {
         CRC_ErrorHandler(CRC_ERROR_INVALID_PARAM);
         return HAL_ERROR;
@@ -70,6 +73,8 @@ HAL_StatusTypeDef CRC_Init(const CRC_Config *config)
     /* Mark as initialized */
     crc_status.initialized = true;
     crc_status.current_method = config->method;
+
+    log_debug("CRC: CRC initialized successfully");
 
     return HAL_OK;
 }

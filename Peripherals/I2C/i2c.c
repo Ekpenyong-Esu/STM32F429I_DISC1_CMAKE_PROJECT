@@ -11,8 +11,9 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "i2c.h"
-#include "../SYS/sys.h"
+#include "sys.h"
 #include <string.h>
+#include "log.h"
 
 /* Private defines -----------------------------------------------------------*/
 
@@ -77,6 +78,7 @@ static I2C_StatusTypeDef I2C_ConvertHALStatus(HAL_StatusTypeDef halStatus)
   */
 void I2C_Init(void)
 {
+    log_debug("I2C: Initializing I2C3");
   hi2c3.Instance = I2C3;                               /* Select I2C3 peripheral */
   hi2c3.Init.ClockSpeed = I2C_CLOCK_SPEED_STANDARD;    /* 100 kHz clock (standard mode) */
   hi2c3.Init.DutyCycle = I2C_DUTYCYCLE_2;              /* 50% duty cycle */
@@ -89,6 +91,7 @@ void I2C_Init(void)
 
   /* Initialize the I2C peripheral with the specified parameters */
   HAL_I2C_Init(&hi2c3);
+  log_debug("I2C: I2C3 initialized successfully");
 }
 
 /**

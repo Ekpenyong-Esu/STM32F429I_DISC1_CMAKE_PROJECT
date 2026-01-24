@@ -39,7 +39,7 @@ if(NOT TARGET can)
     ${CAN_SOURCE_DIR}/STM32_CAN.cpp
   )
 
-  target_include_directories(can PUBLIC
+  target_include_directories(can INTERFACE
     ${CAN_SOURCE_DIR}
   )
 

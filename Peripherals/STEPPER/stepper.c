@@ -529,10 +529,10 @@ STEPPER_Config_t STEPPER_GetDefaultConfig(void)
 STEPPER_Pins_t STEPPER_GetDefaultPins(void)
 {
     STEPPER_Pins_t pins = {
-        .port1 = GPIOB, .pin1 = GPIO_PIN_12,  /* PB12 */
-        .port2 = GPIOB, .pin2 = GPIO_PIN_13,  /* PB13 */
-        .port3 = GPIOB, .pin3 = GPIO_PIN_14,  /* PB14 */
-        .port4 = GPIOB, .pin4 = GPIO_PIN_15   /* PB15 */
+        .port1 = GPIOE, .pin1 = GPIO_PIN_4,   /* PE4 */
+        .port2 = GPIOE, .pin2 = GPIO_PIN_5,   /* PE5 */
+        .port3 = GPIOE, .pin3 = GPIO_PIN_6,   /* PE6 */
+        .port4 = GPIOB, .pin4 = GPIO_PIN_6    /* PB6 */
     };
 
     return pins;
@@ -550,8 +550,9 @@ static void STEPPER_MspInit(STEPPER_Handle_t *hstep)
 {
     GPIO_InitTypeDef GPIO_InitStruct = {0};
 
-    /* Enable GPIO clocks */
+    /* Enable GPIO clocks for all used ports */
     __HAL_RCC_GPIOB_CLK_ENABLE();
+    __HAL_RCC_GPIOE_CLK_ENABLE();
 
     /* Configure coil pins */
     GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;

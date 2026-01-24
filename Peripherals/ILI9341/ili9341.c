@@ -5,7 +5,8 @@
  */
 
 #include "ili9341.h"
-#include "../SPI/spi.h"
+#include "spi.h"
+#include "log.h"
 
 /* Helper: select/deselect and set data/command mode */
 static inline void ILI9341_Select(void)
@@ -123,16 +124,33 @@ uint16_t ili9341_ReadID(void)
 
 void ili9341_DisplayOn(void)
 {
+    log_debug("ILI9341: Turning display on");
     ili9341_WriteReg(ILI9341_DISPLAY_ON);
 }
 
 void ili9341_DisplayOff(void)
 {
+    log_debug("ILI9341: Turning display off");
     ili9341_WriteReg(ILI9341_DISPLAY_OFF);
+}
+
+void ili9341_SleepIn(void)
+{
+    log_debug("ILI9341: Entering sleep mode");
+    ili9341_WriteReg(ILI9341_SLEEP_IN);
+    HAL_Delay(5);  /* Small delay after sleep in */
+}
+
+void ili9341_SleepOut(void)
+{
+    log_debug("ILI9341: Exiting sleep mode");
+    ili9341_WriteReg(ILI9341_SLEEP_OUT);
+    HAL_Delay(ILI9341_WAKE_DELAY_MS);  /* Wait for wake up */
 }
 
 void ili9341_Init(void)
 {
+    log_debug("ILI9341: Initializing display");
     /* Allow board to setup pins and SPI */
     ILI9341_MspInit();
 
@@ -272,4 +290,5 @@ void ili9341_Init(void)
 
     /* Start GRAM write mode */
     ili9341_WriteReg(ILI9341_GRAM);
+    log_debug("ILI9341: Initialization complete");
 }

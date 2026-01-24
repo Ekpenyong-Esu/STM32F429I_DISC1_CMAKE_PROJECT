@@ -33,6 +33,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "dac.h"                    /**< DAC driver header */
 #include "stm32f4xx_hal_dac.h"      /**< STM32 HAL DAC header */
+#include "log.h"             /**< Logging utilities */
 #include <string.h>                 /**< For memset function */
 
 
@@ -57,6 +58,8 @@
  */
 HAL_StatusTypeDef DAC_Init(DAC_HandleStruct* hdac, const DAC_ConfigTypeDef* config)
 {
+    log_debug("DAC: Initializing DAC");
+
     HAL_StatusTypeDef status = HAL_ERROR;
 
     /* Parameter validation */
@@ -92,6 +95,8 @@ HAL_StatusTypeDef DAC_Init(DAC_HandleStruct* hdac, const DAC_ConfigTypeDef* conf
     /* Mark as initialized */
     hdac->initialized = true;
     status = HAL_OK;
+
+    log_debug("DAC: DAC initialized successfully");
 
     return status;
 }

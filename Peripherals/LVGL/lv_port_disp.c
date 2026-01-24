@@ -15,6 +15,7 @@
 #include <string.h>
 #include "stm32f4xx_hal.h"  /* Add for DMA */
 #include "cachel1_armv7.h"
+#include "../LOG/log.h"
 
 /*-----------------------------------------------------------------------------
  * Display Configuration
@@ -177,6 +178,7 @@ static void disp_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px
  */
 void lv_port_disp_init(void)
 {
+    log_debug("LVGL: Initializing display port");
     /* Clear framebuffer */
     memset((void *)FB_BASE_ADDR, 0x00, FB_SIZE);
 
@@ -187,6 +189,7 @@ void lv_port_disp_init(void)
     /* Create LVGL display (v9 API) */
     lv_display_t *disp = lv_display_create(DISP_HOR_RES, DISP_VER_RES);
     if (!disp) {
+        log_error("LVGL: Failed to create display");
         while (1);
     }
 
@@ -205,6 +208,7 @@ void lv_port_disp_init(void)
 
     /* Set color format */
     lv_display_set_color_format(disp, LV_COLOR_FORMAT_RGB565);
+    log_debug("LVGL: Display port initialized");
 }
 
 /**

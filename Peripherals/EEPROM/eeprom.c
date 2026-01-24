@@ -11,6 +11,7 @@
 #include "eeprom.h"
 #include "../I2C/i2c.h"
 #include <string.h>
+#include "log.h"
 
 /* Private constants ---------------------------------------------------------*/
 
@@ -154,6 +155,8 @@ EEPROM_StatusTypeDef EEPROM_Init(EEPROM_HandleTypeDef* handle)
  */
 EEPROM_StatusTypeDef EEPROM_InitType(EEPROM_HandleTypeDef* handle, EEPROM_TypeDef type)
 {
+    log_debug("EEPROM: Initializing EEPROM");
+
     if (handle == NULL) {
         return EEPROM_INVALID_PARAM;
     }
@@ -181,6 +184,7 @@ EEPROM_StatusTypeDef EEPROM_InitType(EEPROM_HandleTypeDef* handle, EEPROM_TypeDe
     }
 
     handle->initialized = true;
+    log_debug("EEPROM: EEPROM initialized successfully");
     return EEPROM_OK;
 }
 

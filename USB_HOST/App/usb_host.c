@@ -23,6 +23,7 @@
 #include "usb_host.h"
 #include "usbh_core.h"
 #include "usbh_cdc.h"
+#include "log.h"
 
 /* USER CODE BEGIN Includes */
 
@@ -69,6 +70,8 @@ void MX_USB_HOST_Init(void)
 {
   /* USER CODE BEGIN USB_HOST_Init_PreTreatment */
 
+  log_debug("USB_HOST: Initializing USB Host");
+
   /* USER CODE END USB_HOST_Init_PreTreatment */
 
   /* Init host Library, add supported class and start the library. */
@@ -85,6 +88,8 @@ void MX_USB_HOST_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN USB_HOST_Init_PostTreatment */
+
+  log_debug("USB_HOST: USB Host initialized successfully");
 
   /* USER CODE END USB_HOST_Init_PostTreatment */
 }

@@ -39,7 +39,7 @@ if(NOT TARGET vl53l1x)
     ${VL53L1X_SOURCE_DIR}/VL53L1X.cpp
   )
 
-  target_include_directories(vl53l1x PUBLIC
+  target_include_directories(vl53l1x INTERFACE
     ${VL53L1X_SOURCE_DIR}
   )
 

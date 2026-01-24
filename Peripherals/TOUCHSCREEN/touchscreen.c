@@ -19,6 +19,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include "log.h"
+#include "app_low_power.h"  /* For touch activity handling */
 
 /* Private constants ---------------------------------------------------------*/
 #define TS_DELAY_MS(x)                  HAL_Delay(x)
@@ -1019,8 +1020,15 @@ static bool TS_IsValidTouch(uint16_t pressure)
 
  void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
-   if(GPIO_Pin == TS_INT_PIN && g_hts != NULL)
+   if(GPIO_Pin == TS_INT_PIN)
     {
-        TS_IRQHandler(g_hts);
+        /* Always update touch activity for low power management */
+        APP_TouchActivity();
+
+        /* Process touchscreen data if controller is available */
+        if (g_hts != NULL)
+        {
+            TS_IRQHandler(g_hts);
+        }
     }
 }

@@ -11,6 +11,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "rng.h"
+#include "log.h"
 
 /* Private defines -----------------------------------------------------------*/
 #define RNG_FLOAT_DIVISOR       4294967296.0f   /**< 2^32 for float conversion */
@@ -79,6 +80,8 @@ static RNG_StatusTypeDef RNG_CheckErrors(void)
  */
 RNG_StatusTypeDef RNG_Init(void)
 {
+    log_debug("RNG: Initializing Random Number Generator");
+
     /* Enable RNG clock */
     __HAL_RCC_RNG_CLK_ENABLE();
 
@@ -91,7 +94,13 @@ RNG_StatusTypeDef RNG_Init(void)
     }
 
     /* Check for initial errors */
-    return RNG_CheckErrors();
+    RNG_StatusTypeDef status = RNG_CheckErrors();
+
+    if (status == RNG_OK) {
+        log_debug("RNG: Random Number Generator initialized successfully");
+    }
+
+    return status;
 }
 
 /**

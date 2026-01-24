@@ -11,6 +11,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "wwdg.h"
+#include "../LOG/log.h"
 
 /* Private defines -----------------------------------------------------------*/
 #define WWDG_DEFAULT_PRESCALER      WWDG_PRESCALER_8
@@ -72,6 +73,8 @@ static WWDG_StatusTypeDef WWDG_ConvertHALStatus(HAL_StatusTypeDef halStatus)
  */
 WWDG_StatusTypeDef WWDG_Init(void)
 {
+    log_debug("WWDG: Initializing Window Watchdog");
+
     /* Enable WWDG clock */
     __HAL_RCC_WWDG_CLK_ENABLE();
 
@@ -84,6 +87,9 @@ WWDG_StatusTypeDef WWDG_Init(void)
     wwdg_counter_value = WWDG_DEFAULT_COUNTER;
 
     HAL_StatusTypeDef halStatus = HAL_WWDG_Init(&hwwdg);
+
+    log_debug("WWDG: Window Watchdog initialized successfully");
+
     return WWDG_ConvertHALStatus(halStatus);
 }
 
@@ -99,6 +105,8 @@ WWDG_StatusTypeDef WWDG_Init_Custom(const WWDG_ConfigTypeDef* config)
     {
         return WWDG_INVALID_PARAM;
     }
+
+    log_debug("WWDG: Initializing Window Watchdog with custom configuration");
 
     /* Validate counter range */
     if (config->Counter < WWDG_COUNTER_MIN || config->Counter > WWDG_COUNTER_MAX)
@@ -130,6 +138,9 @@ WWDG_StatusTypeDef WWDG_Init_Custom(const WWDG_ConfigTypeDef* config)
     wwdg_counter_value = config->Counter;
 
     HAL_StatusTypeDef halStatus = HAL_WWDG_Init(&hwwdg);
+
+    log_debug("WWDG: Window Watchdog initialized successfully with custom configuration");
+
     return WWDG_ConvertHALStatus(halStatus);
 }
 

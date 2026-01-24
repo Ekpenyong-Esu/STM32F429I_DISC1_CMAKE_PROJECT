@@ -17,6 +17,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "adc.h"
 #include <string.h>
+#include "log.h"
 
 /* Private typedef -----------------------------------------------------------*/
 
@@ -85,6 +86,8 @@ static ADC_HandleStruct* ADC_MapHALHandle(ADC_HandleTypeDef* hal);
  */
 HAL_StatusTypeDef ADC_Init(ADC_HandleStruct* hadc, const ADC_ConfigTypeDef* config)
 {
+    log_debug("ADC: Initializing ADC");
+
     if (hadc == NULL || config == NULL) {
     return HAL_ERROR;
     }
@@ -130,6 +133,8 @@ HAL_StatusTypeDef ADC_Init(ADC_HandleStruct* hadc, const ADC_ConfigTypeDef* conf
     hadc->config = *config;
     hadc->initialized = true;
     hadc->calibrated = false;
+
+    log_debug("ADC: ADC initialized successfully");
 
     return HAL_OK;
 }

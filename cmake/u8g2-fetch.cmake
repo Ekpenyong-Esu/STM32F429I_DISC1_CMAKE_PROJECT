@@ -46,7 +46,7 @@ if(NOT TARGET u8g2)
 
   add_library(u8g2 STATIC ${U8G2_SOURCES})
 
-  target_include_directories(u8g2 PUBLIC
+  target_include_directories(u8g2 INTERFACE
     ${U8G2_SRC_DIR}
   )
 

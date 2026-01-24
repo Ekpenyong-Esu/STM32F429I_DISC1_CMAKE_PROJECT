@@ -39,7 +39,7 @@ if(NOT TARGET bmp280)
     ${BMP280_SOURCE_DIR}/BMP280.cpp
   )
 
-  target_include_directories(bmp280 PUBLIC
+  target_include_directories(bmp280 INTERFACE
     ${BMP280_SOURCE_DIR}
   )
 

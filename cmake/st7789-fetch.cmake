@@ -44,7 +44,7 @@ if(NOT TARGET st7789)
 
   add_library(st7789 STATIC ${ST7789_SOURCES})
 
-  target_include_directories(st7789 PUBLIC
+  target_include_directories(st7789 INTERFACE
     ${ST7789_SOURCE_DIR}
   )
 

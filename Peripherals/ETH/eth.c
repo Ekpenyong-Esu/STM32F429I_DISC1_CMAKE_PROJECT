@@ -8,6 +8,7 @@
  */
 
 #include "eth.h"
+#include "log.h"
 #include <string.h>
 
 /* Ethernet frame constants */
@@ -24,6 +25,8 @@
  * @brief Initialize Ethernet with given configuration
  */
 HAL_StatusTypeDef ETH_Init(ETH_Handle_t *handle, ETH_Config_t *config) {
+    log_debug("ETH: Initializing Ethernet");
+
     if (handle == NULL || config == NULL) {
         return HAL_ERROR;
     }
@@ -60,6 +63,9 @@ HAL_StatusTypeDef ETH_Init(ETH_Handle_t *handle, ETH_Config_t *config) {
     /* MAC configuration is handled during HAL_ETH_Init */
 
     handle->initialized = true;
+
+    log_debug("ETH: Ethernet initialized successfully");
+
     return HAL_OK;
 }
 

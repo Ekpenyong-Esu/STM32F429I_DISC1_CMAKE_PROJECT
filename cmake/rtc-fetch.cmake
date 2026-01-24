@@ -39,7 +39,7 @@ if(NOT TARGET rtc)
     ${RTC_SOURCE_DIR}/STM32RTC.cpp
   )
 
-  target_include_directories(rtc PUBLIC
+  target_include_directories(rtc INTERFACE
     ${RTC_SOURCE_DIR}
   )
 

@@ -39,7 +39,7 @@ if(NOT TARGET lsm6dsl)
     ${LSM6DSL_SOURCE_DIR}/LSM6DSL.cpp
   )
 
-  target_include_directories(lsm6dsl PUBLIC
+  target_include_directories(lsm6dsl INTERFACE
     ${LSM6DSL_SOURCE_DIR}
   )
 

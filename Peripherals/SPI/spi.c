@@ -13,6 +13,7 @@
 #include "spi.h"
 #include "../SYS/sys.h"
 #include <string.h>
+#include "log.h"
 
 /* Private defines -----------------------------------------------------------*/
 #define SPI_CRC_POLYNOMIAL_DEFAULT    10U     /**< Default CRC polynomial value */
@@ -88,6 +89,7 @@ static void SPIx_Error(void)
   */
 void SPI_Init(void)
 {
+    log_debug("SPI: Initializing SPI5");
   /* SPI5 parameter configuration*/
   hspi5.Instance = SPI5;                                /* Select SPI5 peripheral */
   hspi5.Init.Mode = SPI_MODE_MASTER;                    /* Configure as master */
@@ -109,6 +111,7 @@ void SPI_Init(void)
 
   /* Initialize the SPI peripheral with the specified parameters */
    HAL_SPI_Init(&hspi5);
+   log_debug("SPI: SPI5 initialized successfully");
 }
 
 /**

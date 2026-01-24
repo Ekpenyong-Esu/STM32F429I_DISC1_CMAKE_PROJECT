@@ -4,6 +4,7 @@
  */
 
 #include "tim.h"
+#include "log.h"
 
 /* ========================== Base Timer ========================== */
 
@@ -12,6 +13,8 @@ HAL_StatusTypeDef TIM_Init(TIM_HandleTypeDef *htim,
                            uint32_t prescaler,
                            uint32_t period)
 {
+    log_debug("TIM: Initializing Timer");
+
     if (htim == NULL || instance == NULL) {
         return HAL_ERROR;
     }
@@ -23,7 +26,11 @@ HAL_StatusTypeDef TIM_Init(TIM_HandleTypeDef *htim,
     htim->Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
     htim->Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
 
-    return HAL_TIM_Base_Init(htim);
+    HAL_StatusTypeDef status = HAL_TIM_Base_Init(htim);
+    if (status == HAL_OK) {
+        log_debug("TIM: Timer initialized successfully");
+    }
+    return status;
 }
 
 HAL_StatusTypeDef TIM_Start(TIM_HandleTypeDef *htim)

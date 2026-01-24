@@ -39,7 +39,7 @@ if(NOT TARGET eeprom)
     ${EEPROM_SOURCE_DIR}/EEPROM.cpp
   )
 
-  target_include_directories(eeprom PUBLIC
+  target_include_directories(eeprom INTERFACE
     ${EEPROM_SOURCE_DIR}
   )
 

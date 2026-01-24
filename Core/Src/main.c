@@ -12,12 +12,13 @@
 #include "stm32f4xx_hal_def.h"
 #include "sys.h"
 #include <stdint.h>
-
+#include "lvgl.h"
 #include "lvgl_app.h"
 #include "ltdc.h"
 #include "fmc.h"
 #include "ili9341.h"  /* ILI9341 driver */
 #include "i2c.h"      /* I2C driver for touchscreen */
+#include "app_low_power.h"  /* Application low power management */
 
 int main(void)
 {
@@ -81,7 +82,12 @@ int main(void)
     LVGL_App_Init();
 
     /*-------------------------------------------------------------------------
-     * STEP 6: Demo Variables
+     * STEP 6: Initialize Application Low Power Management
+     *-----------------------------------------------------------------------*/
+    APP_LowPowerInit();
+
+    /*-------------------------------------------------------------------------
+     * STEP 7: Demo Variables
      *-----------------------------------------------------------------------*/
     uint32_t last_update = 0;
     int temp = 25;
@@ -120,7 +126,25 @@ int main(void)
             last_update = current_time;
         }
 
+        /* Check for low power mode every 1 second */
+        static uint32_t last_low_power_check = 0;
+        if (current_time - last_low_power_check >= 1000) {
+            if (APP_ShouldEnterLowPower()) {
+                /* Enter low power mode */
+                LVGL_App_UpdateStatus("Entering Low Power Mode");
+                HAL_Delay(100); /* Give time for status update */
 
+                PWR_StatusTypeDef low_power_status = APP_EnterLowPowerMode();
+                if (low_power_status == PWR_OK) {
+                    /* System will wake up here after low power mode */
+                    LVGL_App_UpdateStatus("System Resumed from Low Power");
+                    APP_UpdateActivity(); /* Reset activity timer */
+                } else {
+                    LVGL_App_UpdateStatus("Low Power Mode Failed");
+                }
+            }
+            last_low_power_check = current_time;
+        }
     }
 }
 

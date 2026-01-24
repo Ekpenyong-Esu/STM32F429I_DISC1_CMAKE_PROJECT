@@ -41,7 +41,7 @@ if(NOT TARGET unity)
     ${UNITY_SOURCE_DIR}/src/unity.c
   )
 
-  target_include_directories(unity PUBLIC
+  target_include_directories(unity INTERFACE
     ${UNITY_SOURCE_DIR}/src
   )
 

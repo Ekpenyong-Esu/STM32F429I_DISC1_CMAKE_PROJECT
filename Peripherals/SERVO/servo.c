@@ -23,7 +23,7 @@
  */
 
 /* PWM timer configuration for 50Hz (20ms period) */
-#define SERVO_PWM_PRESCALER     89      /* 90MHz / 90 = 1MHz timer clock */
+#define SERVO_PWM_PRESCALER     85      /* 86MHz / 86 = 1MHz timer clock */
 #define SERVO_PWM_PERIOD        19999   /* 1MHz / 20000 = 50Hz (20ms period) */
 
 /* Pulse width calculation: pulse = (pulseWidth_us * timer_clock) / 1000000 */

@@ -18,6 +18,7 @@
 #include "rtc.h"
 #include <stdio.h>
 #include <string.h>
+#include "log.h"
 
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
@@ -41,6 +42,8 @@ static void RTC_TimestampToDateTime(uint32_t timestamp, RTC_Date_t* sDate, RTC_T
  */
 RTC_StatusTypeDef RTC_Init(void)
 {
+    log_debug("RTC: Initializing RTC");
+
     /* Initialize RTC MSP */
     RTC_MspInit();
 
@@ -58,6 +61,8 @@ RTC_StatusTypeDef RTC_Init(void)
     {
         return RTC_STATUS_ERROR;
     }
+
+    log_debug("RTC: RTC initialized successfully");
 
     return RTC_STATUS_OK;
 }

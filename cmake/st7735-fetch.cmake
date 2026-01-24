@@ -44,7 +44,7 @@ if(NOT TARGET st7735)
 
   add_library(st7735 STATIC ${ST7735_SOURCES})
 
-  target_include_directories(st7735 PUBLIC
+  target_include_directories(st7735 INTERFACE
     ${ST7735_SOURCE_DIR}
   )
 

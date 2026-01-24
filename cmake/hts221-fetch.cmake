@@ -39,7 +39,7 @@ if(NOT TARGET hts221)
     ${HTS221_SOURCE_DIR}/HTS221.cpp
   )
 
-  target_include_directories(hts221 PUBLIC
+  target_include_directories(hts221 INTERFACE
     ${HTS221_SOURCE_DIR}
   )
 

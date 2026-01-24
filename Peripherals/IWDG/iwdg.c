@@ -11,6 +11,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "iwdg.h"
+#include "../LOG/log.h"
 
 /* Private defines -----------------------------------------------------------*/
 #define IWDG_DEFAULT_PRESCALER      IWDG_PRESCALER_32
@@ -98,11 +99,16 @@ static void IWDG_CalculatePrescalerReload(uint32_t timeout_ms, uint32_t* prescal
  */
 IWDG_StatusTypeDef IWDG_Init(void)
 {
+    log_debug("IWDG: Initializing Independent Watchdog");
+
     hiwdg.Instance = IWDG;
     hiwdg.Init.Prescaler = IWDG_DEFAULT_PRESCALER;
     hiwdg.Init.Reload = IWDG_DEFAULT_RELOAD;
 
     HAL_StatusTypeDef halStatus = HAL_IWDG_Init(&hiwdg);
+
+    log_debug("IWDG: Independent Watchdog initialized successfully");
+
     return IWDG_ConvertHALStatus(halStatus);
 }
 
@@ -119,6 +125,8 @@ IWDG_StatusTypeDef IWDG_Init_Custom(const IWDG_ConfigTypeDef* config)
         return IWDG_INVALID_PARAM;
     }
 
+    log_debug("IWDG: Initializing Independent Watchdog with custom configuration");
+
     if (config->Reload > IWDG_RELOAD_MAX)
     {
         return IWDG_INVALID_PARAM;
@@ -129,6 +137,9 @@ IWDG_StatusTypeDef IWDG_Init_Custom(const IWDG_ConfigTypeDef* config)
     hiwdg.Init.Reload = config->Reload;
 
     HAL_StatusTypeDef halStatus = HAL_IWDG_Init(&hiwdg);
+
+    log_debug("IWDG: Independent Watchdog initialized successfully with custom configuration");
+
     return IWDG_ConvertHALStatus(halStatus);
 }
 
@@ -145,6 +156,8 @@ IWDG_StatusTypeDef IWDG_Init_TimeoutMs(uint32_t timeout_ms)
         return IWDG_INVALID_PARAM;
     }
 
+    log_debug("IWDG: Initializing Independent Watchdog with timeout %lu ms", timeout_ms);
+
     uint32_t prescaler = 0;
     uint32_t reload = 0;
 
@@ -155,6 +168,9 @@ IWDG_StatusTypeDef IWDG_Init_TimeoutMs(uint32_t timeout_ms)
     hiwdg.Init.Reload = reload;
 
     HAL_StatusTypeDef halStatus = HAL_IWDG_Init(&hiwdg);
+
+    log_debug("IWDG: Independent Watchdog initialized successfully with timeout");
+
     return IWDG_ConvertHALStatus(halStatus);
 }
 

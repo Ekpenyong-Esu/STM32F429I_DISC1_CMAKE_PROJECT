@@ -31,6 +31,7 @@ extern "C" {
 
 /* ILI9341 Commands (subset used by init sequence) */
 #define ILI9341_SWRESET             0x01
+#define ILI9341_SLEEP_IN            0x10
 #define ILI9341_SLEEP_OUT           0x11
 #define ILI9341_DISPLAY_ON          0x29
 #define ILI9341_DISPLAY_OFF         0x28
@@ -86,6 +87,10 @@ uint16_t ili9341_GetLcdPixelHeight(void);
 /* Weak hook for board-specific GPIO/SPI configuration. Implement in board files to override. */
 void ILI9341_MspInit(void);
 void ILI9341_MspDeInit(void);
+
+void ili9341_SleepIn(void);
+void ili9341_SleepOut(void);
+
 
 #ifdef __cplusplus
 }

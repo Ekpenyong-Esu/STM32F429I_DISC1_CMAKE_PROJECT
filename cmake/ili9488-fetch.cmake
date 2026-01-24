@@ -44,7 +44,7 @@ if(NOT TARGET ili9488)
 
   add_library(ili9488 STATIC ${ILI9488_SOURCES})
 
-  target_include_directories(ili9488 PUBLIC
+  target_include_directories(ili9488 INTERFACE
     ${ILI9488_SOURCE_DIR}
   )
 

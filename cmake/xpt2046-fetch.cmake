@@ -44,7 +44,7 @@ if(NOT TARGET xpt2046)
 
   add_library(xpt2046 STATIC ${XPT2046_SOURCES})
 
-  target_include_directories(xpt2046 PUBLIC
+  target_include_directories(xpt2046 INTERFACE
     ${XPT2046_SOURCE_DIR}
   )
 

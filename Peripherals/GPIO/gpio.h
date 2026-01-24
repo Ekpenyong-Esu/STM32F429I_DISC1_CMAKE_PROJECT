@@ -1,13 +1,13 @@
 /**
   ******************************************************************************
   * @file    gpio.h
-  * @brief   GPIO module interface
+  * @brief   GPIO module interface for STM32F429
   * @details This file contains all the function prototypes for
   *          the GPIO peripheral configuration and control.
-  *          It provides APIs to initialize and control different GPIO pins
-  *          on the STM32F429 board.
-  * @version 1.0
-  * @date    2025-09-03
+  *          It provides comprehensive APIs to initialize and control GPIO pins
+  *          on the STM32F429 microcontroller.
+  * @version 2.0
+  * @date    2024-12-19
   ******************************************************************************
   */
 
@@ -21,108 +21,146 @@ extern "C" {
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f4xx.h"
 
+
 /* Exported types ------------------------------------------------------------*/
+
+/**
+ * @brief GPIO driver handle structure
+ */
+typedef struct {
+    GPIO_TypeDef *Port;                    /**< GPIO port (GPIOA-GPIOI) */
+    GPIO_InitTypeDef Init;                 /**< GPIO initialization structure */
+    uint8_t initialized;                   /**< Initialization status flag */
+    uint32_t errorCode;                    /**< Last error code */
+} GPIO_Driver_Handle_t;
+
+/**
+ * @brief GPIO driver error codes
+ */
 typedef enum {
-    INTERRUPT_MODE,
-    POLLING_MODE
-} GPIO_Mode_t;
-/**
- * @brief   Initializes all GPIO pins used in the application
- * @details Configures the GPIO pin modes, pull-up/down resistors,
- *          speeds, and initial output levels
- * @param   None
- * @retval  None
- */
-void GPIO_Init(void);
+    GPIO_DRIVER_ERROR_NONE = 0x00U,       /**< Operation successful */
+    GPIO_DRIVER_ERROR_INIT = 0x01U,       /**< Initialization failed */
+    GPIO_DRIVER_ERROR_CONFIG = 0x02U,     /**< Configuration error */
+    GPIO_DRIVER_ERROR_PIN = 0x04U         /**< Invalid pin specification */
+} GPIO_Driver_Error_t;
+
+/* Exported constants --------------------------------------------------------*/
+
+/* GPIO pin definitions */
+#define GPIO_PIN_0                 ((uint16_t)0x0001)
+#define GPIO_PIN_1                 ((uint16_t)0x0002)
+#define GPIO_PIN_2                 ((uint16_t)0x0004)
+#define GPIO_PIN_3                 ((uint16_t)0x0008)
+#define GPIO_PIN_4                 ((uint16_t)0x0010)
+#define GPIO_PIN_5                 ((uint16_t)0x0020)
+#define GPIO_PIN_6                 ((uint16_t)0x0040)
+#define GPIO_PIN_7                 ((uint16_t)0x0080)
+#define GPIO_PIN_8                 ((uint16_t)0x0100)
+#define GPIO_PIN_9                 ((uint16_t)0x0200)
+#define GPIO_PIN_10                ((uint16_t)0x0400)
+#define GPIO_PIN_11                ((uint16_t)0x0800)
+#define GPIO_PIN_12                ((uint16_t)0x1000)
+#define GPIO_PIN_13                ((uint16_t)0x2000)
+#define GPIO_PIN_14                ((uint16_t)0x4000)
+#define GPIO_PIN_15                ((uint16_t)0x8000)
+#define GPIO_PIN_ALL               ((uint16_t)0xFFFF)
+
+/* Exported macro ------------------------------------------------------------*/
+
+/* Exported functions --------------------------------------------------------*/
 
 /**
- * @brief   Initialize PA0 button interrupt
- * @details Configures PA0 (B1) button for interrupt operation
- * @param   mode: GPIO_Mode_t (INTERRUPT_MODE or POLLING_MODE)
- * @retval  None
+ * @brief Initialize GPIO driver handle
+ * @param handle: Pointer to GPIO driver handle
+ * @retval HAL_StatusTypeDef: Operation status
  */
-void GPIO_PA0_Button_Init(GPIO_Mode_t mode);
+HAL_StatusTypeDef GPIO_Driver_Init(GPIO_Driver_Handle_t *handle);
 
 /**
- * @brief   Button interrupt callback handler
- * @details Handles PA0 (B1 button) interrupts
- * @param   None
- * @retval  None
+ * @brief Deinitialize GPIO driver handle
+ * @param handle: Pointer to GPIO driver handle
+ * @retval HAL_StatusTypeDef: Operation status
  */
-void GPIO_Button_Callback(void);
-
+HAL_StatusTypeDef GPIO_Driver_DeInit(GPIO_Driver_Handle_t *handle);
 
 /**
- * @brief   Set the state of the LD3 LED
- * @details Controls the LD3 LED on the STM32F429 board
- * @param   state: Desired state (GPIO_PIN_SET or GPIO_PIN_RESET)
- * @retval  None
+ * @brief Read GPIO pin state
+ * @param GPIOx: GPIO port
+ * @param GPIO_Pin: GPIO pin
+ * @retval GPIO_PinState: Pin state (SET or RESET)
  */
-void GPIO_LED_LD3_Set(GPIO_PinState state);
+GPIO_PinState GPIO_Driver_ReadPin(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin);
 
 /**
- * @brief   Set the state of the LD4 LED
- * @details Controls the LD4 LED on the STM32F429 board
- * @param   state: Desired state (GPIO_PIN_SET or GPIO_PIN_RESET)
- * @retval  None
+ * @brief Write GPIO pin state
+ * @param GPIOx: GPIO port
+ * @param GPIO_Pin: GPIO pin
+ * @param PinState: Pin state to be written (SET or RESET)
+ * @retval None
  */
-void GPIO_LED_LD4_Set(GPIO_PinState state);
+void GPIO_Driver_WritePin(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin, GPIO_PinState PinState);
 
 /**
- * @brief   Toggle the LD3 LED
- * @details Toggles the current state of LD3 LED
- * @param   None
- * @retval  None
+ * @brief Toggle GPIO pin state
+ * @param GPIOx: GPIO port
+ * @param GPIO_Pin: GPIO pin
+ * @retval None
  */
-void GPIO_LED_LD3_Toggle(void);
+void GPIO_Driver_TogglePin(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin);
 
 /**
- * @brief   Toggle the LD4 LED
- * @details Toggles the current state of LD4 LED
- * @param   None
- * @retval  None
+ * @brief Read GPIO port value
+ * @param GPIOx: GPIO port
+ * @retval uint16_t: Port value
  */
-void GPIO_LED_LD4_Toggle(void);
+uint16_t GPIO_Driver_ReadPort(GPIO_TypeDef *GPIOx);
 
 /**
- * @brief   Get the state of the user button (B1/PA0)
- * @details Reads the current state of the user button
- * @param   None
- * @retval  GPIO_PinState: Current button state
+ * @brief Write GPIO port value
+ * @param GPIOx: GPIO port
+ * @param PortValue: Port value
+ * @retval None
  */
-GPIO_PinState GPIO_Button_B1_GetState(void);
+void GPIO_Driver_WritePort(GPIO_TypeDef *GPIOx, uint16_t PortValue);
 
 /**
- * @brief   Check if user button is pressed (with debouncing)
- * @details Reads button state with software debouncing
- * @param   debounce_ms: Debounce time in milliseconds
- * @retval  uint8_t: 1 if button is pressed, 0 otherwise
+ * @brief Enable GPIO interrupt
+ * @param GPIOx: GPIO port
+ * @param GPIO_Pin: GPIO pin
+ * @param edge: Interrupt edge (EXTI_TRIGGER_RISING/FALLING/RISING_FALLING)
+ * @retval HAL_StatusTypeDef: Operation status
  */
-uint8_t GPIO_Button_B1_IsPressed(uint32_t debounce_ms);
+HAL_StatusTypeDef GPIO_Driver_EnableIT(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin, uint32_t edge);
 
 /**
- * @brief   Get button press count
- * @details Returns the total number of button presses since last reset
- * @param   None
- * @retval  uint32_t: Button press count
+ * @brief Disable GPIO interrupt
+ * @param GPIOx: GPIO port
+ * @param GPIO_Pin: GPIO pin
+ * @retval HAL_StatusTypeDef: Operation status
  */
-uint32_t GPIO_Button_GetPressCount(void);
+HAL_StatusTypeDef GPIO_Driver_DisableIT(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin);
 
 /**
- * @brief   Reset button press count
- * @details Resets the button press counter to zero
- * @param   None
- * @retval  None
+ * @brief Clear GPIO interrupt pending bit
+ * @param GPIO_Pin: GPIO pin
+ * @retval None
  */
-void GPIO_Button_ResetPressCount(void);
+void GPIO_Driver_ClearITPendingBit(uint16_t GPIO_Pin);
 
 /**
- * @brief   Initialize GPIO interrupts
- * @details Initializes GPIO and configures PA0 button for interrupt operation
- * @param   None
- * @retval  None
+ * @brief Lock GPIO pin configuration
+ * @param GPIOx: GPIO port
+ * @param GPIO_Pin: GPIO pin
+ * @retval HAL_StatusTypeDef: Operation status
  */
-void initialize_gpio_interrupts(void);
+HAL_StatusTypeDef GPIO_Driver_LockPin(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin);
+
+/**
+ * @brief Get GPIO driver error code
+ * @param handle: Pointer to GPIO driver handle
+ * @retval uint32_t: Error code
+ */
+uint32_t GPIO_Driver_GetError(GPIO_Driver_Handle_t *handle);
 
 #ifdef __cplusplus
 }

@@ -40,7 +40,7 @@ if(NOT TARGET cmock)
     ${CMOCK_SOURCE_DIR}/src/cmock.c
   )
 
-  target_include_directories(cmock PUBLIC
+  target_include_directories(cmock INTERFACE
     ${CMOCK_SOURCE_DIR}/src
   )
 

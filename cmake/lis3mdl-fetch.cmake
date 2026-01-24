@@ -39,7 +39,7 @@ if(NOT TARGET lis3mdl)
     ${LIS3MDL_SOURCE_DIR}/LIS3MDL.cpp
   )
 
-  target_include_directories(lis3mdl PUBLIC
+  target_include_directories(lis3mdl INTERFACE
     ${LIS3MDL_SOURCE_DIR}
   )
 

@@ -50,8 +50,8 @@ project(${CMAKE_PROJECT_NAME})
 message(STATUS "Project: ${CMAKE_PROJECT_NAME}")
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
-# Enable language support for C and Assembly (needed for startup files)
-enable_language(C ASM)
+# Enable language support for C, C++, and Assembly (needed for startup files and C++ libraries)
+enable_language(C CXX ASM)
 
 # ------------------------------------------------------------------------------
 # Create Executable Target
@@ -88,10 +88,14 @@ endif()
 # Core utility libraries
 option(USE_LITTLEFS "Include LittleFS filesystem" ON)
 option(LITTLEFS_USE_LOCAL "Use local LittleFS checkout instead of FetchContent" OFF)
+option(USE_FATFS "Include FatFS filesystem" OFF)
 option(USE_UNITY "Include Unity testing framework" ON)
 option(USE_PRINTF "Include lightweight printf" ON)
 option(USE_MININI "Include minIni configuration parser" OFF)
 option(USE_CMOCK "Include CMock mocking framework" OFF)
+option(USE_CJSON "Include cJSON JSON parser" OFF)
+option(USE_CLI "Include CLI command line interface" OFF)
+option(USE_LOGGING "Include ulog lightweight logging framework" OFF)
 
 # Sensor Libraries (enable based on your hardware)
 option(USE_BMP280 "Include BMP280 pressure/temperature sensor" OFF)
@@ -104,10 +108,12 @@ option(USE_APDS9960 "Include APDS-9960 gesture/proximity sensor" OFF)
 
 # Communication Libraries
 option(USE_CAN "Include CAN bus communication" OFF)
+option(USE_RS_COMM "Include RS-485 serial communication" OFF)
 
 # System Libraries
 option(USE_EEPROM "Include EEPROM emulation" OFF)
 option(USE_RTC "Include RTC timekeeping" OFF)
+option(USE_CRC "Include CRC data integrity library" OFF)
 
 # Display/TFT Libraries (enable based on your display hardware)
 option(USE_ILI9341 "Include ILI9341 TFT display driver" OFF)
@@ -119,7 +125,9 @@ option(USE_XPT2046 "Include XPT2046 resistive touchscreen" OFF)
 option(USE_U8G2 "Include U8g2 universal graphics library" OFF)
 option(USE_STMPE "Include STMPE touchscreen controller" OFF)
 
-# ------------------------------------------------------------------------------
+# Motor Libraries
+option(USE_STEPPER "Include StepperDriver stepper motor library" OFF)
+option(USE_SERVO "Include ServoMotor servo library" OFF)
 # Include External Library Fetch Scripts
 # ------------------------------------------------------------------------------
 # Core utility libraries
@@ -131,6 +139,10 @@ if(USE_LITTLEFS)
         message(STATUS "Config: Using FetchContent to download LittleFS")
         include("cmake/littlefs-fetch.cmake")
     endif()
+endif()
+
+if(USE_FATFS)
+    include("cmake/fatfs-fetch.cmake")
 endif()
 
 if(USE_UNITY)
@@ -147,6 +159,18 @@ endif()
 
 if(USE_CMOCK)
     include("cmake/cmock-fetch.cmake")
+endif()
+
+if(USE_CJSON)
+    include("cmake/cjson-fetch.cmake")
+endif()
+
+if(USE_CLI)
+    include("cmake/cli-fetch.cmake")
+endif()
+
+if(USE_LOGGING)
+    include("cmake/logging-fetch.cmake")
 endif()
 
 # Sensor Libraries
@@ -182,6 +206,9 @@ endif()
 if(USE_CAN)
     include("cmake/can-fetch.cmake")
 endif()
+if(USE_RS_COMM)
+    include("cmake/rs_comm-fetch.cmake")
+endif()
 
 # System Libraries
 if(USE_EEPROM)
@@ -190,6 +217,10 @@ endif()
 
 if(USE_RTC)
     include("cmake/rtc-fetch.cmake")
+endif()
+
+if(USE_CRC)
+    include("cmake/crc-fetch.cmake")
 endif()
 
 # Display/TFT Libraries
@@ -223,6 +254,15 @@ endif()
 
 if(USE_STMPE)
     include("cmake/stmpe-fetch.cmake")
+endif()
+
+# Motor Libraries
+if(USE_STEPPER)
+    include("cmake/stepper-fetch.cmake")
+endif()
+
+if(USE_SERVO)
+    include("cmake/servo-fetch.cmake")
 endif()
 
 # ------------------------------------------------------------------------------
@@ -262,10 +302,14 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
 
     # Core utility libraries
     $<$<BOOL:${USE_LITTLEFS}>:littlefs>
+    $<$<BOOL:${USE_FATFS}>:fatfs>
     $<$<BOOL:${USE_UNITY}>:unity>
     $<$<BOOL:${USE_PRINTF}>:printf>
     $<$<BOOL:${USE_MININI}>:minini>
     $<$<BOOL:${USE_CMOCK}>:cmock>
+    $<$<BOOL:${USE_CJSON}>:cjson>
+    $<$<BOOL:${USE_CLI}>:cli>
+    $<$<BOOL:${USE_LOGGING}>:logging>
 
     # Sensor libraries
     $<$<BOOL:${USE_BMP280}>:BMP280>
@@ -278,10 +322,12 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
 
     # Communication libraries
     $<$<BOOL:${USE_CAN}>:CAN>
+    $<$<BOOL:${USE_RS_COMM}>:rs_comm>
 
     # System libraries
     $<$<BOOL:${USE_EEPROM}>:EEPROM>
     $<$<BOOL:${USE_RTC}>:RTC>
+    $<$<BOOL:${USE_CRC}>:crc>
 
     # Display/TFT libraries
     $<$<BOOL:${USE_ILI9341}>:ILI9341>
@@ -292,6 +338,10 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     $<$<BOOL:${USE_XPT2046}>:XPT2046>
     $<$<BOOL:${USE_U8G2}>:U8G2>
     $<$<BOOL:${USE_STMPE}>:STMPE>
+
+    # Motor libraries
+    $<$<BOOL:${USE_STEPPER}>:stepperdriver>
+    $<$<BOOL:${USE_SERVO}>:servomotor>
 )
 
 # ------------------------------------------------------------------------------

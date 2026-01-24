@@ -40,7 +40,7 @@ if(NOT TARGET printf)
     ${PRINTF_SOURCE_DIR}/printf/printf.c
   )
 
-  target_include_directories(printf PUBLIC
+  target_include_directories(printf INTERFACE
     ${PRINTF_SOURCE_DIR}/printf
   )
 
@@ -50,6 +50,10 @@ if(NOT TARGET printf)
     PRINTF_SUPPORT_EXPONENTIAL_SPECIFIERS=0  # Disable %e, %g (saves space)
     PRINTF_SUPPORT_WRITEBACK_SPECIFIER=0     # Disable %n
     PRINTF_SUPPORT_MSVC_STYLE_INTEGER_SPECIFIERS=0  # Disable MSVC extensions
+    # Expose standard names (printf, vprintf, snprintf, ...) to consumers so
+    # including <printf/printf.h> lets user call the standard names instead of
+    # the library-internal names with trailing underscore.
+    PRINTF_ALIAS_STANDARD_FUNCTION_NAMES=1
   )
 endif()
 

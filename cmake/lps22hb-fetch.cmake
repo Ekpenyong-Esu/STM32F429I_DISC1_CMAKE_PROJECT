@@ -39,7 +39,7 @@ if(NOT TARGET lps22hb)
     ${LPS22HB_SOURCE_DIR}/LPS22HB.cpp
   )
 
-  target_include_directories(lps22hb PUBLIC
+  target_include_directories(lps22hb INTERFACE
     ${LPS22HB_SOURCE_DIR}
   )
 

@@ -44,7 +44,7 @@ if(NOT TARGET ssd1306)
 
   add_library(ssd1306 STATIC ${SSD1306_SOURCES})
 
-  target_include_directories(ssd1306 PUBLIC
+  target_include_directories(ssd1306 INTERFACE
     ${SSD1306_SOURCE_DIR}
   )
 

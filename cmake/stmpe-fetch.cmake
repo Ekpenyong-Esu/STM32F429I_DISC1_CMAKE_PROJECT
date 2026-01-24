@@ -22,7 +22,7 @@ add_library(STMPE STATIC
 )
 
 # Include directories
-target_include_directories(STMPE PUBLIC
+target_include_directories(STMPE INTERFACE
     ${stmpe_SOURCE_DIR}
 )
 

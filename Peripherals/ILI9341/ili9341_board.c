@@ -6,7 +6,7 @@
  */
 
 #include "ili9341.h"
-#include "../SPI/spi.h"
+#include "spi.h"
 #include "stm32f4xx_hal.h"
 
 /* Local constants - match ST BSP */

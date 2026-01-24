@@ -8,6 +8,7 @@
  */
 
 #include "dma.h"
+#include "../LOG/log.h"
 
 /* Static function prototypes */
 static void DMA_TransferCompleteCallback_Wrapper(DMA_HandleTypeDef *hdma);
@@ -97,6 +98,8 @@ HAL_StatusTypeDef DMA_Init(DMA_Handle_t *handle, DMA_Config_t *config) {
         return HAL_ERROR;
     }
 
+    log_debug("DMA: Initializing DMA");
+
     /* Validate configuration parameters */
     if (config->stream == NULL) {
         return HAL_ERROR;
@@ -156,6 +159,9 @@ HAL_StatusTypeDef DMA_Init(DMA_Handle_t *handle, DMA_Config_t *config) {
     HAL_DMA_RegisterCallback(&handle->hdma, HAL_DMA_XFER_ERROR_CB_ID, DMA_TransferErrorCallback_Wrapper);
 
     handle->initialized = true;
+
+    log_debug("DMA: DMA initialized successfully");
+
     return HAL_OK;
 }
 

@@ -41,7 +41,7 @@ if(NOT TARGET minini)
     ${MININI_SOURCE_DIR}/minGlue.c
   )
 
-  target_include_directories(minini PUBLIC
+  target_include_directories(minini INTERFACE
     ${MININI_SOURCE_DIR}
   )
 

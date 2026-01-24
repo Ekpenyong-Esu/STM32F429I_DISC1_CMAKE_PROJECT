@@ -11,6 +11,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "sys.h"
+#include "log.h"
 
 /**
   * @brief  System Initialization Function
@@ -26,11 +27,15 @@
   */
 void SYS_Init(void)
 {
+  log_debug("SYS: Initializing system");
+
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
 
   /* Configure the system clock */
   SystemClock_Config();
+
+  log_debug("SYS: System initialized successfully");
 }
 
 /**

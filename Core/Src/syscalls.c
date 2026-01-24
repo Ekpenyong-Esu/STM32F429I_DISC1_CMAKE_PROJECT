@@ -31,6 +31,7 @@
 #include <sys/times.h>
 
 #include "stm32f4xx_hal.h"
+#include "SEGGER_RTT.h"
 
 /* Variables */
 extern int __io_putchar(int ch) __attribute__((weak));
@@ -89,6 +90,12 @@ __attribute__((weak)) int _write(int file, char *ptr, int len)
     ITM_SendChar(*ptr++);
   }
   return len;
+}
+
+// Implementation of putchar_ required by the printf library
+void putchar_(char c)
+{
+  ITM_SendChar(c);
 }
 
 int _close(int file)

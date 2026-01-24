@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "stm32f4xx_hal.h"
+#include "log.h"
 
 
 
@@ -48,7 +49,9 @@ static void LTDC_SetPixelByIndex(uint8_t *fbBase, uint32_t index, uint32_t color
  * @return HAL_StatusTypeDef: HAL status
  */
 HAL_StatusTypeDef LTDC_Driver_Init(LTDC_Driver_t *driver, LTDC_HandleTypeDef *hltdc_handle) {
+    log_debug("LTDC: Initializing driver");
     if (driver == NULL || hltdc_handle == NULL) {
+        log_error("LTDC: Invalid parameters for init");
         return HAL_ERROR;
     }
 
@@ -93,6 +96,7 @@ HAL_StatusTypeDef LTDC_Driver_Init(LTDC_Driver_t *driver, LTDC_HandleTypeDef *hl
     driver->activeLayer = 0;
     driver->initialized = true;
 
+    log_debug("LTDC: Driver initialized successfully");
     return HAL_OK;
 }
 
@@ -133,7 +137,9 @@ HAL_StatusTypeDef LTDC_Driver_DeInit(LTDC_Driver_t *driver) {
  * @return HAL_StatusTypeDef: HAL status
  */
 HAL_StatusTypeDef LTDC_ConfigureDisplay(LTDC_Driver_t *driver, LTDC_DisplayConfig_t *config) {
+    log_debug("LTDC: Configuring display %dx%d", config->width, config->height);
     if (LTDC_ValidateDriver(driver) != HAL_OK || config == NULL) {
+        log_error("LTDC: Invalid driver or config for display setup");
         driver->errorCode = LTDC_ERROR_INVALID_PARAM;
         return HAL_ERROR;
     }
@@ -175,6 +181,7 @@ HAL_StatusTypeDef LTDC_ConfigureDisplay(LTDC_Driver_t *driver, LTDC_DisplayConfi
     /* Store configuration */
     driver->displayConfig = *config;
 
+    log_debug("LTDC: Display configured successfully");
     return HAL_OK;
 }
 
@@ -186,7 +193,9 @@ HAL_StatusTypeDef LTDC_ConfigureDisplay(LTDC_Driver_t *driver, LTDC_DisplayConfi
  * @return HAL_StatusTypeDef: HAL status
  */
 HAL_StatusTypeDef LTDC_ConfigureLayer(LTDC_Driver_t *driver, uint8_t layer, LTDC_LayerConfig_t *config) {
+    log_debug("LTDC: Configuring layer %d", layer);
     if (LTDC_ValidateDriver(driver) != HAL_OK || LTDC_ValidateLayer(layer) != HAL_OK || config == NULL) {
+        log_error("LTDC: Invalid parameters for layer %d config", layer);
         driver->errorCode = LTDC_ERROR_INVALID_PARAM;
         return HAL_ERROR;
     }
@@ -250,6 +259,7 @@ HAL_StatusTypeDef LTDC_ConfigureLayer(LTDC_Driver_t *driver, uint8_t layer, LTDC
     /* Store configuration */
     driver->layers[layer] = *config;
 
+    log_debug("LTDC: Layer %d configured successfully", layer);
     return HAL_OK;
 }
 
@@ -945,6 +955,7 @@ HAL_StatusTypeDef LTDC_HW_Init(void) {
 
     /* Initialize LTDC */
     if (HAL_LTDC_Init(&hltdc) != HAL_OK) {
+        log_debug("LTDC: LTDC init failed");  // TODO: Set error code (LTDC)
         return HAL_ERROR;
     }
 
@@ -969,10 +980,12 @@ HAL_StatusTypeDef LTDC_HW_Init(void) {
     layerCfg.Backcolor.Red = 0;
 
     if (HAL_LTDC_ConfigLayer(&hltdc, &layerCfg, 0) != HAL_OK) {
+        log_debug("LTDC Layer config error\n");
+
         return HAL_ERROR;
     }
 
-
+    log_debug("LTDC: Driver initialized successfully");
     return HAL_OK;
 }
 

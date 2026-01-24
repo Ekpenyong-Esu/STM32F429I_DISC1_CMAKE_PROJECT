@@ -9,6 +9,7 @@
 #include "uart_interrupt.h"
 #include "uart_blocking.h"
 #include "sys.h"
+#include "log.h"
 
 /** @brief Delay after deinitialization to allow hardware to settle */
 #define UART_DEINIT_DELAY_MS (1000U)
@@ -21,6 +22,8 @@ extern UART_Handle_t uartHandle;
 
 UART_Status_t UART_Init(UART_Handle_t* handle, const UART_Config_t* config)
 {
+    log_debug("UART: Initializing UART");
+
     if (handle == NULL || config == NULL || config->instance == NULL) {
         DEBUG_PRINT("UART handle or config is NULL");
         return UART_ERROR;
@@ -78,6 +81,7 @@ UART_Status_t UART_Init(UART_Handle_t* handle, const UART_Config_t* config)
 
     if (status == UART_OK) {
         handle->isInitialized = true;
+        log_debug("UART: UART initialized successfully");
     }
 
     return status;

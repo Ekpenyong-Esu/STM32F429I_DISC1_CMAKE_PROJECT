@@ -7,6 +7,7 @@
 
 #include "can.h"
 #include <string.h>
+#include "log.h"
 
 /* Private defines */
 #define CAN_TX_TIMEOUT_DEFAULT       100U
@@ -36,6 +37,8 @@ static void CAN_ErrorHandler(void);
  */
 HAL_StatusTypeDef CAN_Init(const CAN_Config *config)
 {
+    log_debug("CAN: Initializing CAN");
+
     HAL_StatusTypeDef status = HAL_ERROR;
 
     if (config == NULL) {
@@ -73,6 +76,8 @@ HAL_StatusTypeDef CAN_Init(const CAN_Config *config)
 
     /* Mark as initialized */
     can_status.initialized = true;
+
+    log_debug("CAN: CAN initialized successfully");
 
     return HAL_OK;
 }

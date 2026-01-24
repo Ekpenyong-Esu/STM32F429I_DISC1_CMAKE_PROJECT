@@ -45,7 +45,7 @@ if(NOT TARGET ili9341)
 
   add_library(ili9341 STATIC ${ILI9341_SOURCES})
 
-  target_include_directories(ili9341 PUBLIC
+  target_include_directories(ili9341 INTERFACE
     ${ILI9341_SOURCE_DIR}
   )
 

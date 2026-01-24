@@ -39,7 +39,7 @@ if(NOT TARGET apds9960)
     ${APDS9960_SOURCE_DIR}/APDS9960.cpp
   )
 
-  target_include_directories(apds9960 PUBLIC
+  target_include_directories(apds9960 INTERFACE
     ${APDS9960_SOURCE_DIR}
   )
 
