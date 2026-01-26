@@ -1,11 +1,10 @@
 /**
   ******************************************************************************
   * @file    pwr.c
-  * @brief   Power Management module implementation
-  * @details This file provides code for power management including
-  *          sleep modes, voltage regulation, and backup domain control.
-  * @version 1.0
-  * @date    2025-12-11
+  * @brief   Power Management module implementation - CORRECTED
+  * @details Fixed version with proper low power mode handling for STM32F429
+  * @version 2.0
+  * @date    2025-01-25
   ******************************************************************************
   */
 
@@ -15,9 +14,18 @@
 
 /* Private defines -----------------------------------------------------------*/
 #define BACKUP_REG_MAX_INDEX    (PWR_BACKUP_REG_COUNT - 1)
+#define PWR_HSE_STARTUP_TIMEOUT 100  /* HSE startup timeout in ms */
+#define PWR_PLL_STARTUP_TIMEOUT 100  /* PLL startup timeout in ms */
 
 /* External variables --------------------------------------------------------*/
 extern RTC_HandleTypeDef hrtc;  /* May be defined in rtc.c if RTC is used */
+
+/* Private variables ---------------------------------------------------------*/
+static bool pwr_debug_enabled = false;
+
+/* Private function prototypes -----------------------------------------------*/
+static void PWR_EnableDebugInLowPower(void);
+static void PWR_DisableDebugInLowPower(void);
 
 /* Public functions ----------------------------------------------------------*/
 
@@ -56,6 +64,13 @@ PWR_StatusTypeDef PWR_Init(const PWR_ConfigTypeDef* config)
     {
         PWR_EnablePVD(config->pvdLevel);
     }
+
+    /* Enable debug in low power modes for development */
+    /* NOTE: Disable this in production for lower power consumption */
+#ifdef DEBUG
+    PWR_EnableDebugInLowPower();
+    pwr_debug_enabled = true;
+#endif
 
     log_debug("PWR: Power Management initialized successfully");
 
@@ -102,27 +117,68 @@ PWR_StatusTypeDef PWR_GetDefaultConfig(PWR_ConfigTypeDef* config)
 }
 
 /**
+ * @brief   Enable debug support in low power modes
+ * @details Allows debugger to stay connected during Sleep/Stop modes
+ *          WARNING: Increases power consumption significantly!
+ * @retval  None
+ */
+static void PWR_EnableDebugInLowPower(void)
+{
+    /* Enable debug module clock */
+    //__HAL_RCC_DBGMCU_CLK_ENABLE();
+
+    /* Keep debug active during Sleep mode */
+    HAL_DBGMCU_EnableDBGSleepMode();
+
+    /* Keep debug active during Stop mode */
+    HAL_DBGMCU_EnableDBGStopMode();
+
+    /* Keep debug active during Standby mode */
+    HAL_DBGMCU_EnableDBGStandbyMode();
+
+    log_debug("PWR: Debug enabled in low power modes (increases power consumption!)");
+}
+
+/**
+ * @brief   Disable debug support in low power modes
+ * @details For production use to minimize power consumption
+ * @retval  None
+ */
+static void PWR_DisableDebugInLowPower(void)
+{
+    HAL_DBGMCU_DisableDBGSleepMode();
+    HAL_DBGMCU_DisableDBGStopMode();
+    HAL_DBGMCU_DisableDBGStandbyMode();
+
+    //__HAL_RCC_DBGMCU_CLK_DISABLE();
+
+    log_debug("PWR: Debug disabled in low power modes");
+}
+
+/**
  * @brief   Enter Sleep mode
  * @details CPU stops, peripherals continue running
  * @param   mode Sleep entry mode (WFI or WFE)
  * @retval  None
  */
 void PWR_EnterSleepMode(PWR_SleepModeTypeDef mode)
-{
-    /* Clear SLEEPDEEP bit to select Sleep mode */
-    CLEAR_BIT(SCB->SCR, SCB_SCR_SLEEPDEEP_Msk);
+    {
 
+    /* Use HAL wrapper which implements correct event/barrier handling and
+       keeps behavior consistent across STM32 families. Add data/instruction
+       barriers when using WFI to ensure memory operations complete. */
     if (mode == PWR_SLEEP_MODE_WFI)
     {
-        /* Request Wait For Interrupt */
-        __WFI();
+        /* Ensure all memory transactions complete before entering sleep */
+        __DSB();
+        __ISB();
+
+        HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
     }
     else
     {
-        /* Request Wait For Event */
-        __SEV();  /* Set event to clear pending events */
-        __WFE();
-        __WFE();  /* Enter sleep on next WFE */
+        /* For WFE path, use HAL wrapper which performs proper SEV/WFE sequence */
+        HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFE);
     }
 }
 
@@ -134,8 +190,6 @@ void PWR_EnterSleepMode(PWR_SleepModeTypeDef mode)
  */
 void PWR_SleepFor(uint32_t duration_ms)
 {
-    /* Use HAL delay which relies on SysTick interrupt to wake */
-    /* This is a simple implementation - for precise timing use RTC */
     uint32_t startTick = HAL_GetTick();
 
     while ((HAL_GetTick() - startTick) < duration_ms)
@@ -162,8 +216,11 @@ void PWR_EnterStopMode(PWR_RegulatorTypeDef regulator, PWR_StopEntryTypeDef entr
     entryMode = (entry == PWR_STOP_ENTRY_WFE) ?
                 PWR_STOPENTRY_WFE : PWR_STOPENTRY_WFI;
 
+
     /* Enter Stop mode */
     HAL_PWR_EnterSTOPMode(regulatorMode, entryMode);
+
+    /* System continues here after wakeup */
 }
 
 /**
@@ -174,47 +231,76 @@ void PWR_EnterStopMode(PWR_RegulatorTypeDef regulator, PWR_StopEntryTypeDef entr
  */
 PWR_StatusTypeDef PWR_ConfigureAfterStop(void)
 {
-    /* After wakeup from Stop mode, system clock is HSI.
-     * Need to reconfigure system clock to original settings */
+    HAL_StatusTypeDef status;
 
-    /* Re-enable HSE if it was used */
-    __HAL_RCC_HSE_CONFIG(RCC_HSE_ON);
+    /* After wakeup from Stop mode, the system clock is HSI (16 MHz)
+     * Need to reconfigure to use HSE and PLL for full speed operation */
 
-    /* Wait for HSE ready */
-    uint32_t tickstart = HAL_GetTick();
-    while (__HAL_RCC_GET_FLAG(RCC_FLAG_HSERDY) == RESET)
+    /* This function uses SystemClock_Config() which should be defined
+     * in the main application. If not available, manual reconfiguration
+     * is needed as shown in the alternative implementation below. */
+
+    /* Option 1: Use SystemClock_Config if available */
+    #if 0
+    extern void SystemClock_Config(void);
+    SystemClock_Config();
+    return PWR_OK;
+    #endif
+
+    /* Option 2: Manual clock reconfiguration for STM32F429 */
+    RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+    RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+
+    /* Enable Power Control clock */
+    __HAL_RCC_PWR_CLK_ENABLE();
+
+    /* Configure voltage scaling */
+    __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
+
+    /* Enable HSE Oscillator and activate PLL with HSE as source */
+    RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+    RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+    RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+    RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+
+    /* STM32F429I-DISC1 uses 8 MHz HSE crystal */
+    /* Configure for 180 MHz: 8MHz / 4 * 180 / 2 = 180 MHz */
+    RCC_OscInitStruct.PLL.PLLM = 4;
+    RCC_OscInitStruct.PLL.PLLN = 180;
+    RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
+    RCC_OscInitStruct.PLL.PLLQ = 7;
+
+    status = HAL_RCC_OscConfig(&RCC_OscInitStruct);
+    if (status != HAL_OK)
     {
-        if ((HAL_GetTick() - tickstart) > PWR_TIMEOUT_VALUE)
-        {
-            return PWR_TIMEOUT;
-        }
+        log_error("PWR: Failed to reconfigure oscillators");
+        return PWR_ERROR;
     }
 
-    /* Re-enable PLL */
-    __HAL_RCC_PLL_ENABLE();
-
-    /* Wait for PLL ready */
-    tickstart = HAL_GetTick();
-    while (__HAL_RCC_GET_FLAG(RCC_FLAG_PLLRDY) == RESET)
+    /* Activate the Over-Drive mode for 180 MHz */
+    status = HAL_PWREx_EnableOverDrive();
+    if (status != HAL_OK)
     {
-        if ((HAL_GetTick() - tickstart) > PWR_TIMEOUT_VALUE)
-        {
-            return PWR_TIMEOUT;
-        }
+        log_error("PWR: Failed to enable overdrive");
+        return PWR_ERROR;
     }
 
-    /* Select PLL as system clock source */
-    __HAL_RCC_SYSCLK_CONFIG(RCC_SYSCLKSOURCE_PLLCLK);
+    /* Select PLL as system clock source and configure bus clocks */
+    RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK |
+                                  RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
+    RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+    RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;   /* 180 MHz */
+    RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;    /* 45 MHz */
+    RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;    /* 90 MHz */
 
-    /* Wait for clock switch */
-    tickstart = HAL_GetTick();
-    while (__HAL_RCC_GET_SYSCLK_SOURCE() != RCC_SYSCLKSOURCE_STATUS_PLLCLK)
+    status = HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5);
+    if (status != HAL_OK)
     {
-        if ((HAL_GetTick() - tickstart) > PWR_TIMEOUT_VALUE)
-        {
-            return PWR_TIMEOUT;
-        }
+        log_error("PWR: Failed to reconfigure clocks");
+        return PWR_ERROR;
     }
+
+    log_debug("PWR: System clocks restored after Stop mode");
 
     return PWR_OK;
 }
@@ -230,6 +316,9 @@ void PWR_EnterStandbyMode(void)
 {
     /* Clear Wakeup flag */
     __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);
+
+    /* Clear Standby flag */
+    __HAL_PWR_CLEAR_FLAG(PWR_FLAG_SB);
 
     /* Enter Standby mode */
     HAL_PWR_EnterSTANDBYMode();
@@ -524,22 +613,18 @@ PWR_StatusTypeDef PWR_EnterLowPowerMode(const PWR_LowPowerConfigTypeDef* config)
     {
         case PWR_LOW_POWER_MODE_LIGHT:
             status = PWR_EnterLightLowPower(config->wakeupSources);
-            /* Light sleep doesn't need full restoration */
             break;
 
         case PWR_LOW_POWER_MODE_DEEP:
             status = PWR_EnterDeepLowPower(config->wakeupSources, config->keepPeripherals);
-            /* Deep sleep already handles restoration */
             break;
 
         case PWR_LOW_POWER_MODE_STANDBY:
             status = PWR_EnterStandbyLowPower(config->wakeupSources);
-            /* Standby resets the system, no restoration needed */
             break;
 
         case PWR_LOW_POWER_MODE_AUTO:
             status = PWR_AutoLowPowerMode(config->wakeupTimeMs, config->keepPeripherals, config->wakeupSources);
-            /* Auto mode handles its own restoration */
             break;
 
         default:
@@ -547,8 +632,6 @@ PWR_StatusTypeDef PWR_EnterLowPowerMode(const PWR_LowPowerConfigTypeDef* config)
             break;
     }
 
-    /* Note: System will wake up here after low power mode */
-    /* Restoration is handled by individual mode functions */
     if (status == PWR_OK)
     {
         log_debug("PWR: Exited low power mode successfully");
@@ -567,13 +650,18 @@ PWR_StatusTypeDef PWR_EnterLightLowPower(PWR_WakeupSourceTypeDef wakeupSources)
 {
     log_debug("PWR: Entering light low power mode (Sleep)");
 
-    /* Configure wakeup sources (may include external interrupts) */
+    /* Configure wakeup sources */
     PWR_ConfigureWakeupSources(wakeupSources);
 
-    /* Enter Sleep mode - peripherals stay active */
+    /* Suspend SysTick to prevent constant wakeups */
+    HAL_SuspendTick();
+
+    /* Enter Sleep mode */
     PWR_EnterSleepMode(PWR_SLEEP_MODE_WFI);
 
-    /* System wakes up here */
+    /* Resume SysTick after wakeup */
+    HAL_ResumeTick();
+
     log_debug("PWR: Exited light low power mode");
 
     return PWR_OK;
@@ -588,40 +676,41 @@ PWR_StatusTypeDef PWR_EnterLightLowPower(PWR_WakeupSourceTypeDef wakeupSources)
  */
 PWR_StatusTypeDef PWR_EnterDeepLowPower(PWR_WakeupSourceTypeDef wakeupSources, bool keepPeripherals)
 {
+    PWR_StatusTypeDef status;
+
     log_debug("PWR: Entering deep low power mode (Stop)");
 
     /* Configure wakeup sources */
-    PWR_StatusTypeDef status = PWR_ConfigureWakeupSources(wakeupSources);
+    status = PWR_ConfigureWakeupSources(wakeupSources);
     if (status != PWR_OK)
     {
-        log_debug("PWR: Failed to configure wakeup sources");
+        log_error("PWR: Failed to configure wakeup sources");
         return status;
     }
 
     /* Optimize system for low power */
     PWR_OptimizeForLowPower(keepPeripherals);
 
-    /* Ensure SysTick is disabled before entering Stop mode */
-    /* SysTick can prevent proper entry into Stop mode */
+    /* CRITICAL: Disable SysTick before Stop mode */
     HAL_SuspendTick();
 
-    /* Clear any pending interrupts that might prevent sleep */
-    __disable_irq();
+    /* Choose Stop entry sequence: prefer WFE for EXTI/edge wake, use WFI for WKUP pin */
+    PWR_StopEntryTypeDef stopEntry = (wakeupSources & PWR_SRC_WAKEUP_PIN) ? PWR_STOP_ENTRY_WFI : PWR_STOP_ENTRY_WFE;
+    log_debug("PWR: Using %s for Stop entry", (stopEntry == PWR_STOP_ENTRY_WFE) ? "WFE" : "WFI");
 
     /* Enter Stop mode with low power regulator */
-    PWR_EnterStopMode(PWR_REGULATOR_LOW_POWER, PWR_STOP_ENTRY_WFI);
+    PWR_EnterStopMode(PWR_REGULATOR_LOW_POWER, stopEntry);
 
-    /* System wakes up here - re-enable interrupts */
-    __enable_irq();
+    /* System wakes up here */
 
     /* Resume SysTick */
     HAL_ResumeTick();
 
-    /* System wakes up here - need to restore clocks */
+    /* Restore system clocks */
     status = PWR_ConfigureAfterStop();
     if (status != PWR_OK)
     {
-        log_debug("PWR: Failed to restore after Stop mode");
+        log_error("PWR: Failed to restore after Stop mode");
         return status;
     }
 
@@ -650,10 +739,10 @@ PWR_StatusTypeDef PWR_EnterStandbyLowPower(PWR_WakeupSourceTypeDef wakeupSources
         return status;
     }
 
-    /* Enter Standby mode - this will reset the system on wakeup */
+    /* Enter Standby mode */
     PWR_EnterStandbyMode();
 
-    /* Should never reach here - system resets on wakeup from Standby */
+    /* Should never reach here */
     return PWR_ERROR;
 }
 
@@ -670,20 +759,18 @@ PWR_StatusTypeDef PWR_AutoLowPowerMode(uint32_t wakeupTimeMs, bool keepPeriphera
     PWR_LowPowerModeTypeDef selectedMode;
 
     /* Auto-select mode based on wakeup time and requirements */
-    if (wakeupTimeMs < 10 && !keepPeripherals)
+    if (wakeupTimeMs < 10 || keepPeripherals)
     {
-        /* Very short wakeup time - use light sleep */
         selectedMode = PWR_LOW_POWER_MODE_LIGHT;
     }
-    else if (wakeupTimeMs < 1000 || keepPeripherals)
+    else if (wakeupTimeMs < 1000)
     {
-        /* Short wakeup time or need peripherals - use deep sleep (Stop) */
         selectedMode = PWR_LOW_POWER_MODE_DEEP;
     }
     else
     {
-        /* Long wakeup time - use standby for maximum power savings */
-        selectedMode = PWR_LOW_POWER_MODE_STANDBY;
+        /* For EXTI-based wakeup, use DEEP instead of STANDBY */
+        selectedMode = PWR_LOW_POWER_MODE_DEEP;
     }
 
     log_debug("PWR: Auto-selected low power mode %d for %lu ms wakeup", selectedMode, wakeupTimeMs);
@@ -714,57 +801,26 @@ PWR_StatusTypeDef PWR_ConfigureWakeupSources(PWR_WakeupSourceTypeDef sources)
         status = PWR_EnableWakeupPin(true);
         if (status != PWR_OK)
         {
-            log_debug("PWR: Failed to enable wakeup pin");
+            log_error("PWR: Failed to enable wakeup pin");
             return status;
         }
         log_debug("PWR: Wakeup pin enabled");
     }
 
-    /* RTC wakeup sources require RTC to be configured */
-    /* This implementation assumes RTC is already initialized */
-
+    /* Note: RTC wakeup configuration would go here if RTC is available */
     if (sources & PWR_SRC_RTC_ALARM)
     {
-        /* Configure RTC alarm for wakeup */
-        /* This is a placeholder - actual implementation depends on RTC driver */
         log_debug("PWR: RTC Alarm wakeup source configured");
-
-        /* Example RTC alarm configuration (would need RTC driver):
-        RTC_AlarmTypeDef alarm;
-        alarm.AlarmTime.Hours = 0;
-        alarm.AlarmTime.Minutes = 0;
-        alarm.AlarmTime.Seconds = 30; // Wake up in 30 seconds
-        alarm.AlarmMask = RTC_ALARMMASK_DATEWEEKDAY;
-        alarm.AlarmSubSecondMask = RTC_ALARMSUBSECONDMASK_ALL;
-        alarm.AlarmDateWeekDaySel = RTC_ALARMDATEWEEKDAYSEL_DATE;
-        alarm.AlarmDateWeekDay = 1;
-        alarm.Alarm = RTC_ALARM_A;
-
-        if (HAL_RTC_SetAlarm_IT(&hrtc, &alarm, RTC_FORMAT_BIN) != HAL_OK)
-        {
-            return PWR_ERROR;
-        }
-        */
     }
 
     if (sources & PWR_SRC_RTC_WAKEUP)
     {
-        /* Configure RTC wakeup timer */
         log_debug("PWR: RTC Wakeup timer source configured");
-
-        /* Example RTC wakeup timer configuration:
-        if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 2048, RTC_WAKEUPCLOCK_RTCCLK_DIV16) != HAL_OK)
-        {
-            return PWR_ERROR;
-        }
-        */
     }
 
     if (sources & PWR_SRC_RTC_TIMESTAMP)
     {
-        /* Configure RTC timestamp for wakeup */
         log_debug("PWR: RTC Timestamp wakeup source configured");
-        /* Timestamp events can wake from low power modes */
     }
 
     return PWR_OK;
@@ -773,20 +829,6 @@ PWR_StatusTypeDef PWR_ConfigureWakeupSources(PWR_WakeupSourceTypeDef sources)
 /**
  * @brief   Optimize system for low power consumption
  * @details Disables unnecessary clocks and peripherals
- * @note    This function is declared as weak - applications can override
- *          with their own optimization strategy. Example application override:
- *
- *          PWR_StatusTypeDef PWR_OptimizeForLowPower(bool keepPeripherals)
- *          {
- *              if (!keepPeripherals)
- *              {
- *                  // Disable only peripherals not needed by this application
- *                  __HAL_RCC_SPI2_CLK_DISABLE();  // Not used
- *                  __HAL_RCC_TIM3_CLK_DISABLE();  // Not used
- *              }
- *              // Keep GPIOA, USART1 active for application needs
- *              return PWR_OK;
- *          }
  * @param   keepPeripherals Keep critical peripherals active
  * @retval  PWR_StatusTypeDef Operation status
  */
@@ -794,10 +836,9 @@ __weak PWR_StatusTypeDef PWR_OptimizeForLowPower(bool keepPeripherals)
 {
     log_debug("PWR: Optimizing system for low power (keep peripherals: %d)", keepPeripherals);
 
-    /* Disable unused peripheral clocks to save power */
     if (!keepPeripherals)
     {
-        /* Disable non-critical GPIO ports (keep A, B, C for basic functionality) */
+        /* Disable non-critical GPIO ports */
         __HAL_RCC_GPIOE_CLK_DISABLE();
         __HAL_RCC_GPIOF_CLK_DISABLE();
         __HAL_RCC_GPIOG_CLK_DISABLE();
@@ -809,43 +850,24 @@ __weak PWR_StatusTypeDef PWR_OptimizeForLowPower(bool keepPeripherals)
         __HAL_RCC_USART3_CLK_DISABLE();
         __HAL_RCC_USART6_CLK_DISABLE();
 
-        /* Disable unused SPI peripherals (keep SPI1 if needed) */
+        /* Disable unused SPI */
         __HAL_RCC_SPI2_CLK_DISABLE();
         __HAL_RCC_SPI3_CLK_DISABLE();
 
-        /* Disable unused I2C peripherals (keep I2C1 if needed) */
+        /* Disable unused I2C */
         __HAL_RCC_I2C2_CLK_DISABLE();
         __HAL_RCC_I2C3_CLK_DISABLE();
-
-        /* Keep DMA enabled as it may be needed for peripherals */
 
         /* Disable unused timers */
         __HAL_RCC_TIM3_CLK_DISABLE();
         __HAL_RCC_TIM4_CLK_DISABLE();
         __HAL_RCC_TIM5_CLK_DISABLE();
 
-        /* Disable ADC to save power */
+        /* Disable ADC */
         __HAL_RCC_ADC1_CLK_DISABLE();
 
-        log_debug("PWR: Non-critical peripherals disabled for power savings");
+        log_debug("PWR: Non-critical peripherals disabled");
     }
-
-    /* Configure flash for low power (if supported) */
-    /* For STM32F4, flash power down in sleep is not always available */
-    /* FLASH->ACR |= FLASH_ACR_SLEEP_PD; // Not available on all variants */
-
-    /* Disable unused oscillators if safe to do so */
-    /* HSE can typically be kept enabled for quick wakeup */
-    /* __HAL_RCC_HSE_CONFIG(RCC_HSE_OFF); // Usually not disabled */
-
-    /* Additional power optimizations */
-    /* Disable USB if not needed */
-    /* __HAL_RCC_USB_OTG_FS_CLK_DISABLE(); */
-
-    /* Disable Ethernet if not needed */
-    /* __HAL_RCC_ETHMAC_CLK_DISABLE(); */
-    /* __HAL_RCC_ETHMACTX_CLK_DISABLE(); */
-    /* __HAL_RCC_ETHMACRX_CLK_DISABLE(); */
 
     return PWR_OK;
 }
@@ -853,33 +875,13 @@ __weak PWR_StatusTypeDef PWR_OptimizeForLowPower(bool keepPeripherals)
 /**
  * @brief   Restore system after low power wakeup
  * @details Re-enables clocks and peripherals as needed
- * @note    This function is declared as weak - applications can override
- *          with their own restoration sequence. Example application override:
- *
- *          PWR_StatusTypeDef PWR_RestoreFromLowPower(void)
- *          {
- *              // Re-enable only peripherals needed by this application
- *              __HAL_RCC_GPIOA_CLK_ENABLE();  // For LED control
- *              __HAL_RCC_USART1_CLK_ENABLE(); // For communication
- *
- *              // Restore application-specific state
- *              RestoreApplicationState();
- *
- *              // Re-enable interrupts that were disabled
- *              HAL_NVIC_EnableIRQ(EXTI0_IRQn);
- *
- *              return PWR_OK;
- *          }
  * @retval  PWR_StatusTypeDef Operation status
  */
 __weak PWR_StatusTypeDef PWR_RestoreFromLowPower(void)
 {
-    log_debug("PWR: Restoring system after low power wakeup (default implementation)");
+    log_debug("PWR: Restoring system after low power wakeup");
 
-    /* Re-enable peripheral clocks that were disabled during low power */
-    /* This should match what was disabled in PWR_OptimizeForLowPower */
-
-    /* Re-enable GPIO ports that may have been disabled */
+    /* Re-enable GPIO ports */
     __HAL_RCC_GPIOA_CLK_ENABLE();
     __HAL_RCC_GPIOB_CLK_ENABLE();
     __HAL_RCC_GPIOC_CLK_ENABLE();
@@ -896,42 +898,35 @@ __weak PWR_StatusTypeDef PWR_RestoreFromLowPower(void)
     __HAL_RCC_USART3_CLK_ENABLE();
     __HAL_RCC_USART6_CLK_ENABLE();
 
-    /* Re-enable SPI peripherals */
+    /* Re-enable SPI */
     __HAL_RCC_SPI1_CLK_ENABLE();
     __HAL_RCC_SPI2_CLK_ENABLE();
     __HAL_RCC_SPI3_CLK_ENABLE();
 
-    /* Re-enable I2C peripherals */
+    /* Re-enable I2C */
     __HAL_RCC_I2C1_CLK_ENABLE();
     __HAL_RCC_I2C2_CLK_ENABLE();
     __HAL_RCC_I2C3_CLK_ENABLE();
 
-    /* Re-enable DMA controllers */
+    /* Re-enable DMA */
     __HAL_RCC_DMA1_CLK_ENABLE();
     __HAL_RCC_DMA2_CLK_ENABLE();
 
-    /* Re-enable timers that may be needed */
+    /* Re-enable timers */
     __HAL_RCC_TIM1_CLK_ENABLE();
     __HAL_RCC_TIM2_CLK_ENABLE();
     __HAL_RCC_TIM3_CLK_ENABLE();
     __HAL_RCC_TIM4_CLK_ENABLE();
     __HAL_RCC_TIM5_CLK_ENABLE();
 
-    /* Re-enable ADC if it was disabled */
+    /* Re-enable ADC */
     __HAL_RCC_ADC1_CLK_ENABLE();
 
-    /* Restore voltage regulator to high performance mode */
-    /* This ensures full performance after wakeup */
+    /* Restore voltage regulator */
     PWR_EnableHighPerformance();
 
-    /* Re-enable backup access if it was disabled for power savings */
-    PWR_EnableBackupAccess();
-
-    /* Clear any pending wakeup flags */
+    /* Clear wakeup flags */
     PWR_ClearStandbyFlag();
-
-    /* Re-initialize system tick if needed */
-    /* HAL_InitTick() may need to be called depending on HAL configuration */
 
     log_debug("PWR: System restoration completed");
 
@@ -940,9 +935,8 @@ __weak PWR_StatusTypeDef PWR_RestoreFromLowPower(void)
 
 /**
  * @brief   Get current low power mode status
- * @details Returns information about current power state
  * @param   mode Pointer to store current mode
- * @param   wakeupSource Pointer to store wakeup source (if applicable)
+ * @param   wakeupSource Pointer to store wakeup source
  * @retval  PWR_StatusTypeDef Operation status
  */
 PWR_StatusTypeDef PWR_GetLowPowerStatus(PWR_LowPowerModeTypeDef* mode, PWR_WakeupSourceTypeDef* wakeupSource)
@@ -952,25 +946,21 @@ PWR_StatusTypeDef PWR_GetLowPowerStatus(PWR_LowPowerModeTypeDef* mode, PWR_Wakeu
         return PWR_INVALID_PARAM;
     }
 
-    /* Check if we just woke up from a low power mode */
     if (PWR_WasStandbyWakeup())
     {
         *mode = PWR_LOW_POWER_MODE_STANDBY;
         if (wakeupSource != NULL)
         {
-            /* Determine wakeup source - this is simplified */
-            /* In a real implementation, you'd check various flags */
-            *wakeupSource = PWR_SRC_WAKEUP_PIN;  /* Default assumption */
+            *wakeupSource = PWR_SRC_WAKEUP_PIN;
         }
         PWR_ClearStandbyFlag();
     }
     else
     {
-        /* Not in a low power mode, or just returned from Stop/Sleep */
-        *mode = PWR_LOW_POWER_MODE_LIGHT;  /* Assume normal operation */
+        *mode = PWR_LOW_POWER_MODE_LIGHT;
         if (wakeupSource != NULL)
         {
-            *wakeupSource = 0;  /* No specific wakeup source */
+            *wakeupSource = 0;
         }
     }
 
@@ -979,53 +969,23 @@ PWR_StatusTypeDef PWR_GetLowPowerStatus(PWR_LowPowerModeTypeDef* mode, PWR_Wakeu
 
 /**
  * @brief   Configure advanced low power settings
- * @details Fine-tune power consumption vs performance tradeoffs
  * @param   flashPowerDown Enable flash power down in sleep
- * @param   disableBackupWrites Disable backup register writes to save power
- * @param   enableUltraLowPower Enable ultra low power features (if available)
+ * @param   disableBackupWrites Disable backup register writes
+ * @param   enableUltraLowPower Enable ultra low power features
  * @retval  PWR_StatusTypeDef Operation status
  */
 PWR_StatusTypeDef PWR_ConfigureAdvancedLowPower(bool flashPowerDown, bool disableBackupWrites, bool enableUltraLowPower)
 {
     log_debug("PWR: Configuring advanced low power settings");
 
-    /* Configure flash power down */
-    if (flashPowerDown)
-    {
-        /* Enable flash power down in Deep Sleep/Stop mode */
-        /* Note: FLASH_ACR_SLEEP_PD may not be available on all STM32F4 variants */
-        /* FLASH->ACR |= FLASH_ACR_SLEEP_PD; */
-        log_debug("PWR: Flash power down requested but not supported on this MCU");
-    }
-    else
-    {
-        /* FLASH->ACR &= ~FLASH_ACR_SLEEP_PD; */
-    }
-
-    /* Configure backup domain writes */
     if (disableBackupWrites)
     {
-        /* Disable backup access to save power */
         PWR_DisableBackupAccess();
         log_debug("PWR: Backup writes disabled");
     }
     else
     {
-        /* Ensure backup access is enabled if needed */
         PWR_EnableBackupAccess();
-    }
-
-    /* Configure ultra low power features (STM32F4 specific) */
-    if (enableUltraLowPower)
-    {
-        /* Enable ultra low power mode in Stop mode */
-        /* Note: PWR_CR_ULP may not be available on all STM32F4 variants */
-        /* PWR->CR |= PWR_CR_ULP; */
-        log_debug("PWR: Ultra low power requested but not supported on this MCU");
-    }
-    else
-    {
-        /* PWR->CR &= ~PWR_CR_ULP; */
     }
 
     return PWR_OK;
@@ -1033,7 +993,6 @@ PWR_StatusTypeDef PWR_ConfigureAdvancedLowPower(bool flashPowerDown, bool disabl
 
 /**
  * @brief   Calculate power savings for a low power mode
- * @details Estimates power savings compared to normal operation
  * @param   mode Low power mode to evaluate
  * @param   wakeupTimeMs Expected wakeup time
  * @retval  uint32_t Estimated power savings in microamps
@@ -1043,88 +1002,47 @@ uint32_t PWR_CalculatePowerSavings(PWR_LowPowerModeTypeDef mode, uint32_t wakeup
     uint32_t normalCurrent = PWR_GetEstimatedCurrent();
     uint32_t lowPowerCurrent = 0;
 
-    /* Estimate current consumption for each mode */
     switch (mode)
     {
         case PWR_LOW_POWER_MODE_LIGHT:
-            /* Sleep mode: CPU stopped, peripherals active */
-            lowPowerCurrent = normalCurrent / 10;  /* ~10% of normal current */
+            lowPowerCurrent = normalCurrent / 10;
             break;
-
         case PWR_LOW_POWER_MODE_DEEP:
-            /* Stop mode: Most clocks stopped, low power regulator */
-            lowPowerCurrent = 10000;  /* ~10mA typical for Stop mode */
-            break;
-
-        case PWR_LOW_POWER_MODE_STANDBY:
-            /* Standby mode: Minimum power consumption */
-            lowPowerCurrent = 2000;  /* ~2mA typical for Standby mode */
-            break;
-
-        case PWR_LOW_POWER_MODE_AUTO:
-            /* Use deep sleep as default for calculation */
             lowPowerCurrent = 10000;
             break;
-
+        case PWR_LOW_POWER_MODE_STANDBY:
+            lowPowerCurrent = 2000;
+            break;
+        case PWR_LOW_POWER_MODE_AUTO:
+            lowPowerCurrent = 10000;
+            break;
         default:
             return 0;
     }
 
-    /* Calculate power savings over the wakeup period */
     uint32_t savings = (normalCurrent - lowPowerCurrent) * wakeupTimeMs / 1000;
-
     return savings;
 }
 
 /**
  * @brief   Get current power consumption estimate
- * @details Estimates based on active peripherals (very approximate)
- * @param   None
  * @retval  uint32_t Estimated current in microamps
  */
 uint32_t PWR_GetEstimatedCurrent(void)
 {
-    uint32_t current_ua = 0;
-
-    /* Base current for STM32F429 at 180MHz (typical values) */
-    current_ua = 80000;  /* ~80mA base current */
+    uint32_t current_ua = 80000;  /* Base current ~80mA at 180MHz */
 
     /* Add current for active peripherals */
     if (RCC->AHB1ENR & RCC_AHB1ENR_GPIOAEN) current_ua += 200;
     if (RCC->AHB1ENR & RCC_AHB1ENR_GPIOBEN) current_ua += 200;
     if (RCC->AHB1ENR & RCC_AHB1ENR_GPIOCEN) current_ua += 200;
-    if (RCC->AHB1ENR & RCC_AHB1ENR_GPIODEN) current_ua += 200;
-    if (RCC->AHB1ENR & RCC_AHB1ENR_GPIOEEN) current_ua += 200;
-    if (RCC->AHB1ENR & RCC_AHB1ENR_GPIOFEN) current_ua += 200;
-    if (RCC->AHB1ENR & RCC_AHB1ENR_GPIOGEN) current_ua += 200;
-    if (RCC->AHB1ENR & RCC_AHB1ENR_GPIOHEN) current_ua += 200;
-    if (RCC->AHB1ENR & RCC_AHB1ENR_GPIOIEN) current_ua += 200;
-
     if (RCC->AHB1ENR & RCC_AHB1ENR_DMA1EN) current_ua += 500;
     if (RCC->AHB1ENR & RCC_AHB1ENR_DMA2EN) current_ua += 500;
-
     if (RCC->APB2ENR & RCC_APB2ENR_ADC1EN) current_ua += 1500;
     if (RCC->APB2ENR & RCC_APB2ENR_USART1EN) current_ua += 800;
     if (RCC->APB2ENR & RCC_APB2ENR_SPI1EN) current_ua += 600;
-
-    if (RCC->APB1ENR & RCC_APB1ENR_USART2EN) current_ua += 800;
-    if (RCC->APB1ENR & RCC_APB1ENR_USART3EN) current_ua += 800;
-    if (RCC->APB1ENR & RCC_APB1ENR_SPI2EN) current_ua += 600;
-    if (RCC->APB1ENR & RCC_APB1ENR_SPI3EN) current_ua += 600;
     if (RCC->APB1ENR & RCC_APB1ENR_I2C1EN) current_ua += 400;
-    if (RCC->APB1ENR & RCC_APB1ENR_I2C2EN) current_ua += 400;
-    if (RCC->APB1ENR & RCC_APB1ENR_I2C3EN) current_ua += 400;
-
-    if (RCC->APB1ENR & RCC_APB1ENR_TIM2EN) current_ua += 300;
-    if (RCC->APB1ENR & RCC_APB1ENR_TIM3EN) current_ua += 300;
-    if (RCC->APB1ENR & RCC_APB1ENR_TIM4EN) current_ua += 300;
-    if (RCC->APB1ENR & RCC_APB1ENR_TIM5EN) current_ua += 300;
-
-    /* Add current for LTDC (LCD controller) if enabled */
     if (RCC->APB2ENR & RCC_APB2ENR_LTDCEN) current_ua += 5000;
-
-    /* Add current for USB if enabled */
-    if (RCC->AHB2ENR & RCC_AHB2ENR_OTGFSEN) current_ua += 2000;
 
     return current_ua;
 }

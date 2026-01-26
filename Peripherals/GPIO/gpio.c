@@ -406,16 +406,3 @@ void EXTI9_5_IRQHandler(void)
     }
 }
 
-/**
- * @brief EXTI lines 10-15 interrupt handler
- */
-// void EXTI15_10_IRQHandler(void)
-// {
-//     for (uint8_t pin = 10; pin <= 15; pin++) {
-//         uint16_t pin_mask = 1 << pin;
-//         if (__HAL_GPIO_EXTI_GET_IT(pin_mask) != RESET) {
-//             __HAL_GPIO_EXTI_CLEAR_IT(pin_mask);
-//             // Add custom handler here based on pin
-//         }
-//     }
-// }

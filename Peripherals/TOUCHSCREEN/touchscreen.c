@@ -20,6 +20,7 @@
 #include <stdlib.h>
 #include "log.h"
 #include "app_low_power.h"  /* For touch activity handling */
+#include "stm32f4xx_hal_gpio.h"
 
 /* Private constants ---------------------------------------------------------*/
 #define TS_DELAY_MS(x)                  HAL_Delay(x)
@@ -458,6 +459,7 @@ TS_StatusTypeDef TS_EnableInterrupt(TS_HandleTypeDef *hts, bool enable)
     }
 
     if (enable) {
+        log_debug("TS: Enabling touchscreen interrupt");
         /* Enable touch detection interrupt */
         TS_WriteRegister(hts, STMPE811_REG_INT_EN, STMPE811_INT_EN_TOUCH_DET);
         TS_WriteRegister(hts, STMPE811_REG_INT_CTRL, STMPE811_INT_CTRL_POL_LOW | STMPE811_INT_CTRL_ENABLE);
@@ -493,9 +495,10 @@ TS_StatusTypeDef TS_ITConfig(TS_HandleTypeDef *hts)
     HAL_GPIO_Init(TS_INT_GPIO_PORT, &GPIO_InitStruct);
 
     /* Enable EXTI interrupt */
-    HAL_NVIC_SetPriority(TS_INT_EXTI_IRQn, 5, 0);
+    HAL_NVIC_SetPriority(TS_INT_EXTI_IRQn, TS_INT_NVIC_PRIORITY, 0x00);
     HAL_NVIC_EnableIRQ(TS_INT_EXTI_IRQn);
 
+    log_debug("TS_ITConfig Initialized");
     return TS_OK;
 }
 
@@ -754,7 +757,7 @@ TS_ConfigTypeDef TS_GetDefaultConfig(void)
         .TouchDetectDelay = STMPE811_TSC_CFG_SETTLE_1MS,
         .PanelDriverSettlingTime = STMPE811_TSC_CFG_SETTLE_1MS,
         .PressureThreshold = TS_PRESSURE_THRESHOLD,
-        .InterruptEnable = false,
+        .InterruptEnable = true,
         .FIFOEnable = true,
         .FIFOThreshold = 1
     };
@@ -791,16 +794,24 @@ static TS_StatusTypeDef TS_CheckDevice(TS_HandleTypeDef *hts)
 {
     uint16_t device_id = 0;
 
+    /* Check that device responds on I2C bus before reading registers */
+    if (I2C_IsDeviceReady(STMPE811_I2C_ADDRESS, 3, 100) != I2C_OK) {
+        log_debug("TS: Device not found on I2C bus");
+        return TS_DEVICE_NOT_FOUND;
+    }
+
     if (TS_ReadRegister16(hts, STMPE811_REG_CHIP_ID, &device_id) != TS_OK) {
+        log_debug("TS: Failed to read device ID");
         return TS_DEVICE_NOT_FOUND;
     }
 
     if (device_id != STMPE811_CHIP_ID) {
+        log_debug("TS: Device ID mismatch");
         return TS_DEVICE_NOT_FOUND;
     }
 
     hts->DeviceID = device_id;
-
+    log_debug("TS: Device found, ID: 0x%04X", device_id);
     return TS_OK;
 }
 
@@ -1016,6 +1027,7 @@ static bool TS_IsValidTouch(uint16_t pressure)
 
 /**
  * @brief External interrupt handler
+
  */
 
  void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)

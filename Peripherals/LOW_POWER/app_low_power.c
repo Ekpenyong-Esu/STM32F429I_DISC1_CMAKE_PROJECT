@@ -1,11 +1,10 @@
 /**
   ******************************************************************************
   * @file    app_low_power.c
-  * @brief   Production-ready low power mode implementation for STM32F429I-DISC1 GUI
-  * @details Comprehensive power management for LVGL touchscreen application
-  *          with proper display, SDRAM, and peripheral control.
-  * @version 2.0
-  * @date    2025-12-11
+  * @brief   CORRECTED Production-ready low power for STM32F429I-DISC1
+  * @details Fixed version with proper EXTI wake-up and peripheral handling
+  * @version 3.0
+  * @date    2025-01-25
   ******************************************************************************
   */
 
@@ -25,35 +24,24 @@
 #include <lv_port_indev.h>
 #include <string.h>
 
-/* Extern declarations for peripheral handles */
-extern SPI_HandleTypeDef hspi5;
-extern I2C_HandleTypeDef hi2c3;
-extern LTDC_HandleTypeDef hltdc;
-
 /* Private defines -----------------------------------------------------------*/
-#define APP_LOW_POWER_TIMEOUT_MS         15000   /* 15 seconds of inactivity for low power */
-#define APP_DISPLAY_DIM_TIMEOUT_MS       5000    /* 5 seconds to dim display */
-#define APP_DISPLAY_OFF_TIMEOUT_MS       10000   /* 10 seconds to turn off display */
-
-/* Production-ready constants for timeouts and defaults */
+#define APP_LOW_POWER_TIMEOUT_MS         15000   /* 15 seconds */
+#define APP_DISPLAY_DIM_TIMEOUT_MS       5000    /* 5 seconds */
+#define APP_DISPLAY_OFF_TIMEOUT_MS       10000   /* 10 seconds */
 #define APP_LOW_POWER_SHORT_MS           120000  /* 2 minutes */
 #define APP_LOW_POWER_MEDIUM_MS          600000  /* 10 minutes */
-#define APP_SDRAM_STABILIZE_MS           10      /* SDRAM stabilization delay */
-
+#define APP_SDRAM_STABILIZE_MS           10
+#define APP_FADE_DIM_MS                  300
+#define APP_FADE_POWER_MS                500
 #define DEFAULT_TEMP_VALUE               25
 #define DEFAULT_HUMIDITY_VALUE           60
 #define STATUS_TEXT_MAX_LEN              64
 
-/* Display power control pins (STM32F429I-DISC1 specific) */
-/* STM32F429I-DISC1 backlight is on PK3 (or PWM on PK3) */
+/* Display power control pins */
 #define LCD_BL_GPIO_Port                 GPIOK
 #define LCD_BL_Pin                       GPIO_PIN_3
 #define LCD_RESET_GPIO_Port              GPIOD
 #define LCD_RESET_Pin                    GPIO_PIN_12
-
-/* SDRAM power control */
-#define SDRAM_POWER_GPIO_Port            GPIOE
-#define SDRAM_POWER_Pin                  GPIO_PIN_1  /* Hypothetical power control pin */
 
 /* Private variables ---------------------------------------------------------*/
 static uint32_t last_activity_time = 0;
@@ -61,11 +49,16 @@ static bool display_is_on = true;
 static bool display_is_dimmed = false;
 static bool touchscreen_is_active = true;
 static bool sdram_is_active = true;
+static volatile bool s_auto_sleep_request = false;
 
 /* GUI state backup */
 static lv_obj_t *current_screen_backup = NULL;
 static int temp_value_backup = DEFAULT_TEMP_VALUE;
 static int humidity_value_backup = DEFAULT_HUMIDITY_VALUE;
+
+/* Dim overlay */
+static lv_obj_t *s_dim_overlay = NULL;
+
 
 /* Private function prototypes -----------------------------------------------*/
 static void APP_DisplayPowerOff(void);
@@ -77,11 +70,26 @@ static void APP_SDRAM_PowerOff(void);
 static void APP_SDRAM_PowerOn(void);
 static void APP_SaveGUIState(void);
 static void APP_RestoreGUIState(void);
-static void APP_ConfigureWakeupPins(void);
+static void APP_FadeToBlack(uint32_t msec, bool power_off_after);
+static void APP_FadeFromBlack(uint32_t msec);
+static void APP_DimAnimExec(void * var, int32_t value);
+static void APP_DimAnimReady_Dim(lv_anim_t * anim);
+static void APP_DimAnimReady_PowerOff(lv_anim_t * anim);
+static void APP_DimAnimReady_Remove(lv_anim_t * anim);
+
+/* Public accessors ----------------------------------------------------------*/
+bool APP_IsAutoSleepRequested(void)
+{
+    return s_auto_sleep_request;
+}
+
+void APP_ClearAutoSleepRequest(void)
+{
+    s_auto_sleep_request = false;
+}
 
 /**
  * @brief   Initialize application low power management
- * @details Sets up activity monitoring and configures wakeup sources
  * @retval  PWR_StatusTypeDef Operation status
  */
 PWR_StatusTypeDef APP_LowPowerInit(void)
@@ -92,10 +100,11 @@ PWR_StatusTypeDef APP_LowPowerInit(void)
     touchscreen_is_active = true;
     sdram_is_active = true;
 
-    /* Configure wakeup pins for low power modes */
-    APP_ConfigureWakeupPins();
+    /* Wakeup pins are delegated to the touchscreen driver (TS_ITConfig during TS_Init).
+     * Ensure TS_Init()/TS_ITConfig is run before entering low power if wake is required. */
+    log_debug("APP: Wakeup pins delegated to touchscreen driver");
 
-    /* Ensure backlight GPIO is configured (PK3 on STM32F429I-DISC1) */
+    /* Ensure backlight GPIO is configured */
     __HAL_RCC_GPIOK_CLK_ENABLE();
     GPIO_InitTypeDef GPIO_InitStruct = {0};
     GPIO_InitStruct.Pin = LCD_BL_Pin;
@@ -104,7 +113,7 @@ PWR_StatusTypeDef APP_LowPowerInit(void)
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(LCD_BL_GPIO_Port, &GPIO_InitStruct);
 
-    /* Make sure backlight is on in normal operation */
+    /* Make sure backlight is on */
     HAL_GPIO_WritePin(LCD_BL_GPIO_Port, LCD_BL_Pin, GPIO_PIN_SET);
 
     log_debug("APP: Low power management initialized for STM32F429I-DISC1");
@@ -112,43 +121,37 @@ PWR_StatusTypeDef APP_LowPowerInit(void)
 }
 
 /**
- * @brief   Update activity timestamp
- * @details Call this function whenever user interacts with the GUI
- * @retval  None
+ * @brief   Update activity timestamp (non-touch events)
  */
 void APP_UpdateActivity(void)
 {
-    /* Generic activity update: only refresh timestamp so that non-touch
-       background activity does not automatically undim the display. */
     last_activity_time = HAL_GetTick();
 }
 
 /**
- * @brief Update activity timestamp triggered by a TOUCH event
- * @details Undims/powers-on the display and touchscreen when a real touch
- *          interaction occurs. This ensures that only touching the screen
- *          will restore brightness from dimmed state.
+ * @brief   Update activity from touch event
+ * @details Restores display if dimmed/off
  */
 void APP_TouchActivity(void)
 {
     last_activity_time = HAL_GetTick();
 
-    log_debug("APP: Touch activity detected - restoring display if needed");
+    log_debug("APP: Touch activity detected");
 
-    /* If the display was dimmed, undim (turn on backlight) */
+    /* Undim if dimmed */
     if (display_is_dimmed)
     {
         APP_DisplayDim(false);
         display_is_dimmed = false;
     }
 
-    /* If fully off, power the display back on */
+    /* Power on if off */
     if (!display_is_on)
     {
         APP_DisplayPowerOn();
     }
 
-    /* Ensure touchscreen interface is active */
+    /* Ensure touchscreen is active */
     if (!touchscreen_is_active)
     {
         APP_TouchscreenPowerOn();
@@ -157,35 +160,40 @@ void APP_TouchActivity(void)
 
 /**
  * @brief   Check if system should enter low power mode
- * @details Monitors activity and decides if low power mode is needed
- * @retval  bool True if low power mode should be entered
+ * @retval  bool True if should enter low power
  */
 bool APP_ShouldEnterLowPower(void)
 {
     uint32_t current_time = HAL_GetTick();
     uint32_t inactive_time = current_time - last_activity_time;
 
-    /* Check for display dim timeout first */
+    /* Check for auto-sleep request from animation */
+    if (s_auto_sleep_request)
+    {
+        return true;
+    }
+
+    /* Dim timeout */
     if (inactive_time >= APP_DISPLAY_DIM_TIMEOUT_MS && !display_is_dimmed && display_is_on)
     {
         APP_DisplayDim(true);
-        return false; /* Don't enter full low power yet, just dim display */
+        return false;
     }
 
-    /* Check for display off timeout - only power off if not already dimmed */
+    /* Display off timeout */
     if (inactive_time >= APP_DISPLAY_OFF_TIMEOUT_MS && display_is_on && !display_is_dimmed)
     {
         APP_DisplayPowerOff();
-        return false; /* Don't enter full low power yet, just turn off display */
+        return false;
     }
 
-    /* Enter low power mode immediately after display is turned off */
+    /* Enter low power after display is off */
     if (!display_is_on)
     {
         return true;
     }
 
-    /* Check for full low power timeout as fallback */
+    /* Fallback timeout */
     if (inactive_time >= APP_LOW_POWER_TIMEOUT_MS)
     {
         return true;
@@ -196,7 +204,6 @@ bool APP_ShouldEnterLowPower(void)
 
 /**
  * @brief   Enter application-optimized low power mode
- * @details Automatically selects best low power mode based on inactivity time
  * @retval  PWR_StatusTypeDef Operation status
  */
 PWR_StatusTypeDef APP_EnterLowPowerMode(void)
@@ -206,151 +213,113 @@ PWR_StatusTypeDef APP_EnterLowPowerMode(void)
     PWR_LowPowerConfigTypeDef config;
     PWR_GetDefaultLowPowerConfig(&config);
 
-    /* Configure based on inactivity duration */
-    if (inactive_time < APP_LOW_POWER_SHORT_MS) /* Less than 2 minutes */
+    /* Select mode based on inactivity */
+    if (inactive_time < APP_LOW_POWER_SHORT_MS)
     {
         config.mode = PWR_LOW_POWER_MODE_LIGHT;
-        config.keepPeripherals = true; /* Keep display peripherals for quick resume */
-        config.wakeupSources = 0; /* Use EXTI interrupts for wake-up, not dedicated pin */
+        config.keepPeripherals = true;
+        config.wakeupSources = 0;  /* EXTI wake-up only */
     }
-    else if (inactive_time < APP_LOW_POWER_MEDIUM_MS) /* Less than 10 minutes */
+    else if (inactive_time < APP_LOW_POWER_MEDIUM_MS)
     {
         config.mode = PWR_LOW_POWER_MODE_DEEP;
-        config.keepPeripherals = false; /* Disable most peripherals */
-        config.wakeupSources = 0; /* Use EXTI interrupts for wake-up, not dedicated pin */
-    }
-    else /* Long inactivity */
-    {
-        config.mode = PWR_LOW_POWER_MODE_STANDBY;
         config.keepPeripherals = false;
-        config.wakeupSources = 0; /* Use EXTI interrupts for wake-up, not dedicated pin */
+        config.wakeupSources = 0;  /* EXTI wake-up only */
+    }
+    else
+    {
+        /* Use DEEP for long sleep (EXTI can wake from Stop mode) */
+        config.mode = PWR_LOW_POWER_MODE_DEEP;
+        config.keepPeripherals = false;
+        config.wakeupSources = 0;
     }
 
-    config.wakeupTimeMs = APP_LOW_POWER_SHORT_MS; /* 2 minute typical wakeup */
+    config.wakeupTimeMs = APP_LOW_POWER_SHORT_MS;
     config.optimizeVoltage = true;
 
-    log_debug("APP: Entering low power mode after %lu ms inactivity (touch wake-up enabled)", inactive_time);
+    log_debug("APP: Entering low power mode after %lu ms inactivity", inactive_time);
 
     return PWR_EnterLowPowerMode(&config);
 }
 
 /**
  * @brief   Application-specific low power optimization
- * @details Optimized for STM32F429I-DISC1 GUI application with LVGL
+ * @details Overrides weak function in pwr.c
  * @param   keepPeripherals Keep critical peripherals active
  * @retval  PWR_StatusTypeDef Operation status
  */
 PWR_StatusTypeDef PWR_OptimizeForLowPower(bool keepPeripherals)
 {
-    log_debug("APP: Optimizing STM32F429I-DISC1 GUI application for low power (keep peripherals: %d)", keepPeripherals);
+    log_debug("APP: Optimizing STM32F429I-DISC1 for low power (keep: %d)", keepPeripherals);
 
     if (!keepPeripherals)
     {
-        /* Properly deinitialize peripherals using MSP deinit functions */
-        /* This ensures clocks are disabled and GPIOs are deconfigured */
+        /* Save GUI state first */
+        APP_SaveGUIState();
 
-        /* Deinitialize SPI5 (ILI9341 display) */
-        HAL_SPI_MspDeInit(&hspi5);
+        /* Power off display and touchscreen but keep INT enabled */
+        APP_DisplayPowerOff();
+        APP_TouchscreenPowerOff();
 
-        /* Deinitialize I2C3 (touchscreen) */
-        HAL_I2C_MspDeInit(&hi2c3);
+        /* Power off SDRAM */
+        APP_SDRAM_PowerOff();
 
-        /* Deinitialize LTDC (display controller) */
-        HAL_LTDC_MspDeInit(&hltdc);
+        /* Deinitialize non-critical peripherals */
+        /* Note: Don't disable I2C3/EXTI as we need touchscreen interrupt */
 
-        /* Deinitialize SDRAM (FMC) */
-        HAL_SDRAM_MspDeInit(NULL);
+        /* Disable non-critical timers */
+        __HAL_RCC_TIM2_CLK_DISABLE();
+        __HAL_RCC_TIM3_CLK_DISABLE();
+        __HAL_RCC_TIM4_CLK_DISABLE();
+        __HAL_RCC_TIM5_CLK_DISABLE();
+
+        /* Disable unused communication interfaces */
+        __HAL_RCC_USART2_CLK_DISABLE();
+        __HAL_RCC_USART3_CLK_DISABLE();
+        __HAL_RCC_USART6_CLK_DISABLE();
+
+        /* Disable unused SPI */
+        __HAL_RCC_SPI2_CLK_DISABLE();
+        __HAL_RCC_SPI3_CLK_DISABLE();
+
+        /* Disable ADC */
+        __HAL_RCC_ADC1_CLK_DISABLE();
+        __HAL_RCC_ADC2_CLK_DISABLE();
+        __HAL_RCC_ADC3_CLK_DISABLE();
 
         /* Disable non-critical GPIO ports */
-        __HAL_RCC_GPIOC_CLK_DISABLE();
         __HAL_RCC_GPIOE_CLK_DISABLE();
         __HAL_RCC_GPIOF_CLK_DISABLE();
         __HAL_RCC_GPIOG_CLK_DISABLE();
         __HAL_RCC_GPIOH_CLK_DISABLE();
         __HAL_RCC_GPIOI_CLK_DISABLE();
 
-        /* Disable unused communication peripherals */
-        /* Keep USART1 for potential logging/debugging */
-        __HAL_RCC_USART2_CLK_DISABLE();
-        __HAL_RCC_USART3_CLK_DISABLE();
-        __HAL_RCC_USART6_CLK_DISABLE();
-
-        /* SPI1, I2C1, LTDC, FMC already deinitialized via MSP */
-
-        /* Disable unused DMA controllers */
-        /* Keep DMA2D for potential graphics acceleration */
-        __HAL_RCC_DMA1_CLK_DISABLE();
-        /* Keep DMA2 for potential use */
-
-        /* Disable unused timers */
-        /* Keep TIM1 for potential GUI animations */
-        __HAL_RCC_TIM2_CLK_DISABLE();
-        __HAL_RCC_TIM3_CLK_DISABLE();
-        __HAL_RCC_TIM4_CLK_DISABLE();
-        __HAL_RCC_TIM5_CLK_DISABLE();
-        __HAL_RCC_TIM6_CLK_DISABLE();
-        __HAL_RCC_TIM7_CLK_DISABLE();
-        __HAL_RCC_TIM8_CLK_DISABLE();
-        __HAL_RCC_TIM9_CLK_DISABLE();
-        __HAL_RCC_TIM10_CLK_DISABLE();
-        __HAL_RCC_TIM11_CLK_DISABLE();
-        __HAL_RCC_TIM12_CLK_DISABLE();
-        __HAL_RCC_TIM13_CLK_DISABLE();
-        __HAL_RCC_TIM14_CLK_DISABLE();
-
-        /* Disable unused ADC (sensors not active in low power) */
-        __HAL_RCC_ADC1_CLK_DISABLE();
-        __HAL_RCC_ADC2_CLK_DISABLE();
-        __HAL_RCC_ADC3_CLK_DISABLE();
-
-        /* Disable other unused peripherals */
-        __HAL_RCC_CAN1_CLK_DISABLE();
-        __HAL_RCC_CAN2_CLK_DISABLE();
-        __HAL_RCC_DAC_CLK_DISABLE();
-        __HAL_RCC_RNG_CLK_DISABLE();
-    }
-
-    /* Save GUI state before entering low power */
-    APP_SaveGUIState();
-
-    /* Turn off display and touchscreen for maximum power savings */
-    APP_DisplayPowerOff();
-    APP_TouchscreenPowerOff();
-
-    /* Optionally power down SDRAM if not keeping peripherals */
-    if (!keepPeripherals)
-    {
-        APP_SDRAM_PowerOff();
+        log_debug("APP: Non-critical peripherals disabled");
     }
 
     return PWR_OK;
 }
 
 /**
- * @brief   Application-specific low power restoration
- * @details Restores STM32F429I-DISC1 GUI application state after low power wakeup
+ * @brief   Application-specific restoration
+ * @details Overrides weak function in pwr.c
  * @retval  PWR_StatusTypeDef Operation status
  */
 PWR_StatusTypeDef PWR_RestoreFromLowPower(void)
 {
-    log_debug("APP: Restoring STM32F429I-DISC1 GUI application from low power mode");
+    log_debug("APP: Restoring STM32F429I-DISC1 from low power");
 
-    /* Restore voltage regulator to high performance mode */
+    /* Restore voltage regulator */
     PWR_EnableHighPerformance();
 
-    /* Re-enable backup access if it was disabled for power savings */
-    PWR_EnableBackupAccess();
-
-    /* Clear any pending wakeup flags */
+    /* Clear wakeup flags */
     PWR_ClearStandbyFlag();
 
-    /* Power on SDRAM first (needed for display framebuffer) */
+    /* Power on SDRAM first */
     APP_SDRAM_PowerOn();
-
-    /* Small delay for SDRAM to stabilize */
     HAL_Delay(APP_SDRAM_STABILIZE_MS);
 
-    /* Re-initialize SDRAM if needed */
+    /* Reinitialize SDRAM */
     FMC_Driver_Handle_t fmcHandle;
     FMC_Driver_SDRAM_Config_t sdramConfig = {
         .bank = FMC_SDRAM_BANK2,
@@ -374,25 +343,25 @@ PWR_StatusTypeDef PWR_RestoreFromLowPower(void)
 
     if (FMC_Driver_SDRAM_Init(&fmcHandle, &sdramConfig) == HAL_OK)
     {
-        log_debug("APP: SDRAM reinitialized successfully");
+        log_debug("APP: SDRAM reinitialized");
     }
     else
     {
-        log_error("APP: SDRAM reinitialization failed");
+        log_error("APP: SDRAM reinit failed");
     }
 
     /* Power on display and touchscreen */
     APP_DisplayPowerOn();
     APP_TouchscreenPowerOn();
 
-    /* Re-initialize display hardware - HAL MSP init will handle clock/GPIO setup */
-    ili9341_Init();  /* Calls ILI9341_MspInit() for SPI/GPIO clocks */
-    LTDC_HW_Init();  /* Calls LTDC_MspInit() for LTDC clocks */
+    /* Reinitialize display hardware */
+    ili9341_Init();
+    LTDC_HW_Init();
 
-    /* Re-initialize I2C for touchscreen - HAL MSP init will handle clock/GPIO setup */
-    I2C_Init();      /* Calls I2C MSP init functions */
+    /* Reinitialize I2C for touchscreen */
+    I2C_Init();
 
-    /* Re-initialize LVGL and display port */
+    /* Reinitialize LVGL */
     lv_init();
     lv_port_disp_init();
     lv_port_indev_init();
@@ -400,60 +369,148 @@ PWR_StatusTypeDef PWR_RestoreFromLowPower(void)
     /* Restore GUI state */
     APP_RestoreGUIState();
 
-    /* Update status to show we're back */
+    /* Update status */
     LVGL_App_UpdateStatus("System Resumed");
 
-    log_debug("APP: STM32F429I-DISC1 GUI application restoration completed");
+    log_debug("APP: Restoration completed");
 
     return PWR_OK;
 }
 
+/* LVGL animation callbacks --------------------------------------------------*/
+
+static void APP_DimAnimExec(void * var, int32_t value)
+{
+    lv_obj_t *overlay = (lv_obj_t *)var;
+    if (overlay)
+    {
+        lv_obj_set_style_bg_opa(overlay, (lv_opa_t)value, 0);
+    }
+}
+
+static void APP_DimAnimReady_Remove(lv_anim_t * anim)
+{
+    lv_obj_t *overlay = (lv_obj_t *)anim->var;
+    if (overlay)
+    {
+        lv_obj_del(overlay);
+        if (s_dim_overlay == overlay) { s_dim_overlay = NULL; }
+    }
+}
+
+static void APP_DimAnimReady_Dim(lv_anim_t * anim)
+{
+    (void)anim;
+
+    /* Turn off backlight */
+    HAL_GPIO_WritePin(LCD_BL_GPIO_Port, LCD_BL_Pin, GPIO_PIN_RESET);
+    display_is_dimmed = true;
+
+    /* Request low-power entry */
+    log_debug("APP: Auto-sleep requested after dim");
+    s_auto_sleep_request = true;
+}
+
+static void APP_DimAnimReady_PowerOff(lv_anim_t * anim)
+{
+    (void)anim;
+
+    /* Ensure backlight off */
+    HAL_GPIO_WritePin(LCD_BL_GPIO_Port, LCD_BL_Pin, GPIO_PIN_RESET);
+
+    /* Put ILI9341 into sleep */
+    ili9341_SleepIn();
+
+    /* Disable LTDC */
+    if (hltdc.Instance != NULL)
+    {
+        __HAL_LTDC_DISABLE(&hltdc);
+    }
+
+    display_is_on = false;
+    display_is_dimmed = false;
+
+    /* Remove overlay */
+    lv_obj_t *overlay = (lv_obj_t *)anim->var;
+    if (overlay)
+    {
+        lv_obj_del(overlay);
+        if (s_dim_overlay == overlay) { s_dim_overlay = NULL; }
+    }
+}
+
 /**
- * @brief   Turn off display power
- * @details Powers down LCD backlight, controller, and LTDC
- * @retval  None
+ * @brief   Fade to black animation
+ * @param   msec Animation duration
+ * @param   power_off_after True to power off display after fade
  */
+static void APP_FadeToBlack(uint32_t msec, bool power_off_after)
+{
+    if (s_dim_overlay) { return; }
+
+    s_dim_overlay = lv_obj_create(lv_scr_act());
+    lv_obj_remove_style_all(s_dim_overlay);
+    lv_obj_set_size(s_dim_overlay, LV_HOR_RES, LV_VER_RES);
+    lv_obj_clear_flag(s_dim_overlay, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_style_bg_color(s_dim_overlay, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(s_dim_overlay, LV_OPA_TRANSP, 0);
+
+    lv_anim_t anim;
+    lv_anim_init(&anim);
+    lv_anim_set_var(&anim, s_dim_overlay);
+    lv_anim_set_exec_cb(&anim, APP_DimAnimExec);
+    lv_anim_set_values(&anim, LV_OPA_TRANSP, LV_OPA_COVER);
+    lv_anim_set_time(&anim, msec ? msec : APP_FADE_POWER_MS);
+    lv_anim_set_ready_cb(&anim, power_off_after ? APP_DimAnimReady_PowerOff : APP_DimAnimReady_Dim);
+    lv_anim_start(&anim);
+}
+
+/**
+ * @brief   Fade from black animation
+ * @param   msec Animation duration
+ */
+static void APP_FadeFromBlack(uint32_t msec)
+{
+    if (!s_dim_overlay) { return; }
+
+    /* Ensure backlight is on */
+    HAL_GPIO_WritePin(LCD_BL_GPIO_Port, LCD_BL_Pin, GPIO_PIN_SET);
+    display_is_dimmed = false;
+
+    lv_anim_t anim;
+    lv_anim_init(&anim);
+    lv_anim_set_var(&anim, s_dim_overlay);
+    lv_anim_set_exec_cb(&anim, APP_DimAnimExec);
+    lv_anim_set_values(&anim, LV_OPA_COVER, LV_OPA_TRANSP);
+    lv_anim_set_time(&anim, msec ? msec : APP_FADE_DIM_MS);
+    lv_anim_set_ready_cb(&anim, APP_DimAnimReady_Remove);
+    lv_anim_start(&anim);
+}
+
+/* Display control functions -------------------------------------------------*/
+
 static void APP_DisplayPowerOff(void)
 {
     if (display_is_on)
     {
         log_debug("APP: Turning display off");
-
-        /* Turn off LCD backlight */
-        HAL_GPIO_WritePin(LCD_BL_GPIO_Port, LCD_BL_Pin, GPIO_PIN_RESET);
-
-        /* Put ILI9341 into sleep mode */
-        ili9341_SleepIn();
-
-        /* Disable LTDC display (use HAL LTDC handle) */
-        if (hltdc.Instance != NULL)
-        {
-            __HAL_LTDC_DISABLE(&hltdc);
-        }
-
-        display_is_on = false;
-        display_is_dimmed = false;
+        APP_FadeToBlack(APP_FADE_POWER_MS, true);
     }
 }
 
-/**
- * @brief   Turn on display power
- * @details Powers up LCD backlight, controller, and LTDC
- * @retval  None
- */
 static void APP_DisplayPowerOn(void)
 {
     if (!display_is_on)
     {
         log_debug("APP: Turning display on");
 
-        /* Turn on LCD backlight */
+        /* Turn on backlight */
         HAL_GPIO_WritePin(LCD_BL_GPIO_Port, LCD_BL_Pin, GPIO_PIN_SET);
 
-        /* Wake up ILI9341 from sleep */
+        /* Wake up ILI9341 */
         ili9341_SleepOut();
 
-        /* Enable LTDC display (use HAL LTDC handle) */
+        /* Enable LTDC */
         if (hltdc.Instance != NULL)
         {
             __HAL_LTDC_ENABLE(&hltdc);
@@ -461,170 +518,100 @@ static void APP_DisplayPowerOn(void)
 
         display_is_on = true;
         display_is_dimmed = false;
+
+        /* Fade from black */
+        APP_FadeFromBlack(APP_FADE_DIM_MS);
     }
 }
 
-/**
- * @brief   Dim or undim the display
- * @details Controls LCD backlight brightness for power saving
- * @param   dim True to dim display, false to restore full brightness
- * @retval  None
- */
 static void APP_DisplayDim(bool dim)
 {
     if (dim && !display_is_dimmed)
     {
         log_debug("APP: Dimming display");
-        /* Reduce backlight brightness - PWM control would go here */
-        /* For now, just turn off (full dim) */
-        HAL_GPIO_WritePin(LCD_BL_GPIO_Port, LCD_BL_Pin, GPIO_PIN_RESET);
-        display_is_dimmed = true;
+        APP_FadeToBlack(APP_FADE_DIM_MS, false);
     }
     else if (!dim && display_is_dimmed)
     {
         log_debug("APP: Restoring display brightness");
-        /* Restore full backlight brightness */
-        HAL_GPIO_WritePin(LCD_BL_GPIO_Port, LCD_BL_Pin, GPIO_PIN_SET);
-        display_is_dimmed = false;
+        APP_FadeFromBlack(APP_FADE_DIM_MS);
     }
 }
 
-/**
- * @brief   Turn off touchscreen power
- * @details Disables touchscreen controller and I2C interface but keeps interrupt enabled for wake-up
- * @retval  None
- */
+/* Touchscreen control -------------------------------------------------------*/
+
 static void APP_TouchscreenPowerOff(void)
 {
     if (touchscreen_is_active)
     {
-        log_debug("APP: Turning touchscreen off (keeping interrupt for wake-up)");
+        log_debug("APP: Turning touchscreen off (keeping INT enabled)");
 
-        /* Keep touchscreen interrupt line ENABLED for wake-up from low power */
-        /* HAL_NVIC_DisableIRQ(TS_INT_EXTI_IRQn); // Commented out to allow wake-up */
+        /* CRITICAL: Keep touchscreen interrupt enabled for wake-up!
+         * Only deinitialize I2C to save power */
 
-        /* Deinitialize I2C MSP for touchscreen to save power */
-        HAL_I2C_MspDeInit(&hi2c3);
-
-        /* Put touchscreen controller into low power mode (if driver supports it) */
-        /* Note: Could call a TS_DeInit or TS_Hibernate if handle was available */
+        /* Deinitialize I2C peripheral but keep EXTI GPIO state (keep INT wake configured) */
+        I2C_DeInit();
 
         touchscreen_is_active = false;
     }
 }
 
-/**
- * @brief   Turn on touchscreen power
- * @details Enables touchscreen controller and I2C interface
- * @retval  None
- */
 static void APP_TouchscreenPowerOn(void)
 {
     if (!touchscreen_is_active)
     {
         log_debug("APP: Turning touchscreen on");
 
-        /* Re-initialize I2C (MSP init will enable clocks/GPIOs) */
+        /* Reinitialize I2C */
         I2C_Init();
 
-        /* Re-enable touchscreen interrupt line */
+        /* Ensure interrupt is enabled */
         HAL_NVIC_EnableIRQ(TS_INT_EXTI_IRQn);
-
-        /* Wake up touchscreen controller (driver-level) if needed */
-        /* Note: TS_Init may be called from lv_port_indev_init on full restore */
 
         touchscreen_is_active = true;
     }
 }
 
-/**
- * @brief   Turn off SDRAM power
- * @details Powers down SDRAM to save power (if hardware supports it)
- * @retval  None
- */
+/* SDRAM control -------------------------------------------------------------*/
+
 static void APP_SDRAM_PowerOff(void)
 {
     if (sdram_is_active)
     {
         log_debug("APP: Turning SDRAM off");
-
-        /* Deinitialize FMC/SDRAM MSP to disable clocks and GPIOs */
+        /* No public SDRAM handle available here; call MSP deinit to disable FMC GPIO/clock safely. */
         HAL_SDRAM_MspDeInit(NULL);
-
         sdram_is_active = false;
     }
 }
 
-/**
- * @brief   Turn on SDRAM power
- * @details Powers up SDRAM and restores functionality
- * @retval  None
- */
 static void APP_SDRAM_PowerOn(void)
 {
     if (!sdram_is_active)
     {
         log_debug("APP: Turning SDRAM on");
-
-        /* Reinitialize FMC/SDRAM MSP to enable clocks and GPIOs */
+        /* No public handle here; call MSP init to enable FMC GPIO/clock prior to SDRAM reinit.
+           The full reinitialization is performed later using FMC driver in restore path. */
         HAL_SDRAM_MspInit(NULL);
-
-        /* Wait for SDRAM to stabilize */
         HAL_Delay(APP_SDRAM_STABILIZE_MS);
-
         sdram_is_active = true;
     }
 }
 
-/**
- * @brief   Configure wakeup pins for low power modes
- * @details Sets up PA15 (touchscreen interrupt) as wakeup source for touch-based wake-up
- * @retval  None
- */
-static void APP_ConfigureWakeupPins(void)
-{
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
+/* Wakeup configuration ------------------------------------------------------*/
 
-    /* Configure PA15 (Touchscreen INT) pin for wake-up */
-    GPIO_InitStruct.Pin = TS_INT_PIN;
-    GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-    GPIO_InitStruct.Pull = GPIO_PULLDOWN;
-    HAL_GPIO_Init(TS_INT_GPIO_PORT, &GPIO_InitStruct);
 
-    /* Enable EXTI interrupt for touchscreen */
-    HAL_NVIC_SetPriority(TS_INT_EXTI_IRQn, 0, 0);
-    HAL_NVIC_EnableIRQ(TS_INT_EXTI_IRQn);
+/* State management ----------------------------------------------------------*/
 
-    log_debug("APP: Touchscreen wakeup pins configured");
-}
-
-/**
- * @brief   Save GUI application state
- * @details Stores current GUI state for restoration after low power
- * @retval  None
- */
 static void APP_SaveGUIState(void)
 {
     log_debug("APP: Saving GUI state");
 
-    /* Save current screen */
     current_screen_backup = lv_screen_active();
-
-    /* Save status text */
-    /* Note: Would need to extract text from status_label */
-
-    /* Save sensor values */
-    temp_value_backup = DEFAULT_TEMP_VALUE;      /* Would read from actual GUI */
-    humidity_value_backup = DEFAULT_HUMIDITY_VALUE;  /* Would read from actual GUI */
-
-    /* Additional state saving would go here */
+    temp_value_backup = DEFAULT_TEMP_VALUE;
+    humidity_value_backup = DEFAULT_HUMIDITY_VALUE;
 }
 
-/**
- * @brief   Restore GUI application state
- * @details Restores GUI state after low power wakeup
- * @retval  None
- */
 static void APP_RestoreGUIState(void)
 {
     log_debug("APP: Restoring GUI state");
@@ -632,13 +619,8 @@ static void APP_RestoreGUIState(void)
     /* Reinitialize LVGL application */
     LVGL_App_Init();
 
-    /* Restore sensor values */
+    /* Restore values */
     LVGL_App_UpdateTemperature(temp_value_backup);
     LVGL_App_UpdateHumidity(humidity_value_backup);
-
-    /* Restore status */
     LVGL_App_UpdateStatus("System Active");
-
-    /* Switch to previously active screen if needed */
-    /* lv_screen_load(current_screen_backup); */
 }

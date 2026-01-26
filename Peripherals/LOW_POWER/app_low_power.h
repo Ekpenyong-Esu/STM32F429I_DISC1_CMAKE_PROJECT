@@ -51,6 +51,10 @@ bool APP_ShouldEnterLowPower(void);
  */
 PWR_StatusTypeDef APP_EnterLowPowerMode(void);
 
+/* Auto-sleep request helpers (set internally by dim complete callback) */
+bool APP_IsAutoSleepRequested(void);
+void APP_ClearAutoSleepRequest(void);
+
 #ifdef __cplusplus
 }
 #endif

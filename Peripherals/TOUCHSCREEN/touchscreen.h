@@ -27,7 +27,7 @@ extern "C" {
 #define TS_MAX_TOUCHES                  1       /* Single touch support */
 
 /* STMPE811 Constants */
-#define STMPE811_I2C_ADDRESS            0x82    /* 7-bit address shifted */
+#define STMPE811_I2C_ADDRESS            0x82    /* 8-bit I2C address (7-bit << 1), matches HAL DevAddress */
 #define STMPE811_CHIP_ID                0x0811
 #define STMPE811_MAX_X                  4095
 #define STMPE811_MAX_Y                  4095
@@ -40,6 +40,7 @@ extern "C" {
 #define TS_INT_PIN                      GPIO_PIN_15   /* PA15 - Touch INT */
 #define TS_INT_GPIO_PORT                GPIOA
 #define TS_INT_EXTI_IRQn                EXTI15_10_IRQn
+#define TS_INT_NVIC_PRIORITY            0x0F             /* EXTI NVIC priority for touch wake */
 
 /* I2C Definitions */
 #define TS_I2C                          I2C3

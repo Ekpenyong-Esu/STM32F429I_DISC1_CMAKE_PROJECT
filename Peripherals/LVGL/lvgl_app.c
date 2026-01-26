@@ -28,6 +28,7 @@
  * That's it! This code just does that concept 4 times (once per screen).
  ******************************************************************************/
 
+#include <src/font/lv_font.h>
 #include <stdint.h>
 #include "lvgl.h"
 #include "lvgl_app.h"
@@ -130,14 +131,14 @@ static void create_home_screen(void)
     status_label = lv_label_create(status_card);
     lv_label_set_text(status_label, "System Ready");
     lv_obj_set_style_text_color(status_label, lv_color_white(), 0);  /* White text for debugging */
-    lv_obj_set_style_text_font(status_label, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(status_label, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_align(status_label, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_pos(status_label, 10, 8);  /* Position at 10,10 within the card */
+    lv_obj_set_pos(status_label, 10, 10);  /* Position at 10,10 within the card */
 
     /* Temperature Arc Gauge - Repositioned lower */
     temp_arc = lv_arc_create(scr_home);
     lv_obj_set_size(temp_arc, 80, 80);
-    lv_obj_align(temp_arc, LV_ALIGN_TOP_LEFT, 20, 120);
+    lv_obj_align(temp_arc, LV_ALIGN_TOP_LEFT, 20, 140);
     lv_arc_set_rotation(temp_arc, 135);
     lv_arc_set_bg_angles(temp_arc, 0, 270);
     lv_arc_set_value(temp_arc, 25);
@@ -147,13 +148,14 @@ static void create_home_screen(void)
     temp_label = lv_label_create(scr_home);
     lv_label_set_text(temp_label, "25°C\nTemp");
     lv_obj_set_style_text_color(temp_label, lv_color_white(), 0);
+    lv_obj_set_style_text_font(temp_label, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_align(temp_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align_to(temp_label, temp_arc, LV_ALIGN_CENTER, 0, 0);
 
     /* Humidity Bar - Repositioned to avoid overlap */
     lv_obj_t *hum_container = lv_obj_create(scr_home);
     lv_obj_set_size(hum_container, 80, 80);
-    lv_obj_align(hum_container, LV_ALIGN_TOP_RIGHT, -20, 120);
+    lv_obj_align(hum_container, LV_ALIGN_TOP_RIGHT, -20, 130);
     lv_obj_set_style_bg_color(hum_container, lv_color_hex(0x16213e), 0);
     lv_obj_set_style_border_width(hum_container, 0, 0);
 
