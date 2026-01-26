@@ -137,12 +137,12 @@ HAL_StatusTypeDef LTDC_Driver_DeInit(LTDC_Driver_t *driver) {
  * @return HAL_StatusTypeDef: HAL status
  */
 HAL_StatusTypeDef LTDC_ConfigureDisplay(LTDC_Driver_t *driver, LTDC_DisplayConfig_t *config) {
-    log_debug("LTDC: Configuring display %dx%d", config->width, config->height);
     if (LTDC_ValidateDriver(driver) != HAL_OK || config == NULL) {
         log_error("LTDC: Invalid driver or config for display setup");
         driver->errorCode = LTDC_ERROR_INVALID_PARAM;
         return HAL_ERROR;
     }
+    log_debug("LTDC: Configuring display %dx%d", config->width, config->height);
 
     /* Configure LTDC timing parameters */
     driver->hltdc->Instance = LTDC;
@@ -959,7 +959,7 @@ HAL_StatusTypeDef LTDC_HW_Init(void) {
         return HAL_ERROR;
     }
 
-    memset((void *)fb_ptr, 0x1234, LTDC_FB_SIZE_RGB565);
+    memset((void *)fb_ptr, (unsigned char)0x1234, LTDC_FB_SIZE_RGB565);
 
     /* Configure Layer 1 */
     LTDC_LayerCfgTypeDef layerCfg = {0};

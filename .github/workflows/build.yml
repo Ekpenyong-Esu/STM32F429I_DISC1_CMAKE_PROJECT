@@ -85,7 +85,7 @@ jobs:
           echo "$ELF_FILE" > elf_file_list.txt
 
       - name: Upload firmware artifact
-        uses: actions/upload-artifact@v4  # Updated to the latest version
+        uses: actions/upload-artifact@v3  # Use v3 for stability
         with:
           name: firmware
           path: elf_file_list.txt

@@ -8,6 +8,7 @@
   */
 
 #include "keypad.h"
+#include "log.h"
 #include <stdio.h>
 
 /* Private variables ---------------------------------------------------------*/
@@ -54,9 +55,9 @@ void Keypad_Example_Init(void)
     };
 
     if (Keypad_Init(&hKeypad, &config)) {
-        printf("Keypad initialized successfully\r\n");
+        log_info("Keypad initialized successfully");
     } else {
-        printf("Keypad initialization failed\r\n");
+        log_error("Keypad initialization failed");
     }
 }
 
@@ -75,7 +76,7 @@ void Keypad_Example_CustomKeyMap(void)
     };
 
     Keypad_SetKeyMap(&hKeypad, phoneKeyMap);
-    printf("Custom keymap set\r\n");
+    log_info("Custom keymap set");
 }
 
 /**
@@ -87,7 +88,7 @@ void Keypad_Example_Poll(void)
     char key = Keypad_GetKey(&hKeypad);
 
     if (key != KEYPAD_NO_KEY) {
-        printf("Key pressed: %c\r\n", key);
+        log_info("Key pressed: %c", key);
     }
 }
 
@@ -97,14 +98,14 @@ void Keypad_Example_Poll(void)
  */
 void Keypad_Example_WaitForSpecificKey(char expectedKey)
 {
-    printf("Press '%c' to continue...\r\n", expectedKey);
+    log_info("Press '%c' to continue...", expectedKey);
 
     char key;
     do {
         key = Keypad_WaitForKey(&hKeypad);
     } while (key != expectedKey);
 
-    printf("Correct key pressed!\r\n");
+    log_info("Correct key pressed!");
 }
 
 /**
@@ -114,7 +115,7 @@ void Keypad_Example_WaitForSpecificKey(char expectedKey)
  */
 void Keypad_Example_EnterPIN(char* buffer, uint8_t pinLength)
 {
-    printf("Enter %d-digit PIN:\r\n", pinLength);
+    log_info("Enter %d-digit PIN:", pinLength);
 
     for (uint8_t i = 0; i < pinLength; i++) {
         char key = Keypad_WaitForKey(&hKeypad);
@@ -122,14 +123,14 @@ void Keypad_Example_EnterPIN(char* buffer, uint8_t pinLength)
         /* Only accept numeric keys */
         if (key >= '0' && key <= '9') {
             buffer[i] = key;
-            printf("*");  /* Mask the digit */
+            log_info("*");  /* Mask the digit */
         } else {
             i--;  /* Invalid key, retry */
         }
     }
 
     buffer[pinLength] = '\0';
-    printf("\r\nPIN entered\r\n");
+    log_info("PIN entered");
 }
 
 /**
@@ -137,41 +138,41 @@ void Keypad_Example_EnterPIN(char* buffer, uint8_t pinLength)
  */
 void Keypad_Example_MenuNavigation(void)
 {
-    printf("Menu Navigation:\r\n");
-    printf("  2 = Up\r\n");
-    printf("  8 = Down\r\n");
-    printf("  4 = Left\r\n");
-    printf("  6 = Right\r\n");
-    printf("  5 = Select\r\n");
-    printf("  * = Back\r\n");
+    log_info("Menu Navigation:");
+    log_info("  2 = Up");
+    log_info("  8 = Down");
+    log_info("  4 = Left");
+    log_info("  6 = Right");
+    log_info("  5 = Select");
+    log_info("  * = Back");
 
     while (1) {
         char key = Keypad_WaitForKey(&hKeypad);
 
         switch (key) {
             case '2':
-                printf("Navigate UP\r\n");
+                log_info("Navigate UP");
                 break;
             case '8':
-                printf("Navigate DOWN\r\n");
+                log_info("Navigate DOWN");
                 break;
             case '4':
-                printf("Navigate LEFT\r\n");
+                log_info("Navigate LEFT");
                 break;
             case '6':
-                printf("Navigate RIGHT\r\n");
+                log_info("Navigate RIGHT");
                 break;
             case '5':
-                printf("SELECTED\r\n");
+                log_info("SELECTED");
                 break;
             case '*':
-                printf("BACK\r\n");
+                log_info("BACK");
                 return;
             case '#':
-                printf("Exiting menu\r\n");
+                log_info("Exiting menu");
                 return;
             default:
-                printf("Key: %c\r\n", key);
+                log_info("Key: %c", key);
                 break;
         }
     }
@@ -186,23 +187,23 @@ void Keypad_Example_Calculator(void)
     int32_t currentNum = 0;
     char operation = '\0';
 
-    printf("Simple Calculator:\r\n");
-    printf("  A = Add, B = Subtract, C = Multiply, D = Divide\r\n");
-    printf("  # = Calculate, * = Clear\r\n");
+    log_info("Simple Calculator:");
+    log_info("  A = Add, B = Subtract, C = Multiply, D = Divide");
+    log_info("  # = Calculate, * = Clear");
 
     while (1) {
         char key = Keypad_WaitForKey(&hKeypad);
 
         if (key >= '0' && key <= '9') {
             currentNum = currentNum * 10 + (key - '0');
-            printf("%c", key);
+            log_info("%c", key);
         } else if (key == 'A' || key == 'B' || key == 'C' || key == 'D') {
             if (operation == '\0') {
                 result = currentNum;
             }
             operation = key;
             currentNum = 0;
-            printf(" %c ", key);
+            log_info(" %c ", key);
         } else if (key == '#') {
             /* Calculate result */
             switch (operation) {
@@ -215,7 +216,7 @@ void Keypad_Example_Calculator(void)
                     }
                     break;
             }
-            printf(" = %ld\r\n", result);
+            log_info(" = %d", result);
             currentNum = 0;
             operation = '\0';
         } else if (key == '*') {
@@ -223,7 +224,7 @@ void Keypad_Example_Calculator(void)
             result = 0;
             currentNum = 0;
             operation = '\0';
-            printf("\r\nCleared\r\n");
+            log_info("Cleared");
         }
     }
 }
@@ -236,9 +237,9 @@ void Keypad_Example_GetPosition(void)
     uint8_t row, col;
 
     if (Keypad_GetKeyPosition(&hKeypad, &row, &col)) {
-        printf("Key at Row: %d, Col: %d\r\n", row, col);
+        log_info("Key at Row: %d, Col: %d", row, col);
     } else {
-        printf("No key pressed\r\n");
+        log_info("No key pressed");
     }
 }
 
@@ -250,17 +251,17 @@ void Keypad_Example_Demo(void)
     /* Initialize with default pins */
     Keypad_Example_Init();
 
-    printf("\r\n=== 4x4 Keypad Demo ===\r\n");
-    printf("Press any key (# to exit):\r\n");
+    log_info("=== 4x4 Keypad Demo ===");
+    log_info("Press any key (# to exit):");
 
     while (1) {
         char key = Keypad_GetKey(&hKeypad);
 
         if (key != KEYPAD_NO_KEY) {
-            printf("Key: %c\r\n", key);
+            log_info("Key: %c", key);
 
             if (key == '#') {
-                printf("Demo ended\r\n");
+                log_info("Demo ended");
                 break;
             }
         }
