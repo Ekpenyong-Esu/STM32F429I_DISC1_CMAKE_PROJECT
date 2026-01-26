@@ -63,7 +63,7 @@ int main(void)
     I2C_Init();
 
     /*-------------------------------------------------------------------------
-     * STEP 4: Initialize External SDRAM (for framebuffer)
+     * STEP 4: Initialize External SDRAM (for framebuffer) and Touchscreen
      *-----------------------------------------------------------------------*/
     FMC_Driver_Handle_t fmcHandle;
     FMC_Driver_SDRAM_Config_t sdramConfig = {
