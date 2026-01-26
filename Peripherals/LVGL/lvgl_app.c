@@ -30,6 +30,7 @@
 
 #include <src/font/lv_font.h>
 #include <stdint.h>
+#include <string.h>
 #include "lvgl.h"
 #include "lvgl_app.h"
 #include "lv_port_disp.h"
@@ -91,6 +92,9 @@ static void nav_event_handler(lv_event_t *e);
 static void theme_event_handler(lv_event_t *e);
 static void calendar_event_handler(lv_event_t *e);
 static void alarm_event_handler(lv_event_t *e);
+static void apply_data_centric_theme(void);
+static void apply_control_panel_theme(void);
+static void apply_low_power_theme(void);
 
 /*-----------------------------------------------------------------------------
  * Navigation Event Handler
@@ -142,13 +146,79 @@ static void alarm_event_handler(lv_event_t *e)
 
         if(alarm_set) {
             // Get current date from calendar
-            lv_calendar_get_today_date(calendar, &alarm_date.year, &alarm_date.month, &alarm_date.day);
+            const lv_calendar_date_t *today = lv_calendar_get_today_date(calendar);
+            alarm_date = *today;
             log_info("Alarm set for %02d/%02d/%04d at %02d:%02d",
                     alarm_date.day, alarm_date.month, alarm_date.year, alarm_hour, alarm_minute);
         } else {
             log_info("Alarm cleared");
         }
     }
+}
+
+/*-----------------------------------------------------------------------------
+ * Theme Event Handler
+ *---------------------------------------------------------------------------*/
+static void theme_event_handler(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t *obj = lv_event_get_target(e);
+
+    if(code == LV_EVENT_VALUE_CHANGED) {
+        char buf[32];
+        lv_dropdown_get_selected_str(obj, buf, sizeof(buf));
+        log_info("Theme changed to: %s", buf);
+
+        if(strstr(buf, "Data/Graph")) {
+            current_theme = THEME_DATA_CENTRIC;
+            apply_data_centric_theme();
+        } else if(strstr(buf, "Control Panel")) {
+            current_theme = THEME_CONTROL_PANEL;
+            apply_control_panel_theme();
+        } else if(strstr(buf, "Minimal")) {
+            current_theme = THEME_LOW_POWER;
+            apply_low_power_theme();
+        }
+    }
+}
+
+/*-----------------------------------------------------------------------------
+ * Theme Application Functions
+ *---------------------------------------------------------------------------*/
+static void apply_data_centric_theme(void)
+{
+    // Bright, data-focused colors
+    lv_obj_set_style_bg_color(scr_home, lv_color_hex(0x1a1a2e), 0);
+    lv_obj_set_style_bg_color(scr_sensors, lv_color_hex(0x0f0f23), 0);
+    lv_obj_set_style_bg_color(scr_settings, lv_color_hex(0x1a1a2e), 0);
+    lv_obj_set_style_bg_color(scr_info, lv_color_hex(0x16213e), 0);
+    lv_obj_set_style_bg_color(scr_calendar, lv_color_hex(0x1a1a2e), 0);
+
+    log_info("Applied Data/Graph-Centric theme");
+}
+
+static void apply_control_panel_theme(void)
+{
+    // Professional blue-gray tones
+    lv_obj_set_style_bg_color(scr_home, lv_color_hex(0x2a2a3a), 0);
+    lv_obj_set_style_bg_color(scr_sensors, lv_color_hex(0x1e1e2e), 0);
+    lv_obj_set_style_bg_color(scr_settings, lv_color_hex(0x2a2a3a), 0);
+    lv_obj_set_style_bg_color(scr_info, lv_color_hex(0x1a1a2a), 0);
+    lv_obj_set_style_bg_color(scr_calendar, lv_color_hex(0x2a2a3a), 0);
+
+    log_info("Applied Control Panel theme");
+}
+
+static void apply_low_power_theme(void)
+{
+    // Dark, minimal colors for low power
+    lv_obj_set_style_bg_color(scr_home, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(scr_sensors, lv_color_hex(0x0a0a0a), 0);
+    lv_obj_set_style_bg_color(scr_settings, lv_color_hex(0x0a0a0a), 0);
+    lv_obj_set_style_bg_color(scr_info, lv_color_hex(0x0a0a0a), 0);
+    lv_obj_set_style_bg_color(scr_calendar, lv_color_hex(0x0a0a0a), 0);
+
+    log_info("Applied Minimal/Low-Power theme");
 }
 
 /*=============================================================================
@@ -253,7 +323,7 @@ static void create_home_screen(void)
     btn_home_calendar = btn_calendar;
 
     lv_obj_t *lbl_calendar = lv_label_create(btn_calendar);
-    lv_label_set_text(lbl_calendar, LV_SYMBOL_CALENDAR " Calendar");
+    lv_label_set_text(lbl_calendar, "📅 Calendar");
     lv_obj_center(lbl_calendar);
 
     lv_obj_t *btn_settings = lv_btn_create(scr_home);
@@ -401,6 +471,19 @@ static void create_settings_screen(void)
     lv_obj_add_state(sw_bt, LV_STATE_CHECKED);
     lv_obj_set_style_bg_color(sw_bt, lv_color_hex(0x3be477), LV_PART_INDICATOR);
 
+    /* Theme Selector */
+    lv_obj_t *theme_label = lv_label_create(scr_settings);
+    lv_label_set_text(theme_label, "UI Theme");
+    lv_obj_set_style_text_color(theme_label, lv_color_white(), 0);
+    lv_obj_align(theme_label, LV_ALIGN_TOP_LEFT, 20, 250);
+
+    lv_obj_t *dd_theme = lv_dropdown_create(scr_settings);
+    lv_dropdown_set_options(dd_theme, "Data/Graph-Centric\nControl Panel\nMinimal/Low-Power");
+    lv_obj_align(dd_theme, LV_ALIGN_TOP_LEFT, 20, 270);
+    lv_obj_set_width(dd_theme, 180);
+    lv_dropdown_set_selected(dd_theme, current_theme);
+    lv_obj_add_event_cb(dd_theme, theme_event_handler, LV_EVENT_VALUE_CHANGED, NULL);
+
     /* Info Button */
     lv_obj_t *btn_info = lv_btn_create(scr_settings);
     lv_obj_set_size(btn_info, 200, 40);
@@ -490,7 +573,7 @@ static void create_calendar_screen(void)
 
     /* Title */
     lv_obj_t *title = lv_label_create(scr_calendar);
-    lv_label_set_text(title, LV_SYMBOL_CALENDAR " Calendar & Alarm");
+    lv_label_set_text(title, "📅 Calendar & Alarm");
     lv_obj_set_style_text_color(title, lv_color_white(), 0);
     lv_obj_set_style_text_font(title, &lv_font_montserrat_16, 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
@@ -528,7 +611,7 @@ static void create_calendar_screen(void)
     alarm_time_label = lv_label_create(alarm_panel);
     lv_label_set_text(alarm_time_label, "08:00");
     lv_obj_set_style_text_color(alarm_time_label, lv_color_hex(0x3be477), 0);
-    lv_obj_set_style_text_font(alarm_time_label, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_font(alarm_time_label, &lv_font_montserrat_16, 0);
     lv_obj_align(alarm_time_label, LV_ALIGN_CENTER, 0, -10);
 
     /* Set alarm button */
@@ -626,6 +709,9 @@ void LVGL_App_Init(void)
 
     /* Step 4: Load home screen as default */
     lv_screen_load(scr_home);
+
+    /* Apply initial theme */
+    apply_data_centric_theme();
 
     /* Force a refresh to ensure the screen is displayed */
     lv_refr_now(NULL);
