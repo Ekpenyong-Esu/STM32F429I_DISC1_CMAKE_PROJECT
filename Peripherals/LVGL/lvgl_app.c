@@ -43,6 +43,16 @@ static lv_obj_t *scr_home;      /* Home dashboard screen */
 static lv_obj_t *scr_sensors;   /* Sensor monitoring screen */
 static lv_obj_t *scr_settings;  /* Settings screen */
 static lv_obj_t *scr_info;      /* System info screen */
+static lv_obj_t *scr_calendar;  /* Calendar screen */
+
+/* UI Themes */
+typedef enum {
+    THEME_DATA_CENTRIC = 0,
+    THEME_CONTROL_PANEL = 1,
+    THEME_LOW_POWER = 2
+} ui_theme_t;
+
+static ui_theme_t current_theme = THEME_DATA_CENTRIC;
 
 /* UI Elements */
 static lv_obj_t *status_label;
@@ -53,6 +63,15 @@ static lv_obj_t *humidity_label; /* Humidity label */
 static lv_obj_t *chart_sensor;   /* Sensor data chart */
 static lv_chart_series_t *chart_series; /* Chart data series */
 
+/* Calendar elements */
+static lv_obj_t *calendar;
+static lv_obj_t *alarm_time_label;
+static lv_obj_t *alarm_set_btn;
+static bool alarm_set = false;
+static lv_calendar_date_t alarm_date;
+static int alarm_hour = 8;
+static int alarm_minute = 0;
+
 /* Navigation button handles (registered after screens created) */
 static lv_obj_t *btn_home_sensors;
 static lv_obj_t *btn_home_settings;
@@ -60,13 +79,18 @@ static lv_obj_t *btn_sensors_back;
 static lv_obj_t *btn_settings_info;
 static lv_obj_t *btn_settings_back;
 static lv_obj_t *btn_info_back;
+static lv_obj_t *btn_home_calendar;
 
 /* Forward declarations */
 static void create_home_screen(void);
 static void create_sensor_screen(void);
 static void create_settings_screen(void);
 static void create_info_screen(void);
+static void create_calendar_screen(void);
 static void nav_event_handler(lv_event_t *e);
+static void theme_event_handler(lv_event_t *e);
+static void calendar_event_handler(lv_event_t *e);
+static void alarm_event_handler(lv_event_t *e);
 
 /*-----------------------------------------------------------------------------
  * Navigation Event Handler
@@ -86,6 +110,44 @@ static void nav_event_handler(lv_event_t *e)
                     0,
                     false);
 
+    }
+}
+
+/*-----------------------------------------------------------------------------
+ * Calendar Event Handler
+ *---------------------------------------------------------------------------*/
+static void calendar_event_handler(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t *obj = lv_event_get_target(e);
+
+    if(code == LV_EVENT_VALUE_CHANGED) {
+        lv_calendar_date_t date;
+        lv_calendar_get_pressed_date(obj, &date);
+        log_info("Calendar: Selected date %02d/%02d/%04d", date.day, date.month, date.year);
+    }
+}
+
+/*-----------------------------------------------------------------------------
+ * Alarm Event Handler
+ *---------------------------------------------------------------------------*/
+static void alarm_event_handler(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+
+    if(code == LV_EVENT_CLICKED) {
+        alarm_set = !alarm_set;
+        lv_obj_t *btn_label = lv_obj_get_child(alarm_set_btn, 0);
+        lv_label_set_text(btn_label, alarm_set ? "Clear" : "Set");
+
+        if(alarm_set) {
+            // Get current date from calendar
+            lv_calendar_get_today_date(calendar, &alarm_date.year, &alarm_date.month, &alarm_date.day);
+            log_info("Alarm set for %02d/%02d/%04d at %02d:%02d",
+                    alarm_date.day, alarm_date.month, alarm_date.year, alarm_hour, alarm_minute);
+        } else {
+            log_info("Alarm cleared");
+        }
     }
 }
 
@@ -173,7 +235,7 @@ static void create_home_screen(void)
 
     /* Navigation Buttons - Repositioned lower */
     lv_obj_t *btn_sensors = lv_btn_create(scr_home);
-    lv_obj_set_size(btn_sensors, 100, 40);
+    lv_obj_set_size(btn_sensors, 80, 40);
     lv_obj_align(btn_sensors, LV_ALIGN_BOTTOM_LEFT, 10, -10);
     lv_obj_set_style_bg_color(btn_sensors, lv_color_hex(0x3be477), 0);
     /* Register callback after all screens are created */
@@ -183,8 +245,19 @@ static void create_home_screen(void)
     lv_label_set_text(lbl_sensors, LV_SYMBOL_LIST " Sensors");
     lv_obj_center(lbl_sensors);
 
+    lv_obj_t *btn_calendar = lv_btn_create(scr_home);
+    lv_obj_set_size(btn_calendar, 80, 40);
+    lv_obj_align(btn_calendar, LV_ALIGN_BOTTOM_MID, 0, -10);
+    lv_obj_set_style_bg_color(btn_calendar, lv_color_hex(0xffa500), 0);
+    /* Register callback after all screens are created */
+    btn_home_calendar = btn_calendar;
+
+    lv_obj_t *lbl_calendar = lv_label_create(btn_calendar);
+    lv_label_set_text(lbl_calendar, LV_SYMBOL_CALENDAR " Calendar");
+    lv_obj_center(lbl_calendar);
+
     lv_obj_t *btn_settings = lv_btn_create(scr_home);
-    lv_obj_set_size(btn_settings, 100, 40);
+    lv_obj_set_size(btn_settings, 80, 40);
     lv_obj_align(btn_settings, LV_ALIGN_BOTTOM_RIGHT, -10, -10);
     lv_obj_set_style_bg_color(btn_settings, lv_color_hex(0xf7b731), 0);
     /* Register callback after all screens are created */
@@ -407,6 +480,92 @@ static void create_info_screen(void)
     lv_obj_center(lbl_back);
 }
 
+/*-----------------------------------------------------------------------------
+ * Create Calendar Screen with Alarm
+ *---------------------------------------------------------------------------*/
+static void create_calendar_screen(void)
+{
+    scr_calendar = lv_obj_create(NULL);
+    lv_obj_set_style_bg_color(scr_calendar, lv_color_hex(0x1a1a2e), 0);
+
+    /* Title */
+    lv_obj_t *title = lv_label_create(scr_calendar);
+    lv_label_set_text(title, LV_SYMBOL_CALENDAR " Calendar & Alarm");
+    lv_obj_set_style_text_color(title, lv_color_white(), 0);
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_16, 0);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
+
+    /* Calendar widget */
+    calendar = lv_calendar_create(scr_calendar);
+    lv_obj_set_size(calendar, 200, 180);
+    lv_obj_align(calendar, LV_ALIGN_TOP_LEFT, 10, 50);
+    lv_obj_set_style_bg_color(calendar, lv_color_hex(0x16213e), 0);
+    lv_obj_set_style_border_color(calendar, lv_color_hex(0x0f4c75), 0);
+    lv_obj_set_style_border_width(calendar, 1, 0);
+
+    /* Set today's date */
+    lv_calendar_date_t today;
+    today.year = 2024;
+    today.month = 12;
+    today.day = 25;
+    lv_calendar_set_today_date(calendar, today.year, today.month, today.day);
+    lv_calendar_set_showed_date(calendar, today.year, today.month);
+
+    /* Alarm settings panel */
+    lv_obj_t *alarm_panel = lv_obj_create(scr_calendar);
+    lv_obj_set_size(alarm_panel, 100, 180);
+    lv_obj_align(alarm_panel, LV_ALIGN_TOP_RIGHT, -10, 50);
+    lv_obj_set_style_bg_color(alarm_panel, lv_color_hex(0x16213e), 0);
+    lv_obj_set_style_border_color(alarm_panel, lv_color_hex(0x0f4c75), 0);
+    lv_obj_set_style_border_width(alarm_panel, 1, 0);
+
+    lv_obj_t *alarm_title = lv_label_create(alarm_panel);
+    lv_label_set_text(alarm_title, "Alarm");
+    lv_obj_set_style_text_color(alarm_title, lv_color_white(), 0);
+    lv_obj_align(alarm_title, LV_ALIGN_TOP_MID, 0, 5);
+
+    /* Time display */
+    alarm_time_label = lv_label_create(alarm_panel);
+    lv_label_set_text(alarm_time_label, "08:00");
+    lv_obj_set_style_text_color(alarm_time_label, lv_color_hex(0x3be477), 0);
+    lv_obj_set_style_text_font(alarm_time_label, &lv_font_montserrat_20, 0);
+    lv_obj_align(alarm_time_label, LV_ALIGN_CENTER, 0, -10);
+
+    /* Set alarm button */
+    alarm_set_btn = lv_btn_create(alarm_panel);
+    lv_obj_set_size(alarm_set_btn, 80, 30);
+    lv_obj_align(alarm_set_btn, LV_ALIGN_BOTTOM_MID, 0, -5);
+    lv_obj_add_event_cb(alarm_set_btn, alarm_event_handler, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *btn_label = lv_label_create(alarm_set_btn);
+    lv_label_set_text(btn_label, alarm_set ? "Clear" : "Set");
+    lv_obj_center(btn_label);
+
+    /* Time adjustment buttons */
+    lv_obj_t *btn_up = lv_btn_create(alarm_panel);
+    lv_obj_set_size(btn_up, 30, 25);
+    lv_obj_align(btn_up, LV_ALIGN_TOP_LEFT, 5, 30);
+    lv_obj_t *up_label = lv_label_create(btn_up);
+    lv_label_set_text(up_label, LV_SYMBOL_UP);
+
+    lv_obj_t *btn_down = lv_btn_create(alarm_panel);
+    lv_obj_set_size(btn_down, 30, 25);
+    lv_obj_align(btn_down, LV_ALIGN_TOP_RIGHT, -5, 30);
+    lv_obj_t *down_label = lv_label_create(btn_down);
+    lv_label_set_text(down_label, LV_SYMBOL_DOWN);
+
+    /* Back Button */
+    lv_obj_t *btn_back = lv_btn_create(scr_calendar);
+    lv_obj_set_size(btn_back, 60, 35);
+    lv_obj_align(btn_back, LV_ALIGN_TOP_LEFT, 5, 5);
+    lv_obj_set_style_bg_color(btn_back, lv_color_hex(0x5f6368), 0);
+    lv_obj_add_event_cb(btn_back, nav_event_handler, LV_EVENT_CLICKED, scr_home);
+
+    lv_obj_t *lbl_back = lv_label_create(btn_back);
+    lv_label_set_text(lbl_back, LV_SYMBOL_LEFT " Back");
+    lv_obj_center(lbl_back);
+}
+
 /*=============================================================================
  * PUBLIC API FUNCTIONS (Called from main.c)
  *===========================================================================*/
@@ -439,11 +598,15 @@ void LVGL_App_Init(void)
     create_sensor_screen();
     create_settings_screen();
     create_info_screen();
+    create_calendar_screen();
     create_home_screen();
 
     /* Register navigation callbacks now that all screen objects exist */
     if (btn_home_sensors) {
         lv_obj_add_event_cb(btn_home_sensors, nav_event_handler, LV_EVENT_CLICKED, scr_sensors);
+    }
+    if (btn_home_calendar) {
+        lv_obj_add_event_cb(btn_home_calendar, nav_event_handler, LV_EVENT_CLICKED, scr_calendar);
     }
     if (btn_home_settings) {
         lv_obj_add_event_cb(btn_home_settings, nav_event_handler, LV_EVENT_CLICKED, scr_settings);
