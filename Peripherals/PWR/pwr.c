@@ -13,19 +13,15 @@
 #include "log.h"
 
 /* Private defines -----------------------------------------------------------*/
-#define BACKUP_REG_MAX_INDEX    (PWR_BACKUP_REG_COUNT - 1)
-#define PWR_HSE_STARTUP_TIMEOUT 100  /* HSE startup timeout in ms */
-#define PWR_PLL_STARTUP_TIMEOUT 100  /* PLL startup timeout in ms */
 
 /* External variables --------------------------------------------------------*/
 extern RTC_HandleTypeDef hrtc;  /* May be defined in rtc.c if RTC is used */
 
 /* Private variables ---------------------------------------------------------*/
-static bool pwr_debug_enabled = false;
+/* No module-level private variables required */
 
 /* Private function prototypes -----------------------------------------------*/
-static void PWR_EnableDebugInLowPower(void);
-static void PWR_DisableDebugInLowPower(void);
+/* (Debug helper removed - keep interface minimal) */
 
 /* Public functions ----------------------------------------------------------*/
 
@@ -65,12 +61,6 @@ PWR_StatusTypeDef PWR_Init(const PWR_ConfigTypeDef* config)
         PWR_EnablePVD(config->pvdLevel);
     }
 
-    /* Enable debug in low power modes for development */
-    /* NOTE: Disable this in production for lower power consumption */
-#ifdef DEBUG
-    PWR_EnableDebugInLowPower();
-    pwr_debug_enabled = true;
-#endif
 
     log_debug("PWR: Power Management initialized successfully");
 
@@ -116,44 +106,7 @@ PWR_StatusTypeDef PWR_GetDefaultConfig(PWR_ConfigTypeDef* config)
     return PWR_OK;
 }
 
-/**
- * @brief   Enable debug support in low power modes
- * @details Allows debugger to stay connected during Sleep/Stop modes
- *          WARNING: Increases power consumption significantly!
- * @retval  None
- */
-static void PWR_EnableDebugInLowPower(void)
-{
-    /* Enable debug module clock */
-    //__HAL_RCC_DBGMCU_CLK_ENABLE();
-
-    /* Keep debug active during Sleep mode */
-    HAL_DBGMCU_EnableDBGSleepMode();
-
-    /* Keep debug active during Stop mode */
-    HAL_DBGMCU_EnableDBGStopMode();
-
-    /* Keep debug active during Standby mode */
-    HAL_DBGMCU_EnableDBGStandbyMode();
-
-    log_debug("PWR: Debug enabled in low power modes (increases power consumption!)");
-}
-
-/**
- * @brief   Disable debug support in low power modes
- * @details For production use to minimize power consumption
- * @retval  None
- */
-static void PWR_DisableDebugInLowPower(void)
-{
-    HAL_DBGMCU_DisableDBGSleepMode();
-    HAL_DBGMCU_DisableDBGStopMode();
-    HAL_DBGMCU_DisableDBGStandbyMode();
-
-    //__HAL_RCC_DBGMCU_CLK_DISABLE();
-
-    log_debug("PWR: Debug disabled in low power modes");
-}
+/* Debug-in-low-power helper removed to avoid unused code and reduce surface area. */
 
 /**
  * @brief   Enter Sleep mode
@@ -399,6 +352,24 @@ PWR_StatusTypeDef PWR_DisablePVD(void)
 }
 
 /**
+ * @brief   Enable PVD interrupt (EXTI line 16)
+ * @details Configures NVIC and enables the PVD interrupt. Keeps implementation minimal
+ *          to avoid over-engineering while providing the feature declared in the header.
+ * @retval  PWR_StatusTypeDef Operation status
+ */
+PWR_StatusTypeDef PWR_EnablePVDInterrupt(void)
+{
+    /* Enable PVD and NVIC line - EXTI line 16/PVD_IRQn is used for PVD interrupts on STM32F4 */
+    HAL_PWR_EnablePVD();
+    HAL_NVIC_SetPriority(PVD_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(PVD_IRQn);
+
+    log_debug("PWR: PVD interrupt enabled");
+
+    return PWR_OK;
+}
+
+/**
  * @brief   Get PVD output status
  * @details Returns whether VDD is below threshold
  * @param   None
@@ -407,21 +378,6 @@ PWR_StatusTypeDef PWR_DisablePVD(void)
 bool PWR_GetPVDStatus(void)
 {
     return __HAL_PWR_GET_FLAG(PWR_FLAG_PVDO) != RESET;
-}
-
-/**
- * @brief   Enable PVD interrupt
- * @details Requires EXTI line 16 and PVD_IRQHandler
- * @param   None
- * @retval  PWR_StatusTypeDef Operation status
- */
-PWR_StatusTypeDef PWR_EnablePVDInterrupt(void)
-{
-    /* Enable EXTI line 16 (connected to PVD output) */
-    HAL_NVIC_SetPriority(PVD_IRQn, 0, 0);
-    HAL_NVIC_EnableIRQ(PVD_IRQn);
-
-    return PWR_OK;
 }
 
 /**
@@ -444,48 +400,6 @@ PWR_StatusTypeDef PWR_EnableBackupAccess(void)
 PWR_StatusTypeDef PWR_DisableBackupAccess(void)
 {
     HAL_PWR_DisableBkUpAccess();
-    return PWR_OK;
-}
-
-/**
- * @brief   Write to backup register
- * @details Data retained during Standby and VBAT modes
- * @param   regIndex Register index (0-19)
- * @param   data 32-bit data to store
- * @retval  PWR_StatusTypeDef Operation status
- */
-PWR_StatusTypeDef PWR_WriteBackupRegister(uint32_t regIndex, uint32_t data)
-{
-    if (regIndex > BACKUP_REG_MAX_INDEX)
-    {
-        return PWR_INVALID_PARAM;
-    }
-
-    /* Enable backup access */
-    HAL_PWR_EnableBkUpAccess();
-
-    /* Write to backup register using RTC */
-    HAL_RTCEx_BKUPWrite(&hrtc, regIndex, data);
-
-    return PWR_OK;
-}
-
-/**
- * @brief   Read from backup register
- * @param   regIndex Register index (0-19)
- * @param   data Pointer to store read data
- * @retval  PWR_StatusTypeDef Operation status
- */
-PWR_StatusTypeDef PWR_ReadBackupRegister(uint32_t regIndex, uint32_t* data)
-{
-    if (regIndex > BACKUP_REG_MAX_INDEX || data == NULL)
-    {
-        return PWR_INVALID_PARAM;
-    }
-
-    /* Read from backup register using RTC */
-    *data = HAL_RTCEx_BKUPRead(&hrtc, regIndex);
-
     return PWR_OK;
 }
 
@@ -528,30 +442,6 @@ PWR_StatusTypeDef PWR_EnableLowPowerMode(void)
     __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE3);
 
     return PWR_OK;
-}
-
-/**
- * @brief   Get status string for error code
- * @param   status PWR status code
- * @retval  const char* Status description
- */
-const char* PWR_GetStatusString(PWR_StatusTypeDef status)
-{
-    switch (status)
-    {
-        case PWR_OK:
-            return "PWR_OK";
-        case PWR_ERROR:
-            return "PWR_ERROR";
-        case PWR_INVALID_PARAM:
-            return "PWR_INVALID_PARAM";
-        case PWR_TIMEOUT:
-            return "PWR_TIMEOUT";
-        case PWR_NOT_READY:
-            return "PWR_NOT_READY";
-        default:
-            return "UNKNOWN_STATUS";
-    }
 }
 
 /**
@@ -835,40 +725,6 @@ PWR_StatusTypeDef PWR_ConfigureWakeupSources(PWR_WakeupSourceTypeDef sources)
 __weak PWR_StatusTypeDef PWR_OptimizeForLowPower(bool keepPeripherals)
 {
     log_debug("PWR: Optimizing system for low power (keep peripherals: %d)", keepPeripherals);
-
-    if (!keepPeripherals)
-    {
-        /* Disable non-critical GPIO ports */
-        __HAL_RCC_GPIOE_CLK_DISABLE();
-        __HAL_RCC_GPIOF_CLK_DISABLE();
-        __HAL_RCC_GPIOG_CLK_DISABLE();
-        __HAL_RCC_GPIOH_CLK_DISABLE();
-        __HAL_RCC_GPIOI_CLK_DISABLE();
-
-        /* Disable unused communication peripherals */
-        __HAL_RCC_USART2_CLK_DISABLE();
-        __HAL_RCC_USART3_CLK_DISABLE();
-        __HAL_RCC_USART6_CLK_DISABLE();
-
-        /* Disable unused SPI */
-        __HAL_RCC_SPI2_CLK_DISABLE();
-        __HAL_RCC_SPI3_CLK_DISABLE();
-
-        /* Disable unused I2C */
-        __HAL_RCC_I2C2_CLK_DISABLE();
-        __HAL_RCC_I2C3_CLK_DISABLE();
-
-        /* Disable unused timers */
-        __HAL_RCC_TIM3_CLK_DISABLE();
-        __HAL_RCC_TIM4_CLK_DISABLE();
-        __HAL_RCC_TIM5_CLK_DISABLE();
-
-        /* Disable ADC */
-        __HAL_RCC_ADC1_CLK_DISABLE();
-
-        log_debug("PWR: Non-critical peripherals disabled");
-    }
-
     return PWR_OK;
 }
 
@@ -880,55 +736,6 @@ __weak PWR_StatusTypeDef PWR_OptimizeForLowPower(bool keepPeripherals)
 __weak PWR_StatusTypeDef PWR_RestoreFromLowPower(void)
 {
     log_debug("PWR: Restoring system after low power wakeup");
-
-    /* Re-enable GPIO ports */
-    __HAL_RCC_GPIOA_CLK_ENABLE();
-    __HAL_RCC_GPIOB_CLK_ENABLE();
-    __HAL_RCC_GPIOC_CLK_ENABLE();
-    __HAL_RCC_GPIOD_CLK_ENABLE();
-    __HAL_RCC_GPIOE_CLK_ENABLE();
-    __HAL_RCC_GPIOF_CLK_ENABLE();
-    __HAL_RCC_GPIOG_CLK_ENABLE();
-    __HAL_RCC_GPIOH_CLK_ENABLE();
-    __HAL_RCC_GPIOI_CLK_ENABLE();
-
-    /* Re-enable communication peripherals */
-    __HAL_RCC_USART1_CLK_ENABLE();
-    __HAL_RCC_USART2_CLK_ENABLE();
-    __HAL_RCC_USART3_CLK_ENABLE();
-    __HAL_RCC_USART6_CLK_ENABLE();
-
-    /* Re-enable SPI */
-    __HAL_RCC_SPI1_CLK_ENABLE();
-    __HAL_RCC_SPI2_CLK_ENABLE();
-    __HAL_RCC_SPI3_CLK_ENABLE();
-
-    /* Re-enable I2C */
-    __HAL_RCC_I2C1_CLK_ENABLE();
-    __HAL_RCC_I2C2_CLK_ENABLE();
-    __HAL_RCC_I2C3_CLK_ENABLE();
-
-    /* Re-enable DMA */
-    __HAL_RCC_DMA1_CLK_ENABLE();
-    __HAL_RCC_DMA2_CLK_ENABLE();
-
-    /* Re-enable timers */
-    __HAL_RCC_TIM1_CLK_ENABLE();
-    __HAL_RCC_TIM2_CLK_ENABLE();
-    __HAL_RCC_TIM3_CLK_ENABLE();
-    __HAL_RCC_TIM4_CLK_ENABLE();
-    __HAL_RCC_TIM5_CLK_ENABLE();
-
-    /* Re-enable ADC */
-    __HAL_RCC_ADC1_CLK_ENABLE();
-
-    /* Restore voltage regulator */
-    PWR_EnableHighPerformance();
-
-    /* Clear wakeup flags */
-    PWR_ClearStandbyFlag();
-
-    log_debug("PWR: System restoration completed");
 
     return PWR_OK;
 }
@@ -978,6 +785,10 @@ PWR_StatusTypeDef PWR_ConfigureAdvancedLowPower(bool flashPowerDown, bool disabl
 {
     log_debug("PWR: Configuring advanced low power settings");
 
+    /* Silence unused-parameter warnings for optional features not yet implemented */
+    (void)flashPowerDown;
+    (void)enableUltraLowPower;
+
     if (disableBackupWrites)
     {
         PWR_DisableBackupAccess();
@@ -991,58 +802,7 @@ PWR_StatusTypeDef PWR_ConfigureAdvancedLowPower(bool flashPowerDown, bool disabl
     return PWR_OK;
 }
 
-/**
- * @brief   Calculate power savings for a low power mode
- * @param   mode Low power mode to evaluate
- * @param   wakeupTimeMs Expected wakeup time
- * @retval  uint32_t Estimated power savings in microamps
- */
-uint32_t PWR_CalculatePowerSavings(PWR_LowPowerModeTypeDef mode, uint32_t wakeupTimeMs)
-{
-    uint32_t normalCurrent = PWR_GetEstimatedCurrent();
-    uint32_t lowPowerCurrent = 0;
+/* Power estimation helpers removed to reduce dead code and simplify the PWR module. */
 
-    switch (mode)
-    {
-        case PWR_LOW_POWER_MODE_LIGHT:
-            lowPowerCurrent = normalCurrent / 10;
-            break;
-        case PWR_LOW_POWER_MODE_DEEP:
-            lowPowerCurrent = 10000;
-            break;
-        case PWR_LOW_POWER_MODE_STANDBY:
-            lowPowerCurrent = 2000;
-            break;
-        case PWR_LOW_POWER_MODE_AUTO:
-            lowPowerCurrent = 10000;
-            break;
-        default:
-            return 0;
-    }
-
-    uint32_t savings = (normalCurrent - lowPowerCurrent) * wakeupTimeMs / 1000;
-    return savings;
-}
-
-/**
- * @brief   Get current power consumption estimate
- * @retval  uint32_t Estimated current in microamps
- */
-uint32_t PWR_GetEstimatedCurrent(void)
-{
-    uint32_t current_ua = 80000;  /* Base current ~80mA at 180MHz */
-
-    /* Add current for active peripherals */
-    if (RCC->AHB1ENR & RCC_AHB1ENR_GPIOAEN) current_ua += 200;
-    if (RCC->AHB1ENR & RCC_AHB1ENR_GPIOBEN) current_ua += 200;
-    if (RCC->AHB1ENR & RCC_AHB1ENR_GPIOCEN) current_ua += 200;
-    if (RCC->AHB1ENR & RCC_AHB1ENR_DMA1EN) current_ua += 500;
-    if (RCC->AHB1ENR & RCC_AHB1ENR_DMA2EN) current_ua += 500;
-    if (RCC->APB2ENR & RCC_APB2ENR_ADC1EN) current_ua += 1500;
-    if (RCC->APB2ENR & RCC_APB2ENR_USART1EN) current_ua += 800;
-    if (RCC->APB2ENR & RCC_APB2ENR_SPI1EN) current_ua += 600;
-    if (RCC->APB1ENR & RCC_APB1ENR_I2C1EN) current_ua += 400;
-    if (RCC->APB2ENR & RCC_APB2ENR_LTDCEN) current_ua += 5000;
-
-    return current_ua;
-}
+/* If you need power estimation in the future, implement a focused helper instead of
+   keeping a large, unmaintained estimator in the core power driver. */

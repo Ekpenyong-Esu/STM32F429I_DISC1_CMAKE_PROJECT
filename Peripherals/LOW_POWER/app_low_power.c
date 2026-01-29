@@ -18,11 +18,9 @@
 #include "i2c.h"
 #include "touchscreen.h"
 #include "fmc.h"
-#include "spi.h"
 #include "gpio.h"
 #include <lv_port_disp.h>
 #include <lv_port_indev.h>
-#include <string.h>
 
 /* Private defines -----------------------------------------------------------*/
 #define APP_LOW_POWER_TIMEOUT_MS         15000   /* 15 seconds */
@@ -35,7 +33,6 @@
 #define APP_FADE_POWER_MS                500
 #define DEFAULT_TEMP_VALUE               25
 #define DEFAULT_HUMIDITY_VALUE           60
-#define STATUS_TEXT_MAX_LEN              64
 
 /* Display power control pins */
 #define LCD_BL_GPIO_Port                 GPIOK
@@ -549,6 +546,10 @@ static void APP_TouchscreenPowerOff(void)
         /* CRITICAL: Keep touchscreen interrupt enabled for wake-up!
          * Only deinitialize I2C to save power */
 
+        /* Disable NVIC for touchscreen EXTI to avoid ISR running while I2C is deinitialized.
+         * EXTI line remains configured so it can still wake the device from Stop mode. */
+        HAL_NVIC_DisableIRQ(TS_INT_EXTI_IRQn);
+
         /* Deinitialize I2C peripheral but keep EXTI GPIO state (keep INT wake configured) */
         I2C_DeInit();
 
@@ -565,7 +566,12 @@ static void APP_TouchscreenPowerOn(void)
         /* Reinitialize I2C */
         I2C_Init();
 
-        /* Ensure interrupt is enabled */
+        /* Clear any pending EXTI flag then enable NVIC for touchscreen interrupt.
+         * Clearing pending flag avoids immediately invoking the callback while
+         * system is still stabilizing. */
+        __HAL_GPIO_EXTI_CLEAR_IT(TS_INT_PIN);
+
+        /* Ensure interrupt is enabled now that I2C is ready */
         HAL_NVIC_EnableIRQ(TS_INT_EXTI_IRQn);
 
         touchscreen_is_active = true;

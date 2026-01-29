@@ -1034,6 +1034,9 @@ static bool TS_IsValidTouch(uint16_t pressure)
 {
    if(GPIO_Pin == TS_INT_PIN)
     {
+         /* Clear Wakeup flag */
+        __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);
+        
         /* Always update touch activity for low power management */
         APP_TouchActivity();
 

@@ -350,14 +350,7 @@ PWR_StatusTypeDef PWR_GetLowPowerStatus(PWR_LowPowerModeTypeDef* mode, PWR_Wakeu
  */
 PWR_StatusTypeDef PWR_ConfigureAdvancedLowPower(bool flashPowerDown, bool disableBackupWrites, bool enableUltraLowPower);
 
-/**
- * @brief   Calculate power savings for a low power mode
- * @details Estimates power savings compared to normal operation
- * @param   mode Low power mode to evaluate
- * @param   wakeupTimeMs Expected wakeup time
- * @retval  uint32_t Estimated power savings in microamps
- */
-uint32_t PWR_CalculatePowerSavings(PWR_LowPowerModeTypeDef mode, uint32_t wakeupTimeMs);
+/* Power estimation helpers intentionally removed to avoid dead code. */
 
 /** @} */
 
@@ -471,13 +464,7 @@ PWR_StatusTypeDef PWR_EnableLowPowerMode(void);
  */
 const char* PWR_GetStatusString(PWR_StatusTypeDef status);
 
-/**
- * @brief   Get current power consumption estimate
- * @details Estimates based on active peripherals (approximate)
- * @param   None
- * @retval  uint32_t Estimated current in microamps
- */
-uint32_t PWR_GetEstimatedCurrent(void);
+/* Current power estimation helper removed to avoid dead code. */
 
 /** @} */
 
