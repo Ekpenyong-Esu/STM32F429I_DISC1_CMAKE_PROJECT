@@ -268,7 +268,6 @@ TS_StatusTypeDef TS_Configure(TS_HandleTypeDef *hts, TS_ConfigTypeDef *config);
 TS_StatusTypeDef TS_Reset(TS_HandleTypeDef *hts);
 
 /* Touch detection and reading functions */
-TS_StatusTypeDef TS_ReadTouchData(TS_HandleTypeDef *hts);
 TS_StatusTypeDef TS_GetTouchData(TS_HandleTypeDef *hts, TS_TouchDataTypeDef *touch_data);
 TS_StatusTypeDef TS_GetSingleTouch(TS_HandleTypeDef *hts,
                                   uint16_t *xPos,
@@ -280,14 +279,6 @@ uint8_t TS_GetTouchCount(TS_HandleTypeDef *hts);
 TS_StatusTypeDef TS_Calibrate(TS_HandleTypeDef *hts);
 TS_StatusTypeDef TS_SetCalibration(TS_HandleTypeDef *hts, TS_CalibrationTypeDef *calibration);
 TS_StatusTypeDef TS_GetCalibration(TS_HandleTypeDef *hts, TS_CalibrationTypeDef *calibration);
-TS_StatusTypeDef TS_SaveCalibration(TS_HandleTypeDef *hts);
-TS_StatusTypeDef TS_LoadCalibration(TS_HandleTypeDef *hts);
-
-/* Gesture recognition functions */
-TS_StatusTypeDef TS_DetectGesture(TS_HandleTypeDef *hts);
-TS_GestureTypeDef TS_GetLastGesture(TS_HandleTypeDef *hts);
-TS_StatusTypeDef TS_EnableGestureDetection(TS_HandleTypeDef *hts, bool enable);
-
 /* Interrupt functions */
 TS_StatusTypeDef TS_EnableInterrupt(TS_HandleTypeDef *hts, bool enable);
 TS_StatusTypeDef TS_ITConfig(TS_HandleTypeDef *hts);

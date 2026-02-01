@@ -48,7 +48,6 @@ static bool display_is_on = true;
 static bool display_is_dimmed = false;
 static bool touchscreen_is_active = true;
 static bool sdram_is_active = true;
-static volatile bool s_auto_sleep_request = false;
 /* Last accepted touch tick for debounce */
 static uint32_t _app_last_touch_tick = 0;
 
@@ -77,17 +76,6 @@ static void APP_DimAnimExec(void * var, int32_t value);
 static void APP_DimAnimReady_Dim(lv_anim_t * anim);
 static void APP_DimAnimReady_PowerOff(lv_anim_t * anim);
 static void APP_DimAnimReady_Remove(lv_anim_t * anim);
-
-/* Public accessors ----------------------------------------------------------*/
-bool APP_IsAutoSleepRequested(void)
-{
-    return s_auto_sleep_request;
-}
-
-void APP_ClearAutoSleepRequest(void)
-{
-    s_auto_sleep_request = false;
-}
 
 /**
  * @brief   Initialize application low power management
@@ -179,12 +167,6 @@ bool APP_ShouldEnterLowPower(void)
 {
     uint32_t current_time = HAL_GetTick();
     uint32_t inactive_time = current_time - last_activity_time;
-
-    /* Check for auto-sleep request from animation */
-    if (s_auto_sleep_request)
-    {
-        return true;
-    }
 
     /* Dim timeout */
     if (inactive_time >= APP_DISPLAY_DIM_TIMEOUT_MS && !display_is_dimmed && display_is_on)
@@ -431,9 +413,7 @@ static void APP_DimAnimReady_Dim(lv_anim_t * anim)
     HAL_GPIO_WritePin(LCD_BL_GPIO_Port, LCD_BL_Pin, GPIO_PIN_RESET);
     display_is_dimmed = true;
 
-    /* Request low-power entry */
-    log_debug("APP: Auto-sleep requested after dim");
-    s_auto_sleep_request = true;
+    log_debug("APP: Display dimmed");
 }
 
 static void APP_DimAnimReady_PowerOff(lv_anim_t * anim)

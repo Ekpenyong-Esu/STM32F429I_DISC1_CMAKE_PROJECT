@@ -184,33 +184,8 @@ static void Demo_CheckLowPower(void)
     /* Check for low power mode every 1 second */
     if (current_time - last_low_power_check >= 1000)
     {
-        /* Check if auto-sleep was requested (from dim animation) */
-        if (APP_IsAutoSleepRequested())
-        {
-            printf("Auto-sleep requested from animation\n");
-            APP_ClearAutoSleepRequest();
-
-            /* Enter low power mode */
-            LVGL_App_UpdateStatus("Auto Sleep...");
-            HAL_Delay(100); /* Give time for status update to render */
-
-            PWR_StatusTypeDef status = APP_EnterLowPowerMode();
-
-            if (status == PWR_OK)
-            {
-                /* System woke up from low power mode */
-                printf("Woke up from low power mode\n");
-                LVGL_App_UpdateStatus("Woke Up!");
-                APP_UpdateActivity(); /* Reset activity timer */
-            }
-            else
-            {
-                printf("Low power mode failed: %d\n", status);
-                LVGL_App_UpdateStatus("Low Power Failed");
-            }
-        }
-        /* Or check if should enter low power based on inactivity */
-        else if (APP_ShouldEnterLowPower())
+        /* Check if should enter low power based on inactivity */
+        if (APP_ShouldEnterLowPower())
         {
             printf("Entering low power mode due to inactivity\n");
 
