@@ -19,7 +19,6 @@
  ******************************************************************************/
 
 #include <stdint.h>
-#include <stdio.h>
 #include "lvgl.h"
 #include "lv_port_indev.h"
 #include "touchscreen.h"
@@ -71,6 +70,9 @@ static void touch_read(lv_indev_t *indev, lv_indev_data_t *data)
         data->point.y = last_y;
         return;
     }
+
+    /* Service any pending touchscreen IRQ (deferred from EXTI) */
+    TS_ServiceIRQ();
 
     /* Read touchscreen data */
     /* Debounce touch: require two consecutive touch reads to confirm a real touch */

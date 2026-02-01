@@ -14,7 +14,6 @@
 #include "i2c.h"
 #include "stdbool.h"
 #include <stdint.h>
-#include <stdio.h>
 #include <string.h>
 #include <math.h>
 #include <stdlib.h>
@@ -24,24 +23,12 @@
 
 /* Private constants ---------------------------------------------------------*/
 #define TS_DELAY_MS(x)                  HAL_Delay(x)
-#define TS_CALIBRATION_POINTS           5
 #define TS_GESTURE_THRESHOLD            20      /* Minimum movement for gesture */
-#define TS_DOUBLE_TAP_TIME              300     /* Maximum time between taps (ms) */
 #define TS_LONG_PRESS_TIME              1000    /* Minimum time for long press (ms) */
-#define TS_DEBOUNCE_TIME                50      /* Debounce time (ms) */
 #define TS_PRESSURE_THRESHOLD           2      /* Default pressure threshold */
-#define TS_COORDINATE_FILTER_SIZE       3       /* Moving average filter size */
 #define TS_DEFAULT_MIN_COORD            200     /* Default minimum coordinate */
 #define TS_DEFAULT_MAX_COORD            3900    /* Default maximum coordinate */
-#define TS_I2C_SPEED                    100000  /* I2C clock speed */
 #define TS_ADC_CTRL_12BIT               0x49    /* 12-bit ADC configuration (BSP value) */
-#define TS_COORD_HIGH_MASK              0xF0    /* High nibble mask */
-#define TS_COORD_LOW_MASK               0x0F    /* Low nibble mask */
-
-/* ST-style mapping constants */
-#define TS_Y_CORRECTION_OFFSET          360U    /* Y offset applied before dividing */
-#define TS_Y_DIVISOR                    11U     /* Y scaling divisor */
-#define TS_X_DIVISOR                    15U    /* X scaling divisor */
 
 /* Pressure scaling */
 #define TS_PRESSURE_MAX_VALUE           0xFFU
@@ -60,13 +47,14 @@
 /* Private variables ---------------------------------------------------------*/
 /* Global touchscreen handle */
 TS_HandleTypeDef *g_hts = NULL;
+/* Deferred EXTI handling flag to avoid I2C use in ISR */
+static volatile bool s_ts_irq_pending = false;
 
 /* Private function prototypes -----------------------------------------------*/
 
 static TS_StatusTypeDef TS_InitI2C(TS_HandleTypeDef *hts);
 static TS_StatusTypeDef TS_CheckDevice(TS_HandleTypeDef *hts);
 static TS_StatusTypeDef TS_ConfigureController(TS_HandleTypeDef *hts);
-//static TS_StatusTypeDef TS_ReadRawCoordinates(TS_HandleTypeDef *hts, uint16_t *raw_x, uint16_t *raw_y, uint16_t *pressure);
 static TS_StatusTypeDef TS_ReadRawCoordinates(uint16_t *raw_x,
                                               uint16_t *raw_y,
                                               uint16_t *pressure);
@@ -75,12 +63,9 @@ static TS_StatusTypeDef TS_ConvertCoordinates(uint16_t raw_x,
                                               uint16_t raw_y,
                                               uint16_t *disp_x,
                                               uint16_t *disp_y);
-//static void TS_ProcessTouchData(TS_HandleTypeDef *hts);  // Removed - not needed
-//static void TS_FilterCoordinates(TS_HandleTypeDef *hts, uint16_t *xPos, uint16_t *yPos);
 static void TS_FilterCoordinates(uint16_t *x,
                                  uint16_t *y);
 static TS_GestureTypeDef TS_AnalyzeGesture(TS_HandleTypeDef *hts);
-static bool TS_IsValidTouch(uint16_t pressure);
 
  static int32_t map(int32_t val,
                    int32_t in_min, int32_t in_max,
@@ -535,6 +520,19 @@ void TS_IRQHandler(TS_HandleTypeDef *hts)
 
     /* Clear interrupt */
     TS_WriteRegister(hts, STMPE811_REG_INT_STA, int_status);
+}
+
+/**
+ * @brief Service pending touchscreen IRQ outside ISR context
+ * @details Clears STMPE811 interrupt and invokes callbacks safely from thread context
+ */
+void TS_ServiceIRQ(void)
+{
+    if (s_ts_irq_pending && g_hts != NULL && g_hts->IsInitialized)
+    {
+        s_ts_irq_pending = false;
+        TS_IRQHandler(g_hts);
+    }
 }
 
 /**
@@ -1018,10 +1016,6 @@ static TS_GestureTypeDef TS_AnalyzeGesture(TS_HandleTypeDef *hts)
  * @param pressure Pressure value
  * @retval bool True if valid touch
  */
-static bool TS_IsValidTouch(uint16_t pressure)
-{
-    return (pressure > TS_PRESSURE_THRESHOLD);
-}
 
 /* IRQ Handlers -------------------------------------------------------------*/
 
@@ -1036,14 +1030,11 @@ static bool TS_IsValidTouch(uint16_t pressure)
     {
          /* Clear Wakeup flag */
         __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);
-        
+
         /* Always update touch activity for low power management */
         APP_TouchActivity();
 
-        /* Process touchscreen data if controller is available */
-        if (g_hts != NULL)
-        {
-            TS_IRQHandler(g_hts);
-        }
+        /* Defer I2C-based interrupt handling to thread context */
+        s_ts_irq_pending = true;
     }
 }

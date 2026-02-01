@@ -11,9 +11,8 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "i2c.h"
-#include "sys.h"
-#include <string.h>
 #include "log.h"
+#include "main.h"
 
 /* Private defines -----------------------------------------------------------*/
 
@@ -33,6 +32,7 @@ I2C_HandleTypeDef hi2c3;
 /* Private function prototypes -----------------------------------------------*/
 static I2C_StatusTypeDef I2C_ConvertHALStatus(HAL_StatusTypeDef halStatus);
 static void I2Cx_Error(void);
+static void I2C_BusRecovery(void);
 
 /* Private functions ---------------------------------------------------------*/
 
@@ -404,11 +404,63 @@ uint32_t I2C_GetError(void)
 
 static void I2Cx_Error(void)
 {
-  /* De-initialize the I2C communication BUS */
-  I2C_DeInit();
+    /* De-initialize the I2C communication BUS */
+    I2C_DeInit();
 
-  /* Re-Initialize the I2C communication BUS */
-  I2C_Init();
+    /* Attempt to recover the bus if lines are stuck */
+    I2C_BusRecovery();
+
+    /* Re-Initialize the I2C communication BUS */
+    I2C_Init();
+}
+
+/**
+ * @brief Attempt to recover a stuck I2C bus by toggling SCL
+ * @details Generates up to 9 clock pulses on SCL and issues a STOP condition
+ */
+static void I2C_BusRecovery(void)
+{
+        GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+        /* Enable GPIO clocks for I2C3 pins */
+        __HAL_RCC_GPIOA_CLK_ENABLE();
+        __HAL_RCC_GPIOC_CLK_ENABLE();
+
+        /* Configure SCL and SDA as open-drain outputs with pull-up */
+        GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
+        GPIO_InitStruct.Pull = GPIO_PULLUP;
+        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+
+        GPIO_InitStruct.Pin = I2C3_SCL_Pin;
+        HAL_GPIO_Init(I2C3_SCL_GPIO_Port, &GPIO_InitStruct);
+
+        GPIO_InitStruct.Pin = I2C3_SDA_Pin;
+        HAL_GPIO_Init(I2C3_SDA_GPIO_Port, &GPIO_InitStruct);
+
+        /* Release lines high */
+        HAL_GPIO_WritePin(I2C3_SCL_GPIO_Port, I2C3_SCL_Pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(I2C3_SDA_GPIO_Port, I2C3_SDA_Pin, GPIO_PIN_SET);
+        HAL_Delay(1);
+
+        /* If SDA is stuck low, toggle SCL to free it */
+        if (HAL_GPIO_ReadPin(I2C3_SDA_GPIO_Port, I2C3_SDA_Pin) == GPIO_PIN_RESET)
+        {
+                for (uint8_t i = 0; i < 9; i++)
+                {
+                        HAL_GPIO_WritePin(I2C3_SCL_GPIO_Port, I2C3_SCL_Pin, GPIO_PIN_RESET);
+                        HAL_Delay(1);
+                        HAL_GPIO_WritePin(I2C3_SCL_GPIO_Port, I2C3_SCL_Pin, GPIO_PIN_SET);
+                        HAL_Delay(1);
+                }
+        }
+
+        /* Generate STOP condition: SDA low -> SCL high -> SDA high */
+        HAL_GPIO_WritePin(I2C3_SDA_GPIO_Port, I2C3_SDA_Pin, GPIO_PIN_RESET);
+        HAL_Delay(1);
+        HAL_GPIO_WritePin(I2C3_SCL_GPIO_Port, I2C3_SCL_Pin, GPIO_PIN_SET);
+        HAL_Delay(1);
+        HAL_GPIO_WritePin(I2C3_SDA_GPIO_Port, I2C3_SDA_Pin, GPIO_PIN_SET);
+        HAL_Delay(1);
 }
 
 /**

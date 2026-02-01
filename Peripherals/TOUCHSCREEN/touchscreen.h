@@ -302,6 +302,12 @@ TS_StatusTypeDef TS_RegisterCallbacks(TS_HandleTypeDef *hts,
                                      void (*release_callback)(void),
                                      void (*gesture_callback)(TS_GestureTypeDef));
 
+/*
+ * @brief Service pending touchscreen interrupt (deferred from EXTI ISR)
+ * @details Call from main loop/LVGL task to clear STMPE811 INT and run callbacks
+ */
+void TS_ServiceIRQ(void);
+
 /* Utility functions */
 TS_StatusTypeDef TS_GetDeviceInfo(TS_HandleTypeDef *hts, uint16_t *device_id, uint8_t *version);
 //TS_StatusTypeDef TS_ConvertCoordinates(TS_HandleTypeDef *hts, uint16_t raw_x, uint16_t raw_y,

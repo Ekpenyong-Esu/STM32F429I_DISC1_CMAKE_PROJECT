@@ -14,9 +14,6 @@
 
 /* Private defines -----------------------------------------------------------*/
 
-/* External variables --------------------------------------------------------*/
-extern RTC_HandleTypeDef hrtc;  /* May be defined in rtc.c if RTC is used */
-
 /* Private variables ---------------------------------------------------------*/
 /* No module-level private variables required */
 

@@ -33,6 +33,8 @@
 #define APP_FADE_POWER_MS                500
 #define DEFAULT_TEMP_VALUE               25
 #define DEFAULT_HUMIDITY_VALUE           60
+/* Debounce for application-level touch activity coalescing (ms) */
+#define APP_TOUCH_ACTIVITY_DEBOUNCE_MS   80
 
 /* Display power control pins */
 #define LCD_BL_GPIO_Port                 GPIOK
@@ -47,6 +49,8 @@ static bool display_is_dimmed = false;
 static bool touchscreen_is_active = true;
 static bool sdram_is_active = true;
 static volatile bool s_auto_sleep_request = false;
+/* Last accepted touch tick for debounce */
+static uint32_t _app_last_touch_tick = 0;
 
 /* GUI state backup */
 static lv_obj_t *current_screen_backup = NULL;
@@ -131,7 +135,19 @@ void APP_UpdateActivity(void)
  */
 void APP_TouchActivity(void)
 {
-    last_activity_time = HAL_GetTick();
+    uint32_t _now = HAL_GetTick();
+
+    /* Coalesce repeated touch activity calls coming from EXTI and LVGL input.
+     * Some hardware/drivers trigger both an EXTI callback and LVGL sampling
+     * on the same touch. Ignore duplicate calls within debounce window. */
+    if ((_now - _app_last_touch_tick) < APP_TOUCH_ACTIVITY_DEBOUNCE_MS)
+    {
+        log_debug("APP: Touch activity ignored (debounce)");
+        return;
+    }
+
+    _app_last_touch_tick = _now;
+    last_activity_time = _now;
 
     log_debug("APP: Touch activity detected");
 
@@ -256,6 +272,18 @@ PWR_StatusTypeDef PWR_OptimizeForLowPower(bool keepPeripherals)
 
         /* Power off display and touchscreen but keep INT enabled */
         APP_DisplayPowerOff();
+
+        /* Wait briefly for fade animation to complete so LVGL callbacks finish
+         * and any overlay objects are removed before we power off peripherals
+         * (prevents dangling LVGL objects or callbacks against powered-down SDRAM/LTDC). */
+        uint32_t _wait_start = HAL_GetTick();
+        while (s_dim_overlay && (HAL_GetTick() - _wait_start) < 1000)
+        {
+            lv_timer_handler();
+            HAL_Delay(5);
+        }
+
+        /* Now safe to power off touchscreen and SDRAM */
         APP_TouchscreenPowerOff();
 
         /* Power off SDRAM */
@@ -546,9 +574,9 @@ static void APP_TouchscreenPowerOff(void)
         /* CRITICAL: Keep touchscreen interrupt enabled for wake-up!
          * Only deinitialize I2C to save power */
 
-        /* Disable NVIC for touchscreen EXTI to avoid ISR running while I2C is deinitialized.
-         * EXTI line remains configured so it can still wake the device from Stop mode. */
-        HAL_NVIC_DisableIRQ(TS_INT_EXTI_IRQn);
+        /* Do NOT disable NVIC for touchscreen EXTI here; keep EXTI configured
+         * so the touch INT can reliably wake the MCU from Stop mode.
+         * We mark touchscreen as inactive to ignore callbacks until I2C is reinitialized. */
 
         /* Deinitialize I2C peripheral but keep EXTI GPIO state (keep INT wake configured) */
         I2C_DeInit();

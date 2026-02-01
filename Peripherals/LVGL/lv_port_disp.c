@@ -13,7 +13,7 @@
 #include "ltdc.h"
 #include <stdint.h>
 #include <string.h>
-#include "stm32f4xx_hal.h"  /* Add for DMA */
+#include "stm32f4xx_hal.h"
 #include "cachel1_armv7.h"
 #include "../LOG/log.h"
 
@@ -35,16 +35,6 @@
 #define FB_SIZE         LTDC_FB_SIZE_RGB565
 
 /*-----------------------------------------------------------------------------
- * DMA Configuration for Display Flush
- *---------------------------------------------------------------------------*/
-
-/** DMA Stream parameters for display flush */
-#define DMA_STREAM               DMA2_Stream0
-#define DMA_CHANNEL              DMA_CHANNEL_0
-#define DMA_STREAM_IRQ           DMA2_Stream0_IRQn
-#define DMA_STREAM_IRQHANDLER    DMA2_Stream0_IRQHandler
-
-/*-----------------------------------------------------------------------------
  * Draw Buffer Configuration
  *---------------------------------------------------------------------------*/
 
@@ -60,66 +50,6 @@ static lv_color_t draw_buf[DRAW_BUF_SIZE] __attribute__((aligned(4)));
 /*-----------------------------------------------------------------------------
  * Private Variables
  *---------------------------------------------------------------------------*/
-
-/** DMA handle for display flush */
-static DMA_HandleTypeDef dmaHandle;
-
-/** Flush state variables */
-static volatile uint8_t dma_transfer_complete = 0;
-static lv_display_t *current_display = NULL;
-
-
-/*-----------------------------------------------------------------------------
- * Private Functions
- *---------------------------------------------------------------------------*/
-
-/**
- * @brief   DMA transfer complete callback
- */
-static void dma_transfer_complete_callback(DMA_HandleTypeDef *hdma)
-{
-    dma_transfer_complete = 1;
-    if (current_display) {
-        lv_display_flush_ready(current_display);
-    }
-}
-
-/**
- * @brief   Configure DMA for display flush operations
- */
-static void dma_config(void)
-{
-    /* Enable DMA2 clock */
-    __HAL_RCC_DMA2_CLK_ENABLE();
-
-    /* Configure DMA handle */
-    dmaHandle.Instance = DMA_STREAM;
-    dmaHandle.Init.Channel = DMA_CHANNEL;
-    dmaHandle.Init.Direction = DMA_MEMORY_TO_MEMORY;
-    dmaHandle.Init.PeriphInc = DMA_PINC_ENABLE;
-    dmaHandle.Init.MemInc = DMA_MINC_ENABLE;
-    dmaHandle.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;  /* 16-bit */
-    dmaHandle.Init.MemDataAlignment = DMA_MDATAALIGN_HALFWORD;     /* 16-bit */
-    dmaHandle.Init.Mode = DMA_NORMAL;
-    dmaHandle.Init.Priority = DMA_PRIORITY_HIGH;
-    dmaHandle.Init.FIFOMode = DMA_FIFOMODE_ENABLE;
-    dmaHandle.Init.FIFOThreshold = DMA_FIFO_THRESHOLD_1QUARTERFULL;
-    dmaHandle.Init.MemBurst = DMA_MBURST_SINGLE;
-    dmaHandle.Init.PeriphBurst = DMA_PBURST_SINGLE;
-
-    /* Initialize DMA */
-    if (HAL_DMA_Init(&dmaHandle) != HAL_OK) {
-        /* Error handling */
-        while(1);
-    }
-
-    /* Register completion callback */
-    HAL_DMA_RegisterCallback(&dmaHandle, HAL_DMA_XFER_CPLT_CB_ID, dma_transfer_complete_callback);
-
-    /* Configure NVIC */
-    HAL_NVIC_SetPriority(DMA_STREAM_IRQ, 0, 0);
-    HAL_NVIC_EnableIRQ(DMA_STREAM_IRQ);
-}
 
 /**
  * @brief   LVGL flush callback - copy rendered pixels to SDRAM framebuffer
@@ -211,10 +141,3 @@ void lv_port_disp_init(void)
     log_debug("LVGL: Display port initialized");
 }
 
-/**
- * @brief   DMA Stream IRQ Handler
- */
-void DMA_STREAM_IRQHANDLER(void)
-{
-    HAL_DMA_IRQHandler(&dmaHandle);
-}
