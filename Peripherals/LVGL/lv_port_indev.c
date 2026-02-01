@@ -23,7 +23,6 @@
 #include "lv_port_indev.h"
 #include "touchscreen.h"
 #include "i2c.h"
-#include "app_low_power.h"  /* Application low power management */
 
 /* Touchscreen handle */
 static TS_HandleTypeDef hts;
@@ -71,9 +70,6 @@ static void touch_read(lv_indev_t *indev, lv_indev_data_t *data)
         return;
     }
 
-    /* Service any pending touchscreen IRQ (deferred from EXTI) */
-    TS_ServiceIRQ();
-
     /* Read touchscreen data */
     /* Debounce touch: require two consecutive touch reads to confirm a real touch */
     static uint8_t touch_confirm_count = 0;
@@ -95,9 +91,6 @@ static void touch_read(lv_indev_t *indev, lv_indev_data_t *data)
         if (touch_confirm_count >= 2) {
             /* Confirmed touch - report pressed and update activity */
             data->state   = LV_INDEV_STATE_PRESSED;
-
-            /* Update activity timestamp only when touch is confirmed */
-            APP_TouchActivity();
 
             last_x = data->point.x;
             last_y = data->point.y;

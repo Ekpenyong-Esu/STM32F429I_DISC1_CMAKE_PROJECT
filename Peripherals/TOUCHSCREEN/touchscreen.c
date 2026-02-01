@@ -18,7 +18,6 @@
 #include <math.h>
 #include <stdlib.h>
 #include "log.h"
-#include "app_low_power.h"  /* For touch activity handling */
 #include "stm32f4xx_hal_gpio.h"
 
 /* Private constants ---------------------------------------------------------*/
@@ -47,8 +46,6 @@
 /* Private variables ---------------------------------------------------------*/
 /* Global touchscreen handle */
 TS_HandleTypeDef *g_hts = NULL;
-/* Deferred EXTI handling flag to avoid I2C use in ISR */
-static volatile bool s_ts_irq_pending = false;
 
 /* Private function prototypes -----------------------------------------------*/
 
@@ -140,15 +137,8 @@ TS_StatusTypeDef TS_Init(TS_HandleTypeDef *hts, I2C_HandleTypeDef *hi2c)
         return status;
     }
 
-    /* Configure interrupts if enabled */
-    if (hts->Config.InterruptEnable) {
-        TS_EnableInterrupt(hts, true);
-        TS_ITConfig(hts);
-
-    }
-    else {
-        TS_EnableInterrupt(hts, false);
-    }
+    /* Polling-only mode: keep touchscreen interrupts disabled */
+    TS_EnableInterrupt(hts, false);
 
     hts->IsInitialized = true;
     return TS_OK;
@@ -165,7 +155,7 @@ TS_StatusTypeDef TS_DeInit(TS_HandleTypeDef *hts)
         return TS_INVALID_PARAM;
     }
 
-    /* Disable interrupts */
+    /* Disable interrupts (polling-only) */
     TS_EnableInterrupt(hts, false);
 
     /* Disable touchscreen controller */
@@ -464,29 +454,6 @@ TS_StatusTypeDef TS_EnableInterrupt(TS_HandleTypeDef *hts, bool enable)
  * @param hts Pointer to touchscreen handle structure
  * @retval TS_StatusTypeDef Status of the operation
  */
-TS_StatusTypeDef TS_ITConfig(TS_HandleTypeDef *hts)
-{
-    if (hts == NULL) {
-        return TS_INVALID_PARAM;
-    }
-
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
-
-    /* Configure interrupt pin */
-    GPIO_InitStruct.Pin = TS_INT_PIN;
-    GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
-    GPIO_InitStruct.Pull = GPIO_PULLUP;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(TS_INT_GPIO_PORT, &GPIO_InitStruct);
-
-    /* Enable EXTI interrupt */
-    HAL_NVIC_SetPriority(TS_INT_EXTI_IRQn, TS_INT_NVIC_PRIORITY, 0x00);
-    HAL_NVIC_EnableIRQ(TS_INT_EXTI_IRQn);
-
-    log_debug("TS_ITConfig Initialized");
-    return TS_OK;
-}
-
 /**
  * @brief Interrupt handler
  * @param hts Pointer to touchscreen handle structure
@@ -526,15 +493,6 @@ void TS_IRQHandler(TS_HandleTypeDef *hts)
  * @brief Service pending touchscreen IRQ outside ISR context
  * @details Clears STMPE811 interrupt and invokes callbacks safely from thread context
  */
-void TS_ServiceIRQ(void)
-{
-    if (s_ts_irq_pending && g_hts != NULL && g_hts->IsInitialized)
-    {
-        s_ts_irq_pending = false;
-        TS_IRQHandler(g_hts);
-    }
-}
-
 /**
  * @brief Register callback functions
  * @param hts Pointer to touchscreen handle structure
@@ -755,7 +713,7 @@ TS_ConfigTypeDef TS_GetDefaultConfig(void)
         .TouchDetectDelay = STMPE811_TSC_CFG_SETTLE_1MS,
         .PanelDriverSettlingTime = STMPE811_TSC_CFG_SETTLE_1MS,
         .PressureThreshold = TS_PRESSURE_THRESHOLD,
-        .InterruptEnable = true,
+        .InterruptEnable = false,
         .FIFOEnable = true,
         .FIFOThreshold = 1
     };
@@ -1016,25 +974,3 @@ static TS_GestureTypeDef TS_AnalyzeGesture(TS_HandleTypeDef *hts)
  * @param pressure Pressure value
  * @retval bool True if valid touch
  */
-
-/* IRQ Handlers -------------------------------------------------------------*/
-
-/**
- * @brief External interrupt handler
-
- */
-
- void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
-{
-   if(GPIO_Pin == TS_INT_PIN)
-    {
-         /* Clear Wakeup flag */
-        __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);
-
-        /* Always update touch activity for low power management */
-        APP_TouchActivity();
-
-        /* Defer I2C-based interrupt handling to thread context */
-        s_ts_irq_pending = true;
-    }
-}

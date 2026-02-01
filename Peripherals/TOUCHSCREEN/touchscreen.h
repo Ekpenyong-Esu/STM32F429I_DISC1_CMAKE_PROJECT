@@ -290,7 +290,6 @@ TS_StatusTypeDef TS_EnableGestureDetection(TS_HandleTypeDef *hts, bool enable);
 
 /* Interrupt functions */
 TS_StatusTypeDef TS_EnableInterrupt(TS_HandleTypeDef *hts, bool enable);
-TS_StatusTypeDef TS_ITConfig(TS_HandleTypeDef *hts);
 void TS_IRQHandler(TS_HandleTypeDef *hts);
 
 /* Global touchscreen handle for interrupt handling */
@@ -306,7 +305,6 @@ TS_StatusTypeDef TS_RegisterCallbacks(TS_HandleTypeDef *hts,
  * @brief Service pending touchscreen interrupt (deferred from EXTI ISR)
  * @details Call from main loop/LVGL task to clear STMPE811 INT and run callbacks
  */
-void TS_ServiceIRQ(void);
 
 /* Utility functions */
 TS_StatusTypeDef TS_GetDeviceInfo(TS_HandleTypeDef *hts, uint16_t *device_id, uint8_t *version);

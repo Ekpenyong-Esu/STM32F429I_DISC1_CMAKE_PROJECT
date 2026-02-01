@@ -22,8 +22,6 @@
 #include "ili9341.h"
 #include "i2c.h"
 #include "touchscreen.h"
-#include "app_low_power.h"
-#include "pwr.h"
 
 /* Private variables ---------------------------------------------------------*/
 static uint32_t last_update = 0;
@@ -34,7 +32,6 @@ static int demo_counter = 0;
 
 /* Private function prototypes -----------------------------------------------*/
 static void Demo_UpdateSensors(void);
-static void Demo_CheckLowPower(void);
 
 int main(void)
 {
@@ -49,21 +46,12 @@ int main(void)
 #endif
 
     /*-------------------------------------------------------------------------
-     * STEP 2: Initialize Power Management (EARLY!)
-     *-----------------------------------------------------------------------*/
-    /* Initialize power management BEFORE other peripherals */
-    /* This configures debug support and power controller */
-    if (PWR_InitDefault() != PWR_OK) {
-        log_error("Pwr Init failed");
-    }
-
-    /*-------------------------------------------------------------------------
-     * STEP 3: Initialize I2C for Touchscreen
+     * STEP 2: Initialize I2C for Touchscreen
      *-----------------------------------------------------------------------*/
     I2C_Init();
 
     /*-------------------------------------------------------------------------
-     * STEP 4: Initialize External SDRAM (for framebuffer) and Touchscreen
+    * STEP 3: Initialize External SDRAM (for framebuffer) and Touchscreen
      *-----------------------------------------------------------------------*/
     FMC_Driver_Handle_t fmcHandle;
     FMC_Driver_SDRAM_Config_t sdramConfig = {
@@ -94,30 +82,25 @@ int main(void)
     }
 
     /*-------------------------------------------------------------------------
-     * STEP 5: Initialize ILI9341 LCD Controller
+    * STEP 4: Initialize ILI9341 LCD Controller
      *-----------------------------------------------------------------------*/
     ili9341_Init();  /* Configure LCD via SPI, switch to RGB mode */
 
     /*-------------------------------------------------------------------------
-     * STEP 6: Initialize LTDC Display Controller
+    * STEP 5: Initialize LTDC Display Controller
      *-----------------------------------------------------------------------*/
     LTDC_HW_Init();
 
     /*-------------------------------------------------------------------------
-     * STEP 7: Initialize LVGL and Create GUI
+    * STEP 6: Initialize LVGL and Create GUI
      *-----------------------------------------------------------------------*/
     LVGL_App_Init();
-
-    /*-------------------------------------------------------------------------
-     * STEP 8: Initialize Application Low Power Management
-     *-----------------------------------------------------------------------*/
-    APP_LowPowerInit();
 
     printf("System initialized successfully\n");
     LVGL_App_UpdateStatus("System Ready");
 
     /*-------------------------------------------------------------------------
-     * STEP 9: Main Loop
+    * STEP 7: Main Loop
      *-----------------------------------------------------------------------*/
     while(1)
     {
@@ -126,9 +109,6 @@ int main(void)
 
         /* Update demo sensor values periodically */
         Demo_UpdateSensors();
-
-        /* Check if should enter low power mode */
-        Demo_CheckLowPower();
 
         /* Small delay to prevent tight loop */
         HAL_Delay(5);
@@ -167,81 +147,9 @@ static void Demo_UpdateSensors(void)
         demo_counter++;
         last_update = current_time;
 
-        /* NOTE: Don't treat internal demo updates as user activity;
-           User interaction (touch) sets activity via APP_TouchActivity(). */
+        /* NOTE: Don't treat internal demo updates as user activity. */
     }
 }
-
-/**
- * @brief   Check and handle low power mode entry
- * @details Checks every second if system should enter low power
- */
-static void Demo_CheckLowPower(void)
-{
-    static uint32_t last_low_power_check = 0;
-    uint32_t current_time = HAL_GetTick();
-
-    /* Check for low power mode every 1 second */
-    if (current_time - last_low_power_check >= 1000)
-    {
-        /* Check if auto-sleep was requested (from dim animation) */
-        if (APP_IsAutoSleepRequested())
-        {
-            printf("Auto-sleep requested from animation\n");
-            APP_ClearAutoSleepRequest();
-
-            /* Enter low power mode */
-            LVGL_App_UpdateStatus("Auto Sleep...");
-            HAL_Delay(100); /* Give time for status update to render */
-
-            PWR_StatusTypeDef status = APP_EnterLowPowerMode();
-
-            if (status == PWR_OK)
-            {
-                /* System woke up from low power mode */
-                printf("Woke up from low power mode\n");
-                LVGL_App_UpdateStatus("Woke Up!");
-                APP_UpdateActivity(); /* Reset activity timer */
-            }
-            else
-            {
-                printf("Low power mode failed: %d\n", status);
-                LVGL_App_UpdateStatus("Low Power Failed");
-            }
-        }
-        /* Or check if should enter low power based on inactivity */
-        else if (APP_ShouldEnterLowPower())
-        {
-            printf("Entering low power mode due to inactivity\n");
-
-            /* Update status before entering low power */
-            LVGL_App_UpdateStatus("Entering Low Power...");
-            HAL_Delay(100); /* Give time for status update to render */
-
-            PWR_StatusTypeDef status = APP_EnterLowPowerMode();
-
-            if (status == PWR_OK)
-            {
-                /* System woke up from low power mode */
-                printf("Woke up from low power mode\n");
-                LVGL_App_UpdateStatus("System Resumed");
-                APP_UpdateActivity(); /* Reset activity timer */
-            }
-            else
-            {
-                printf("Low power mode failed: %d\n", status);
-                LVGL_App_UpdateStatus("Low Power Failed");
-            }
-        }
-
-        last_low_power_check = current_time;
-    }
-}
-
-/* NOTE: HAL_GPIO_EXTI_Callback is already implemented in touchscreen.c
- * The touchscreen driver handles calling APP_TouchActivity() for wake-up
- * No need to duplicate the callback here!
- */
 
 #ifdef USE_FULL_ASSERT
 /**
