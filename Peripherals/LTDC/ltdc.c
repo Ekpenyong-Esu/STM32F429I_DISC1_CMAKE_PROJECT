@@ -15,9 +15,8 @@
 
 /* Private defines -----------------------------------------------------------*/
 #define LTDC_TIMEOUT                5000    /*!< Timeout for LTDC operations */
-#define LTDC_MIN_ALPHA              0       /*!< Minimum alpha value */
 #define LTDC_MAX_ALPHA              255     /*!< Maximum alpha value */
-#define LTDC_DEFAULT_BRIGHTNESS     100     /*!< Default brightness percentage */
+
 
 
 LTDC_HandleTypeDef hltdc;                   /*!< LTDC HAL handle */

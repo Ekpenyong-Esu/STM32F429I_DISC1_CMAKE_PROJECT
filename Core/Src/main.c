@@ -12,7 +12,6 @@
 #include "SEGGER_SYSVIEW.h"
 #include "main.h"
 #include "log.h"
-#include "stm32f4xx_hal_def.h"
 #include "sys.h"
 #include <stdint.h>
 #include "lvgl.h"
@@ -21,7 +20,6 @@
 #include "fmc.h"
 #include "ili9341.h"
 #include "i2c.h"
-#include "touchscreen.h"
 #include "app_low_power.h"
 #include "pwr.h"
 

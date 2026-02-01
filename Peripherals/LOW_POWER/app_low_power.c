@@ -52,7 +52,6 @@ static bool sdram_is_active = true;
 static uint32_t _app_last_touch_tick = 0;
 
 /* GUI state backup */
-static lv_obj_t *current_screen_backup = NULL;
 static int temp_value_backup = DEFAULT_TEMP_VALUE;
 static int humidity_value_backup = DEFAULT_HUMIDITY_VALUE;
 
@@ -620,8 +619,6 @@ static void APP_SDRAM_PowerOn(void)
 static void APP_SaveGUIState(void)
 {
     log_debug("APP: Saving GUI state");
-
-    current_screen_backup = lv_screen_active();
     temp_value_backup = DEFAULT_TEMP_VALUE;
     humidity_value_backup = DEFAULT_HUMIDITY_VALUE;
 }

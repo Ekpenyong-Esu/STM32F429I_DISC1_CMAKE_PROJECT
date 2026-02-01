@@ -20,7 +20,6 @@
  * @brief I2C clock speed constants
  */
 #define I2C_CLOCK_SPEED_STANDARD     100000U     /**< Standard mode: 100 kHz */
-#define I2C_CLOCK_SPEED_FAST         400000U     /**< Fast mode: 400 kHz */
 
 /* Private variables ---------------------------------------------------------*/
 /**
