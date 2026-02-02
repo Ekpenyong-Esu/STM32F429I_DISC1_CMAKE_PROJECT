@@ -31,8 +31,8 @@ static int sensor_val = 50;
 static int demo_counter = 0;
 
 /* Private function prototypes -----------------------------------------------*/
-static void Demo_UpdateSensors(void);
-static void Demo_CheckLowPower(void);
+static void UpdateSensors(void);
+static void CheckLowPower(void);
 
 int main(void)
 {
@@ -123,10 +123,10 @@ int main(void)
         LVGL_App_Tick();
 
         /* Update demo sensor values periodically */
-        Demo_UpdateSensors();
+        UpdateSensors();
 
         /* Check if should enter low power mode */
-        Demo_CheckLowPower();
+        CheckLowPower();
 
         /* Small delay to prevent tight loop */
         HAL_Delay(5);
@@ -137,7 +137,7 @@ int main(void)
  * @brief   Update demo sensor values
  * @details Updates temperature, humidity, and chart data
  */
-static void Demo_UpdateSensors(void)
+static void UpdateSensors(void)
 {
     uint32_t current_time = HAL_GetTick();
 
@@ -164,9 +164,6 @@ static void Demo_UpdateSensors(void)
 
         demo_counter++;
         last_update = current_time;
-
-        /* NOTE: Don't treat internal demo updates as user activity;
-           User interaction (touch) sets activity via APP_TouchActivity(). */
     }
 }
 
@@ -174,7 +171,7 @@ static void Demo_UpdateSensors(void)
  * @brief   Check and handle low power mode entry
  * @details Checks every second if system should enter low power
  */
-static void Demo_CheckLowPower(void)
+static void CheckLowPower(void)
 {
     static uint32_t last_low_power_check = 0;
     uint32_t current_time = HAL_GetTick();
