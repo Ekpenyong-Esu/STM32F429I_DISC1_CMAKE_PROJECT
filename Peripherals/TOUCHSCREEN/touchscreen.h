@@ -298,6 +298,7 @@ TS_StatusTypeDef TS_RegisterCallbacks(TS_HandleTypeDef *hts,
  * @details Call from main loop/LVGL task to clear STMPE811 INT and run callbacks
  */
 void TS_ServiceIRQ(void);
+bool TS_IrqPending(void);
 
 /* Utility functions */
 TS_StatusTypeDef TS_GetDeviceInfo(TS_HandleTypeDef *hts, uint16_t *device_id, uint8_t *version);

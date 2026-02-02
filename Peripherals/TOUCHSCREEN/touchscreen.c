@@ -445,9 +445,10 @@ TS_StatusTypeDef TS_EnableInterrupt(TS_HandleTypeDef *hts, bool enable)
 
     if (enable) {
         log_debug("TS: Enabling touchscreen interrupt");
-        /* Enable touch detection interrupt */
-        TS_WriteRegister(hts, STMPE811_REG_INT_EN, STMPE811_INT_EN_TOUCH_DET);
-        TS_WriteRegister(hts, STMPE811_REG_INT_CTRL, STMPE811_INT_CTRL_POL_LOW | STMPE811_INT_CTRL_ENABLE);
+        /* Enable touch detect + FIFO threshold interrupts for continuous movement */
+        TS_WriteRegister(hts, STMPE811_REG_INT_EN, STMPE811_INT_EN_TOUCH_DET | STMPE811_INT_EN_FIFO_TH);
+        TS_WriteRegister(hts, STMPE811_REG_INT_CTRL,
+                 STMPE811_INT_CTRL_POL_LOW | STMPE811_INT_CTRL_EDGE | STMPE811_INT_CTRL_ENABLE);
     } else {
         /* Disable interrupts */
         TS_WriteRegister(hts, STMPE811_REG_INT_EN, 0x00);
@@ -533,6 +534,11 @@ void TS_ServiceIRQ(void)
         s_ts_irq_pending = false;
         TS_IRQHandler(g_hts);
     }
+}
+
+bool TS_IrqPending(void)
+{
+    return s_ts_irq_pending;
 }
 
 /**

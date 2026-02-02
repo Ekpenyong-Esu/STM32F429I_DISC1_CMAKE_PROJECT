@@ -31,6 +31,7 @@ static TS_HandleTypeDef hts;
 /* Last known touch position */
 static int16_t last_x = 0;
 static int16_t last_y = 0;
+static bool touch_pressed = false;
 /*-----------------------------------------------------------------------------
  * Touch Read Callback - Get Current Touch State
  *---------------------------------------------------------------------------*/
@@ -71,44 +72,34 @@ static void touch_read(lv_indev_t *indev, lv_indev_data_t *data)
         return;
     }
 
-    /* Service any pending touchscreen IRQ (deferred from EXTI) */
+    /* Fully interrupt-driven: only read touch on IRQ */
+    if (!TS_IrqPending()) {
+        data->state   = touch_pressed ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
+        data->point.x = last_x;
+        data->point.y = last_y;
+        return;
+    }
+
+    /* Service pending touchscreen IRQ (deferred from EXTI) */
     TS_ServiceIRQ();
 
-    /* Read touchscreen data */
-    /* Debounce touch: require two consecutive touch reads to confirm a real touch */
-    static uint8_t touch_confirm_count = 0;
-
     if (TS_GetSingleTouch(&hts, &x, &y) == TS_OK) {
-
         /* Clamp coordinates to LVGL display bounds */
         if (x >= TS_DISPLAY_WIDTH)  x = TS_DISPLAY_WIDTH  - 1;
         if (y >= TS_DISPLAY_HEIGHT) y = TS_DISPLAY_HEIGHT - 1;
 
-        /* Apply coordinate transformation if needed */
-        /* For STM32F429I-DISC1, the touchscreen may need X/Y swap and/or rotation */
-
-        /* Option 1: No transformation (current) */
         data->point.x = x;
         data->point.y = y;
+        data->state   = LV_INDEV_STATE_PRESSED;
 
-        touch_confirm_count++;
-        if (touch_confirm_count >= 2) {
-            /* Confirmed touch - report pressed and update activity */
-            data->state   = LV_INDEV_STATE_PRESSED;
+        touch_pressed = true;
+        last_x = data->point.x;
+        last_y = data->point.y;
 
-            /* Update activity timestamp only when touch is confirmed */
-            APP_TouchActivity();
-
-            last_x = data->point.x;
-            last_y = data->point.y;
-        } else {
-            /* Not yet confirmed - report previous state to avoid false presses */
-            data->state   = LV_INDEV_STATE_RELEASED;
-            data->point.x = last_x;
-            data->point.y = last_y;
-        }
+        /* Update activity timestamp on touch */
+        APP_TouchActivity();
     } else {
-        touch_confirm_count = 0;
+        touch_pressed = false;
         data->state   = LV_INDEV_STATE_RELEASED;
         data->point.x = last_x;
         data->point.y = last_y;
