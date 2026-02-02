@@ -124,10 +124,6 @@ void lv_port_indev_init(void)
         return;
     }
 
-    /* Optional: configure touchscreen interrupts */
-    // TS_ITConfig(&hts);
-    // TS_EnableInterrupt(&hts, true);
-
     /* Create LVGL input device driver */
     lv_indev_t *indev = lv_indev_create();
     lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER);

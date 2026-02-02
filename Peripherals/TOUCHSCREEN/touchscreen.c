@@ -137,8 +137,7 @@ TS_StatusTypeDef TS_Init(TS_HandleTypeDef *hts, I2C_HandleTypeDef *hi2c)
         return status;
     }
 
-    /* Polling-only mode: keep touchscreen interrupts disabled */
-    TS_EnableInterrupt(hts, false);
+    /* Polling-only mode: no touchscreen interrupt setup */
 
     hts->IsInitialized = true;
     return TS_OK;
@@ -155,8 +154,7 @@ TS_StatusTypeDef TS_DeInit(TS_HandleTypeDef *hts)
         return TS_INVALID_PARAM;
     }
 
-    /* Disable interrupts (polling-only) */
-    TS_EnableInterrupt(hts, false);
+    /* Polling-only mode: no touchscreen interrupt teardown */
 
     /* Disable touchscreen controller */
     TS_WriteRegister(hts, STMPE811_REG_SYS_CTRL2, STMPE811_SYS_CTRL2_TSC_OFF);
@@ -421,101 +419,7 @@ TS_StatusTypeDef TS_GetCalibration(TS_HandleTypeDef *hts, TS_CalibrationTypeDef 
     return TS_OK;
 }
 
-/**
- * @brief Enable/disable interrupt
- * @param hts Pointer to touchscreen handle structure
- * @param enable Enable/disable flag
- * @retval TS_StatusTypeDef Status of the operation
- */
-TS_StatusTypeDef TS_EnableInterrupt(TS_HandleTypeDef *hts, bool enable)
-{
-    if (hts == NULL) {
-        return TS_INVALID_PARAM;
-    }
 
-    if (enable) {
-        log_debug("TS: Enabling touchscreen interrupt");
-        /* Enable touch detection interrupt */
-        TS_WriteRegister(hts, STMPE811_REG_INT_EN, STMPE811_INT_EN_TOUCH_DET);
-        TS_WriteRegister(hts, STMPE811_REG_INT_CTRL, STMPE811_INT_CTRL_POL_LOW | STMPE811_INT_CTRL_ENABLE);
-    } else {
-        /* Disable interrupts */
-        TS_WriteRegister(hts, STMPE811_REG_INT_EN, 0x00);
-        TS_WriteRegister(hts, STMPE811_REG_INT_CTRL, STMPE811_INT_CTRL_DISABLE);
-    }
-
-    hts->InterruptMode = enable;
-
-    return TS_OK;
-}
-
-/**
- * @brief Configure interrupt
- * @param hts Pointer to touchscreen handle structure
- * @retval TS_StatusTypeDef Status of the operation
- */
-/**
- * @brief Interrupt handler
- * @param hts Pointer to touchscreen handle structure
- */
-void TS_IRQHandler(TS_HandleTypeDef *hts)
-{
-    if (hts == NULL) {
-        return;
-    }
-
-    uint8_t int_status = 0;
-
-    /* Read interrupt status */
-    TS_ReadRegister(hts, STMPE811_REG_INT_STA, &int_status);
-
-    if (int_status & STMPE811_INT_EN_TOUCH_DET) {
-        /* Touch detected - callbacks can be handled here if needed */
-        /* Note: TS_ProcessTouchData removed as TS_GetSingleTouch handles everything */
-
-        /* Call callbacks if registered (for other purposes) */
-        if (hts->TouchCallback != NULL) {
-            hts->TouchCallback();
-        }
-
-        /* Detect gestures if needed */
-        TS_GestureTypeDef gesture = TS_AnalyzeGesture(hts);
-        if (gesture != TS_GESTURE_NONE && hts->GestureCallback != NULL) {
-            hts->GestureCallback(gesture);
-        }
-    }
-
-    /* Clear interrupt */
-    TS_WriteRegister(hts, STMPE811_REG_INT_STA, int_status);
-}
-
-/**
- * @brief Service pending touchscreen IRQ outside ISR context
- * @details Clears STMPE811 interrupt and invokes callbacks safely from thread context
- */
-/**
- * @brief Register callback functions
- * @param hts Pointer to touchscreen handle structure
- * @param touch_callback Touch detected callback
- * @param release_callback Touch released callback
- * @param gesture_callback Gesture detected callback
- * @retval TS_StatusTypeDef Status of the operation
- */
-TS_StatusTypeDef TS_RegisterCallbacks(TS_HandleTypeDef *hts,
-                                     void (*touch_callback)(void),
-                                     void (*release_callback)(void),
-                                     void (*gesture_callback)(TS_GestureTypeDef))
-{
-    if (hts == NULL) {
-        return TS_INVALID_PARAM;
-    }
-
-    hts->TouchCallback = touch_callback;
-    hts->ReleaseCallback = release_callback;
-    hts->GestureCallback = gesture_callback;
-
-    return TS_OK;
-}
 
 /**
  * @brief Convert raw touchscreen coordinates to display coordinates
