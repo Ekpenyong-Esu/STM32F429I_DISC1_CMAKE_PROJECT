@@ -4,11 +4,10 @@
  * This file connects LVGL to the touchscreen hardware on STM32F429I-Discovery.
  *
  * Supported Touch Controllers:
- * - FT6206: Capacitive touch (I2C address 0x38)
- * - STMPE811: Resistive touch (I2C address 0x41/0x82)
+ * - XPT2046: Resistive touch (SPI)
  *
  * What this does:
- * - Reads touch coordinates from hardware via I2C
+ * - Reads touch coordinates from hardware via SPI
  * - Reports touch state (pressed/released) to LVGL
  * - Handles coordinate translation and calibration
  *
@@ -21,16 +20,20 @@
 #include <stdint.h>
 #include "lvgl.h"
 #include "lv_port_indev.h"
-#include "touchscreen.h"
-#include "i2c.h"
-#include "app_low_power.h"  /* Application low power management */
+#include "xpt2046.h"
 
 /* Touchscreen handle */
-static TS_HandleTypeDef hts;
+static XPT2046_Handle_t hxpt;
 
 /* Last known touch position */
 static int16_t last_x = 0;
 static int16_t last_y = 0;
+
+/* Touch controller pins (adjust if wired differently) */
+#define TP_CS_PORT   GPIOC
+#define TP_CS_PIN    GPIO_PIN_3
+#define TP_IRQ_PORT  GPIOA
+#define TP_IRQ_PIN   GPIO_PIN_15
 /*-----------------------------------------------------------------------------
  * Touch Read Callback - Get Current Touch State
  *---------------------------------------------------------------------------*/
@@ -64,51 +67,29 @@ static void touch_read(lv_indev_t *indev, lv_indev_data_t *data)
     uint16_t x = 0;
     uint16_t y = 0;
 
-    if (!hts.IsInitialized) {
+    if (!hxpt.initialized) {
         data->state = LV_INDEV_STATE_RELEASED;
         data->point.x = last_x;
         data->point.y = last_y;
         return;
     }
 
-    /* Service any pending touchscreen IRQ (deferred from EXTI) */
-    TS_ServiceIRQ();
+    XPT2046_TouchPoint_t touch;
 
-    /* Read touchscreen data */
-    /* Debounce touch: require two consecutive touch reads to confirm a real touch */
-    static uint8_t touch_confirm_count = 0;
+    if (XPT2046_ReadTouch(&hxpt, &touch) == XPT2046_OK) {
+        x = touch.x;
+        y = touch.y;
 
-    if (TS_GetSingleTouch(&hts, &x, &y) == TS_OK) {
+        if (x >= 320) x = 319;
+        if (y >= 480) y = 479;
 
-        /* Clamp coordinates to LVGL display bounds */
-        if (x >= TS_DISPLAY_WIDTH)  x = TS_DISPLAY_WIDTH  - 1;
-        if (y >= TS_DISPLAY_HEIGHT) y = TS_DISPLAY_HEIGHT - 1;
-
-        /* Apply coordinate transformation if needed */
-        /* For STM32F429I-DISC1, the touchscreen may need X/Y swap and/or rotation */
-
-        /* Option 1: No transformation (current) */
         data->point.x = x;
         data->point.y = y;
+        data->state = LV_INDEV_STATE_PRESSED;
 
-        touch_confirm_count++;
-        if (touch_confirm_count >= 2) {
-            /* Confirmed touch - report pressed and update activity */
-            data->state   = LV_INDEV_STATE_PRESSED;
-
-            /* Update activity timestamp only when touch is confirmed */
-            APP_TouchActivity();
-
-            last_x = data->point.x;
-            last_y = data->point.y;
-        } else {
-            /* Not yet confirmed - report previous state to avoid false presses */
-            data->state   = LV_INDEV_STATE_RELEASED;
-            data->point.x = last_x;
-            data->point.y = last_y;
-        }
+        last_x = data->point.x;
+        last_y = data->point.y;
     } else {
-        touch_confirm_count = 0;
         data->state   = LV_INDEV_STATE_RELEASED;
         data->point.x = last_x;
         data->point.y = last_y;
@@ -126,14 +107,9 @@ static void touch_read(lv_indev_t *indev, lv_indev_data_t *data)
 /* LVGL input device initialization */
 void lv_port_indev_init(void)
 {
-    /* Initialize touchscreen with I2C3 handle */
-    if (TS_Init(&hts, &hi2c3) != TS_OK) {
+    if (XPT2046_Init(&hxpt, TP_CS_PORT, TP_CS_PIN, TP_IRQ_PORT, TP_IRQ_PIN, 320, 480) != XPT2046_OK) {
         return;
     }
-
-    /* Optional: configure touchscreen interrupts */
-    // TS_ITConfig(&hts);
-    // TS_EnableInterrupt(&hts, true);
 
     /* Create LVGL input device driver */
     lv_indev_t *indev = lv_indev_create();

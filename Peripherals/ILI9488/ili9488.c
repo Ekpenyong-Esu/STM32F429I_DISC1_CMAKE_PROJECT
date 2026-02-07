@@ -17,6 +17,17 @@
 #include <string.h>
 #include <stdio.h>
 
+/* Default weak MSP implementations (board can override) */
+__weak void ILI9488_MspInit(void)
+{
+    /* Default no-op: board-specific file should configure GPIO clocks/pins */
+}
+
+__weak void ILI9488_MspDeInit(void)
+{
+    /* Default no-op */
+}
+
 /* Private defines -----------------------------------------------------------*/
 
 /** @defgroup ILI9488_Private_Defines Private Defines
@@ -251,6 +262,9 @@ ILI9488_StatusTypeDef ILI9488_Init(ILI9488_Handle_t *hili,
         return ILI9488_INVALID_PARAM;
     }
 
+    /* Board-specific MSP hook (GPIO clocks/pins) */
+    ILI9488_MspInit();
+
     /* Initialize structure */
     memset(hili, 0, sizeof(ILI9488_Handle_t));
 
@@ -264,26 +278,6 @@ ILI9488_StatusTypeDef ILI9488_Init(ILI9488_Handle_t *hili,
 
     hili->width = ILI9488_WIDTH;
     hili->height = ILI9488_HEIGHT;
-
-    /* Configure GPIO pins */
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
-
-    /* Chip select pin */
-    GPIO_InitStruct.Pin = cs_pin;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-    HAL_GPIO_Init(cs_port, &GPIO_InitStruct);
-    HAL_GPIO_WritePin(cs_port, cs_pin, GPIO_PIN_SET); // Deselect
-
-    /* Data/Command pin */
-    GPIO_InitStruct.Pin = dc_pin;
-    HAL_GPIO_Init(dc_port, &GPIO_InitStruct);
-    HAL_GPIO_WritePin(dc_port, dc_pin, GPIO_PIN_RESET); // Command mode
-
-    /* Reset pin */
-    GPIO_InitStruct.Pin = rst_pin;
-    HAL_GPIO_Init(rst_port, &GPIO_InitStruct);
 
     /* Hardware reset */
     HAL_GPIO_WritePin(rst_port, rst_pin, GPIO_PIN_RESET);
@@ -440,6 +434,40 @@ ILI9488_StatusTypeDef ILI9488_DrawPixel(ILI9488_Handle_t *hili,
     ILI9488_WriteData16(hili, &color, 1);
 
     return ILI9488_OK;
+}
+
+/**
+ * @brief   Write a block of pixels to the display
+ * @param   hili Pointer to ILI9488 handle
+ * @param   x0 Start X coordinate
+ * @param   y0 Start Y coordinate
+ * @param   x1 End X coordinate
+ * @param   y1 End Y coordinate
+ * @param   data Pixel buffer (RGB565)
+ * @param   size Number of pixels in buffer
+ * @retval  ILI9488_StatusTypeDef Operation status
+ */
+ILI9488_StatusTypeDef ILI9488_WritePixels(ILI9488_Handle_t *hili,
+                                         uint16_t x0, uint16_t y0,
+                                         uint16_t x1, uint16_t y1,
+                                         const uint16_t *data,
+                                         uint32_t size)
+{
+    if (hili == NULL || data == NULL) {
+        return ILI9488_INVALID_PARAM;
+    }
+
+    if (!hili->initialized) {
+        return ILI9488_NOT_INITIALIZED;
+    }
+
+    if (x1 < x0 || y1 < y0) {
+        return ILI9488_INVALID_PARAM;
+    }
+
+    ILI9488_SetAddressWindow(hili, x0, y0, x1, y1);
+    ILI9488_WriteCommand(hili, ILI9488_CMD_MEMORY_WRITE);
+    return ILI9488_WriteData16(hili, (uint16_t *)data, size);
 }
 
 /**

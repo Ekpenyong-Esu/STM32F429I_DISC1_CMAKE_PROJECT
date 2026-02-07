@@ -17,6 +17,7 @@
 #include <string.h>
 #include <stdio.h>
 
+
 /* Private defines -----------------------------------------------------------*/
 
 /** @defgroup XPT2046_Private_Defines Private Defines
@@ -80,6 +81,28 @@ static void XPT2046_DelayUs(uint32_t delay);
  * @param   height Display height
  * @retval  XPT2046_StatusTypeDef Operation status
  */
+
+
+/* Default weak MSP implementations (board can override) */
+__weak void XPT2046_MspInit(GPIO_TypeDef *cs_port, uint16_t cs_pin,
+                            GPIO_TypeDef *irq_port, uint16_t irq_pin)
+{
+    (void)cs_port;
+    (void)cs_pin;
+    (void)irq_port;
+    (void)irq_pin;
+}
+
+__weak void XPT2046_MspDeInit(GPIO_TypeDef *cs_port, uint16_t cs_pin,
+                              GPIO_TypeDef *irq_port, uint16_t irq_pin)
+{
+    (void)cs_port;
+    (void)cs_pin;
+    (void)irq_port;
+    (void)irq_pin;
+}
+
+
 XPT2046_StatusTypeDef XPT2046_Init(XPT2046_Handle_t *hxpt,
                                   GPIO_TypeDef *cs_port, uint16_t cs_pin,
                                   GPIO_TypeDef *irq_port, uint16_t irq_pin,
@@ -88,6 +111,9 @@ XPT2046_StatusTypeDef XPT2046_Init(XPT2046_Handle_t *hxpt,
     if (hxpt == NULL) {
         return XPT2046_INVALID_PARAM;
     }
+
+    /* Board-specific MSP hook (GPIO clocks) */
+    XPT2046_MspInit(cs_port, cs_pin, irq_port, irq_pin);
 
     /* Initialize structure */
     memset(hxpt, 0, sizeof(XPT2046_Handle_t));

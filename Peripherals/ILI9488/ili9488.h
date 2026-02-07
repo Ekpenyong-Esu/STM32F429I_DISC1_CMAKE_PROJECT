@@ -91,6 +91,14 @@ typedef struct {
     bool initialized;               /**< Initialization status */
 } ILI9488_Handle_t;
 
+/**
+ * @brief   Board support hooks (weak by default)
+ * @details Override these in a board-specific file (e.g., ili9488_board.c)
+ *          to configure GPIO clocks and control pins.
+ */
+void ILI9488_MspInit(void);
+void ILI9488_MspDeInit(void);
+
 /* Exported functions -------------------------------------------------------*/
 
 /** @defgroup ILI9488_Init Initialization and Configuration
@@ -175,6 +183,11 @@ ILI9488_StatusTypeDef ILI9488_Clear(ILI9488_Handle_t *hili, uint16_t color);
  * @retval  ILI9488_StatusTypeDef Operation status
  */
 ILI9488_StatusTypeDef ILI9488_UpdateScreen(ILI9488_Handle_t *hili, uint16_t *buffer, uint32_t size);
+ILI9488_StatusTypeDef ILI9488_WritePixels(ILI9488_Handle_t *hili,
+                                         uint16_t x0, uint16_t y0,
+                                         uint16_t x1, uint16_t y1,
+                                         const uint16_t *data,
+                                         uint32_t size);
 
 /** @} */
 

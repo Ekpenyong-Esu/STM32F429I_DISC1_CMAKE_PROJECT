@@ -89,6 +89,15 @@ typedef struct {
     uint32_t last_touch_time;       /**< Last touch timestamp */
 } XPT2046_Handle_t;
 
+/**
+ * @brief   Board support hooks (weak by default)
+ * @details Override these to configure GPIO clocks for CS/IRQ pins.
+ */
+void XPT2046_MspInit(GPIO_TypeDef *cs_port, uint16_t cs_pin,
+                     GPIO_TypeDef *irq_port, uint16_t irq_pin);
+void XPT2046_MspDeInit(GPIO_TypeDef *cs_port, uint16_t cs_pin,
+                       GPIO_TypeDef *irq_port, uint16_t irq_pin);
+
 /* Exported functions -------------------------------------------------------*/
 
 /** @defgroup XPT2046_Init Initialization and Configuration

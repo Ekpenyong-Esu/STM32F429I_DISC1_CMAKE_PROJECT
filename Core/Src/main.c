@@ -17,13 +17,7 @@
 #include <stdint.h>
 #include "lvgl.h"
 #include "lvgl_app.h"
-#include "ltdc.h"
-#include "fmc.h"
-#include "ili9341.h"
-#include "i2c.h"
-#include "touchscreen.h"
-#include "app_low_power.h"
-#include "pwr.h"
+#include "spi.h"
 
 /* Private variables ---------------------------------------------------------*/
 static uint32_t last_update = 0;
@@ -33,8 +27,7 @@ static int sensor_val = 50;
 static int demo_counter = 0;
 
 /* Private function prototypes -----------------------------------------------*/
-static void Demo_UpdateSensors(void);
-static void Demo_CheckLowPower(void);
+static void UpdateSensors(void);
 
 int main(void)
 {
@@ -49,75 +42,20 @@ int main(void)
 #endif
 
     /*-------------------------------------------------------------------------
-     * STEP 2: Initialize Power Management (EARLY!)
+     * STEP 2: Initialize SPI for ILI9488 + XPT2046
      *-----------------------------------------------------------------------*/
-    /* Initialize power management BEFORE other peripherals */
-    /* This configures debug support and power controller */
-    if (PWR_InitDefault() != PWR_OK) {
-        log_error("Pwr Init failed");
-    }
+    SPI_Init();
 
     /*-------------------------------------------------------------------------
-     * STEP 3: Initialize I2C for Touchscreen
-     *-----------------------------------------------------------------------*/
-    I2C_Init();
-
-    /*-------------------------------------------------------------------------
-     * STEP 4: Initialize External SDRAM (for framebuffer) and Touchscreen
-     *-----------------------------------------------------------------------*/
-    FMC_Driver_Handle_t fmcHandle;
-    FMC_Driver_SDRAM_Config_t sdramConfig = {
-        .bank = FMC_SDRAM_BANK2,
-        .columnBits = FMC_SDRAM_COLUMN_BITS_NUM_8,
-        .rowBits = FMC_SDRAM_ROW_BITS_NUM_12,
-        .dataWidth = FMC_SDRAM_MEM_BUS_WIDTH_16,
-        .internalBanks = FMC_SDRAM_INTERN_BANKS_NUM_4,
-        .casLatency = FMC_SDRAM_CAS_LATENCY_3,
-        .clockPeriod = FMC_SDRAM_CLOCK_PERIOD_3,
-        .readBurst = FMC_SDRAM_RBURST_DISABLE,
-        .readPipeDelay = FMC_SDRAM_RPIPE_DELAY_1,
-        .writeProtection = FMC_SDRAM_WRITE_PROTECTION_DISABLE,
-        .loadToActiveDelay = 2,
-        .exitSelfRefreshDelay = 7,
-        .selfRefreshTime = 4,
-        .rowCycleDelay = 7,
-        .writeRecoveryTime = 2,
-        .rpDelay = 2,
-        .rcdDelay = 2
-    };
-
-    /* Initialize SDRAM and verify return status */
-    HAL_StatusTypeDef sdram_status = FMC_Driver_SDRAM_Init(&fmcHandle, &sdramConfig);
-    if (sdram_status != HAL_OK)
-    {
-        log_error("SRAM Init Failed");
-    }
-
-    /*-------------------------------------------------------------------------
-     * STEP 5: Initialize ILI9341 LCD Controller
-     *-----------------------------------------------------------------------*/
-    ili9341_Init();  /* Configure LCD via SPI, switch to RGB mode */
-
-    /*-------------------------------------------------------------------------
-     * STEP 6: Initialize LTDC Display Controller
-     *-----------------------------------------------------------------------*/
-    LTDC_HW_Init();
-
-    /*-------------------------------------------------------------------------
-     * STEP 7: Initialize LVGL and Create GUI
+     * STEP 3: Initialize LVGL and Create GUI
      *-----------------------------------------------------------------------*/
     LVGL_App_Init();
-
-    /*-------------------------------------------------------------------------
-     * STEP 8: Initialize Application Low Power Management
-     *-----------------------------------------------------------------------*/
-    APP_LowPowerInit();
 
     printf("System initialized successfully\n");
     LVGL_App_UpdateStatus("System Ready");
 
     /*-------------------------------------------------------------------------
-     * STEP 9: Main Loop
+     * STEP 4: Main Loop
      *-----------------------------------------------------------------------*/
     while(1)
     {
@@ -125,10 +63,7 @@ int main(void)
         LVGL_App_Tick();
 
         /* Update demo sensor values periodically */
-        Demo_UpdateSensors();
-
-        /* Check if should enter low power mode */
-        Demo_CheckLowPower();
+        UpdateSensors();
 
         /* Small delay to prevent tight loop */
         HAL_Delay(5);
@@ -139,7 +74,7 @@ int main(void)
  * @brief   Update demo sensor values
  * @details Updates temperature, humidity, and chart data
  */
-static void Demo_UpdateSensors(void)
+static void UpdateSensors(void)
 {
     uint32_t current_time = HAL_GetTick();
 
@@ -176,72 +111,7 @@ static void Demo_UpdateSensors(void)
  * @brief   Check and handle low power mode entry
  * @details Checks every second if system should enter low power
  */
-static void Demo_CheckLowPower(void)
-{
-    static uint32_t last_low_power_check = 0;
-    uint32_t current_time = HAL_GetTick();
-
-    /* Check for low power mode every 1 second */
-    if (current_time - last_low_power_check >= 1000)
-    {
-        /* Check if auto-sleep was requested (from dim animation) */
-        if (APP_IsAutoSleepRequested())
-        {
-            printf("Auto-sleep requested from animation\n");
-            APP_ClearAutoSleepRequest();
-
-            /* Enter low power mode */
-            LVGL_App_UpdateStatus("Auto Sleep...");
-            HAL_Delay(100); /* Give time for status update to render */
-
-            PWR_StatusTypeDef status = APP_EnterLowPowerMode();
-
-            if (status == PWR_OK)
-            {
-                /* System woke up from low power mode */
-                printf("Woke up from low power mode\n");
-                LVGL_App_UpdateStatus("Woke Up!");
-                APP_UpdateActivity(); /* Reset activity timer */
-            }
-            else
-            {
-                printf("Low power mode failed: %d\n", status);
-                LVGL_App_UpdateStatus("Low Power Failed");
-            }
-        }
-        /* Or check if should enter low power based on inactivity */
-        else if (APP_ShouldEnterLowPower())
-        {
-            printf("Entering low power mode due to inactivity\n");
-
-            /* Update status before entering low power */
-            LVGL_App_UpdateStatus("Entering Low Power...");
-            HAL_Delay(100); /* Give time for status update to render */
-
-            PWR_StatusTypeDef status = APP_EnterLowPowerMode();
-
-            if (status == PWR_OK)
-            {
-                /* System woke up from low power mode */
-                printf("Woke up from low power mode\n");
-                LVGL_App_UpdateStatus("System Resumed");
-                APP_UpdateActivity(); /* Reset activity timer */
-            }
-            else
-            {
-                printf("Low power mode failed: %d\n", status);
-                LVGL_App_UpdateStatus("Low Power Failed");
-            }
-        }
-
-        last_low_power_check = current_time;
-    }
-}
-
-/* NOTE: HAL_GPIO_EXTI_Callback is already implemented in touchscreen.c
- * The touchscreen driver handles calling APP_TouchActivity() for wake-up
- * No need to duplicate the callback here!
- */
+/* NOTE: Touch is handled by XPT2046 in lv_port_indev.c */
 
 #ifdef USE_FULL_ASSERT
 /**

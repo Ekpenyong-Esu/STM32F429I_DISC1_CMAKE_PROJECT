@@ -30,10 +30,13 @@
 
 #include <src/font/lv_font.h>
 #include <stdint.h>
+#include <string.h>
 #include "lvgl.h"
 #include "lvgl_app.h"
 #include "lv_port_disp.h"
 #include "lv_port_indev.h"
+#include "main.h"
+#include "stm32f4xx_hal.h"
 #include "../LOG/log.h"
 
 /*-----------------------------------------------------------------------------
@@ -43,6 +46,8 @@ static lv_obj_t *scr_home;      /* Home dashboard screen */
 static lv_obj_t *scr_sensors;   /* Sensor monitoring screen */
 static lv_obj_t *scr_settings;  /* Settings screen */
 static lv_obj_t *scr_info;      /* System info screen */
+static lv_obj_t *scr_pins;      /* Pins list screen */
+static lv_obj_t *scr_pin_detail;/* Pin detail screen */
 
 /* UI Elements */
 static lv_obj_t *status_label;
@@ -60,13 +65,172 @@ static lv_obj_t *btn_sensors_back;
 static lv_obj_t *btn_settings_info;
 static lv_obj_t *btn_settings_back;
 static lv_obj_t *btn_info_back;
+static lv_obj_t *btn_home_pins;
+static lv_obj_t *btn_pins_back;
+static lv_obj_t *btn_pin_detail_back;
+
+static lv_obj_t *pin_name_label;
+static lv_obj_t *pin_port_label;
+static lv_obj_t *pin_nature_label;
+static lv_obj_t *pin_state_label;
 
 /* Forward declarations */
 static void create_home_screen(void);
 static void create_sensor_screen(void);
 static void create_settings_screen(void);
 static void create_info_screen(void);
+static void create_pins_screen(void);
+static void create_pin_detail_screen(void);
 static void nav_event_handler(lv_event_t *e);
+static void pin_item_event_handler(lv_event_t *e);
+
+typedef struct {
+    const char *name;
+    GPIO_TypeDef *port;
+    uint16_t pin;
+} PinInfo;
+
+#define PIN_ENTRY(name, port, pin) {name, port, pin}
+
+static const PinInfo pin_table[] = {
+    PIN_ENTRY("PC14_OSC32_IN", PC14_OSC32_IN_GPIO_Port, PC14_OSC32_IN_Pin),
+    PIN_ENTRY("PC15_OSC32_OUT", PC15_OSC32_OUT_GPIO_Port, PC15_OSC32_OUT_Pin),
+    PIN_ENTRY("A0", A0_GPIO_Port, A0_Pin),
+    PIN_ENTRY("A1", A1_GPIO_Port, A1_Pin),
+    PIN_ENTRY("A2", A2_GPIO_Port, A2_Pin),
+    PIN_ENTRY("A3", A3_GPIO_Port, A3_Pin),
+    PIN_ENTRY("A4", A4_GPIO_Port, A4_Pin),
+    PIN_ENTRY("A5", A5_GPIO_Port, A5_Pin),
+    PIN_ENTRY("SPI4_SCK", SPI4_SCK_GPIO_Port, SPI4_SCK_Pin),
+    PIN_ENTRY("SPI4_MISO", SPI4_MISO_GPIO_Port, SPI4_MISO_Pin),
+    PIN_ENTRY("SPI4_MOSI", SPI4_MOSI_GPIO_Port, SPI4_MOSI_Pin),
+    PIN_ENTRY("ENABLE", ENABLE_GPIO_Port, ENABLE_Pin),
+    PIN_ENTRY("PH0_OSC_IN", PH0_OSC_IN_GPIO_Port, PH0_OSC_IN_Pin),
+    PIN_ENTRY("PH1_OSC_OUT", PH1_OSC_OUT_GPIO_Port, PH1_OSC_OUT_Pin),
+    PIN_ENTRY("SDNWE", SDNWE_GPIO_Port, SDNWE_Pin),
+    PIN_ENTRY("NCS_MEMS_SPI", NCS_MEMS_SPI_GPIO_Port, NCS_MEMS_SPI_Pin),
+    PIN_ENTRY("CSX", CSX_GPIO_Port, CSX_Pin),
+    PIN_ENTRY("B1", B1_GPIO_Port, B1_Pin),
+    PIN_ENTRY("MEMS_INT1", MEMS_INT1_GPIO_Port, MEMS_INT1_Pin),
+    PIN_ENTRY("MEMS_INT2", MEMS_INT2_GPIO_Port, MEMS_INT2_Pin),
+    PIN_ENTRY("B5", B5_GPIO_Port, B5_Pin),
+    PIN_ENTRY("VSYNC", VSYNC_GPIO_Port, VSYNC_Pin),
+    PIN_ENTRY("G2", G2_GPIO_Port, G2_Pin),
+    PIN_ENTRY("ACP_RST", ACP_RST_GPIO_Port, ACP_RST_Pin),
+    PIN_ENTRY("OTG_FS_PSO", OTG_FS_PSO_GPIO_Port, OTG_FS_PSO_Pin),
+    PIN_ENTRY("OTG_FS_OC", OTG_FS_OC_GPIO_Port, OTG_FS_OC_Pin),
+    PIN_ENTRY("R3", R3_GPIO_Port, R3_Pin),
+    PIN_ENTRY("R6", R6_GPIO_Port, R6_Pin),
+    PIN_ENTRY("BOOT1", BOOT1_GPIO_Port, BOOT1_Pin),
+    PIN_ENTRY("SDNRAS", SDNRAS_GPIO_Port, SDNRAS_Pin),
+    PIN_ENTRY("A6", A6_GPIO_Port, A6_Pin),
+    PIN_ENTRY("A7", A7_GPIO_Port, A7_Pin),
+    PIN_ENTRY("A8", A8_GPIO_Port, A8_Pin),
+    PIN_ENTRY("A9", A9_GPIO_Port, A9_Pin),
+    PIN_ENTRY("A10", A10_GPIO_Port, A10_Pin),
+    PIN_ENTRY("A11", A11_GPIO_Port, A11_Pin),
+    PIN_ENTRY("D4", D4_GPIO_Port, D4_Pin),
+    PIN_ENTRY("D5", D5_GPIO_Port, D5_Pin),
+    PIN_ENTRY("D6", D6_GPIO_Port, D6_Pin),
+    PIN_ENTRY("D7", D7_GPIO_Port, D7_Pin),
+    PIN_ENTRY("D8", D8_GPIO_Port, D8_Pin),
+    PIN_ENTRY("D9", D9_GPIO_Port, D9_Pin),
+    PIN_ENTRY("D10", D10_GPIO_Port, D10_Pin),
+    PIN_ENTRY("D11", D11_GPIO_Port, D11_Pin),
+    PIN_ENTRY("D12", D12_GPIO_Port, D12_Pin),
+    PIN_ENTRY("G4", G4_GPIO_Port, G4_Pin),
+    PIN_ENTRY("G5", G5_GPIO_Port, G5_Pin),
+    PIN_ENTRY("OTG_HS_ID", OTG_HS_ID_GPIO_Port, OTG_HS_ID_Pin),
+    PIN_ENTRY("VBUS_HS", VBUS_HS_GPIO_Port, VBUS_HS_Pin),
+    PIN_ENTRY("OTG_HS_DM", OTG_HS_DM_GPIO_Port, OTG_HS_DM_Pin),
+    PIN_ENTRY("OTG_HS_DP", OTG_HS_DP_GPIO_Port, OTG_HS_DP_Pin),
+    PIN_ENTRY("D13", D13_GPIO_Port, D13_Pin),
+    PIN_ENTRY("D14", D14_GPIO_Port, D14_Pin),
+    PIN_ENTRY("D15", D15_GPIO_Port, D15_Pin),
+    PIN_ENTRY("TE", TE_GPIO_Port, TE_Pin),
+    PIN_ENTRY("RDX", RDX_GPIO_Port, RDX_Pin),
+    PIN_ENTRY("WRX_DCX", WRX_DCX_GPIO_Port, WRX_DCX_Pin),
+    PIN_ENTRY("D0", D0_GPIO_Port, D0_Pin),
+    PIN_ENTRY("D1", D1_GPIO_Port, D1_Pin),
+    PIN_ENTRY("BA0", BA0_GPIO_Port, BA0_Pin),
+    PIN_ENTRY("BA1", BA1_GPIO_Port, BA1_Pin),
+    PIN_ENTRY("R7", R7_GPIO_Port, R7_Pin),
+    PIN_ENTRY("DOTCLK", DOTCLK_GPIO_Port, DOTCLK_Pin),
+    PIN_ENTRY("SDCLK", SDCLK_GPIO_Port, SDCLK_Pin),
+    PIN_ENTRY("HSYNC", HSYNC_GPIO_Port, HSYNC_Pin),
+    PIN_ENTRY("G6", G6_GPIO_Port, G6_Pin),
+    PIN_ENTRY("I2C3_SDA", I2C3_SDA_GPIO_Port, I2C3_SDA_Pin),
+    PIN_ENTRY("I2C3_SCL", I2C3_SCL_GPIO_Port, I2C3_SCL_Pin),
+    PIN_ENTRY("STLINK_RX", STLINK_RX_GPIO_Port, STLINK_RX_Pin),
+    PIN_ENTRY("STLINK_TX", STLINK_TX_GPIO_Port, STLINK_TX_Pin),
+    PIN_ENTRY("R4", R4_GPIO_Port, R4_Pin),
+    PIN_ENTRY("R5", R5_GPIO_Port, R5_Pin),
+    PIN_ENTRY("SWDIO", SWDIO_GPIO_Port, SWDIO_Pin),
+    PIN_ENTRY("SWCLK", SWCLK_GPIO_Port, SWCLK_Pin),
+    PIN_ENTRY("TP_INT1", TP_INT1_GPIO_Port, TP_INT1_Pin),
+    PIN_ENTRY("R2", R2_GPIO_Port, R2_Pin),
+    PIN_ENTRY("D2", D2_GPIO_Port, D2_Pin),
+    PIN_ENTRY("D3", D3_GPIO_Port, D3_Pin),
+    PIN_ENTRY("G7", G7_GPIO_Port, G7_Pin),
+    PIN_ENTRY("B2", B2_GPIO_Port, B2_Pin),
+    PIN_ENTRY("G3", G3_GPIO_Port, G3_Pin),
+    PIN_ENTRY("B3", B3_GPIO_Port, B3_Pin),
+    PIN_ENTRY("B4", B4_GPIO_Port, B4_Pin),
+    PIN_ENTRY("LD3", LD3_GPIO_Port, LD3_Pin),
+    PIN_ENTRY("LD4", LD4_GPIO_Port, LD4_Pin),
+    PIN_ENTRY("SDNCAS", SDNCAS_GPIO_Port, SDNCAS_Pin),
+    PIN_ENTRY("SDCKE1", SDCKE1_GPIO_Port, SDCKE1_Pin),
+    PIN_ENTRY("SDNE1", SDNE1_GPIO_Port, SDNE1_Pin),
+    PIN_ENTRY("B6", B6_GPIO_Port, B6_Pin),
+    PIN_ENTRY("B7", B7_GPIO_Port, B7_Pin),
+    PIN_ENTRY("NBL0", NBL0_GPIO_Port, NBL0_Pin),
+    PIN_ENTRY("NBL1", NBL1_GPIO_Port, NBL1_Pin)
+};
+
+static const char *pin_port_name(GPIO_TypeDef *port)
+{
+    if (port == GPIOA) return "GPIOA";
+    if (port == GPIOB) return "GPIOB";
+    if (port == GPIOC) return "GPIOC";
+    if (port == GPIOD) return "GPIOD";
+    if (port == GPIOE) return "GPIOE";
+    if (port == GPIOF) return "GPIOF";
+    if (port == GPIOG) return "GPIOG";
+    if (port == GPIOH) return "GPIOH";
+    return "GPIO?";
+}
+
+static uint8_t pin_index(uint16_t pin)
+{
+    for (uint8_t i = 0; i < 16; i++) {
+        if (pin == (uint16_t)(1U << i)) return i;
+    }
+    return 0xFF;
+}
+
+static const char *pin_nature_from_name(const char *name)
+{
+    if (strstr(name, "OSC")) return "OSC";
+    if (strstr(name, "SPI4")) return "SPI4 (AF)";
+    if (strstr(name, "I2C3")) return "I2C3 (AF)";
+    if (strstr(name, "STLINK")) return "ST-LINK UART";
+    if (strstr(name, "SWD")) return "SWD";
+    if (strstr(name, "OTG") || strstr(name, "VBUS")) return "USB OTG";
+    if (strstr(name, "LD")) return "LED";
+    if (strstr(name, "MEMS")) return "MEMS";
+    if (strstr(name, "TP_INT")) return "Touch INT";
+    if (strstr(name, "CSX") || strstr(name, "WRX") || strstr(name, "RDX") || strstr(name, "TE")) return "LCD CTRL";
+    if (!strcmp(name, "VSYNC") || !strcmp(name, "HSYNC") || !strcmp(name, "DOTCLK") ||
+        !strcmp(name, "R2") || !strcmp(name, "R3") || !strcmp(name, "R4") || !strcmp(name, "R5") || !strcmp(name, "R6") || !strcmp(name, "R7") ||
+        !strcmp(name, "G2") || !strcmp(name, "G3") || !strcmp(name, "G4") || !strcmp(name, "G5") || !strcmp(name, "G6") || !strcmp(name, "G7") ||
+        !strcmp(name, "B2") || !strcmp(name, "B3") || !strcmp(name, "B4") || !strcmp(name, "B6") || !strcmp(name, "B7")) {
+        return "LTDC";
+    }
+    if (strstr(name, "SDN") || strstr(name, "SDC") || strstr(name, "SDNE") || strstr(name, "SDCK") || strstr(name, "NBL") || name[0] == 'A' || name[0] == 'D' || strstr(name, "BA")) return "FMC/SDRAM";
+    if (!strcmp(name, "BOOT1")) return "BOOT";
+    if (!strcmp(name, "B1")) return "User Button";
+    return "GPIO";
+}
 
 /*-----------------------------------------------------------------------------
  * Navigation Event Handler
@@ -87,6 +251,35 @@ static void nav_event_handler(lv_event_t *e)
                     false);
 
     }
+}
+
+static void pin_item_event_handler(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code != LV_EVENT_CLICKED) return;
+
+    const PinInfo *info = (const PinInfo *)lv_event_get_user_data(e);
+    if (info == NULL) return;
+
+    uint8_t idx = pin_index(info->pin);
+    const char *port_name = pin_port_name(info->port);
+    const char *nature = pin_nature_from_name(info->name);
+    GPIO_PinState state = HAL_GPIO_ReadPin(info->port, info->pin);
+
+    char buf[64];
+    lv_snprintf(buf, sizeof(buf), "Pin: %s", info->name);
+    lv_label_set_text(pin_name_label, buf);
+
+    lv_snprintf(buf, sizeof(buf), "Port: %s / %u", port_name, idx);
+    lv_label_set_text(pin_port_label, buf);
+
+    lv_snprintf(buf, sizeof(buf), "Nature: %s", nature);
+    lv_label_set_text(pin_nature_label, buf);
+
+    lv_snprintf(buf, sizeof(buf), "State: %s", state == GPIO_PIN_SET ? "HIGH" : "LOW");
+    lv_label_set_text(pin_state_label, buf);
+
+    lv_screen_load_anim(scr_pin_detail, LV_SCR_LOAD_ANIM_FADE_ON, 200, 0, false);
 }
 
 /*=============================================================================
@@ -193,6 +386,16 @@ static void create_home_screen(void)
     lv_obj_t *lbl_settings = lv_label_create(btn_settings);
     lv_label_set_text(lbl_settings, LV_SYMBOL_SETTINGS " Config");
     lv_obj_center(lbl_settings);
+
+    lv_obj_t *btn_pins = lv_btn_create(scr_home);
+    lv_obj_set_size(btn_pins, 90, 36);
+    lv_obj_align(btn_pins, LV_ALIGN_BOTTOM_MID, 0, -10);
+    lv_obj_set_style_bg_color(btn_pins, lv_color_hex(0x4ecdc4), 0);
+    btn_home_pins = btn_pins;
+
+    lv_obj_t *lbl_pins = lv_label_create(btn_pins);
+    lv_label_set_text(lbl_pins, LV_SYMBOL_LIST " Pins");
+    lv_obj_center(lbl_pins);
 }
 
 /*-----------------------------------------------------------------------------
@@ -386,7 +589,7 @@ static void create_info_screen(void)
         "Freq: 180 MHz\n"
         "Flash: 2 MB\n"
         "RAM: 256 KB\n"
-        "Display: 240x320\n"
+        "Display: 320x480\n"
         "LVGL: v9.4.x\n"
         "\n"
         "Status: Running");
@@ -401,6 +604,79 @@ static void create_info_screen(void)
     lv_obj_set_style_bg_color(btn_back, lv_color_hex(0x5f6368), 0);
     /* Register callback after all screens are created */
     btn_info_back = btn_back;
+
+    lv_obj_t *lbl_back = lv_label_create(btn_back);
+    lv_label_set_text(lbl_back, LV_SYMBOL_LEFT " Back");
+    lv_obj_center(lbl_back);
+}
+
+static void create_pins_screen(void)
+{
+    scr_pins = lv_obj_create(NULL);
+    lv_obj_set_style_bg_color(scr_pins, lv_color_hex(0x1a1a2e), 0);
+
+    lv_obj_t *title = lv_label_create(scr_pins);
+    lv_label_set_text(title, LV_SYMBOL_LIST " MCU Pins");
+    lv_obj_set_style_text_color(title, lv_color_white(), 0);
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_14, 0);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
+
+    lv_obj_t *list = lv_list_create(scr_pins);
+    lv_obj_set_size(list, 300, 380);
+    lv_obj_align(list, LV_ALIGN_BOTTOM_MID, 0, -10);
+
+    for (uint32_t i = 0; i < (sizeof(pin_table) / sizeof(pin_table[0])); i++) {
+        lv_obj_t *btn = lv_list_add_btn(list, NULL, pin_table[i].name);
+        lv_obj_add_event_cb(btn, pin_item_event_handler, LV_EVENT_CLICKED, (void *)&pin_table[i]);
+    }
+
+    lv_obj_t *btn_back = lv_btn_create(scr_pins);
+    lv_obj_set_size(btn_back, 60, 35);
+    lv_obj_align(btn_back, LV_ALIGN_TOP_LEFT, 5, 5);
+    lv_obj_set_style_bg_color(btn_back, lv_color_hex(0x5f6368), 0);
+    btn_pins_back = btn_back;
+
+    lv_obj_t *lbl_back = lv_label_create(btn_back);
+    lv_label_set_text(lbl_back, LV_SYMBOL_LEFT " Back");
+    lv_obj_center(lbl_back);
+}
+
+static void create_pin_detail_screen(void)
+{
+    scr_pin_detail = lv_obj_create(NULL);
+    lv_obj_set_style_bg_color(scr_pin_detail, lv_color_hex(0x1a1a2e), 0);
+
+    lv_obj_t *title = lv_label_create(scr_pin_detail);
+    lv_label_set_text(title, LV_SYMBOL_EDIT " Pin Detail");
+    lv_obj_set_style_text_color(title, lv_color_white(), 0);
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_14, 0);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
+
+    pin_name_label = lv_label_create(scr_pin_detail);
+    lv_label_set_text(pin_name_label, "Pin: --");
+    lv_obj_set_style_text_color(pin_name_label, lv_color_white(), 0);
+    lv_obj_align(pin_name_label, LV_ALIGN_TOP_LEFT, 20, 60);
+
+    pin_port_label = lv_label_create(scr_pin_detail);
+    lv_label_set_text(pin_port_label, "Port: --");
+    lv_obj_set_style_text_color(pin_port_label, lv_color_white(), 0);
+    lv_obj_align(pin_port_label, LV_ALIGN_TOP_LEFT, 20, 90);
+
+    pin_nature_label = lv_label_create(scr_pin_detail);
+    lv_label_set_text(pin_nature_label, "Nature: --");
+    lv_obj_set_style_text_color(pin_nature_label, lv_color_white(), 0);
+    lv_obj_align(pin_nature_label, LV_ALIGN_TOP_LEFT, 20, 120);
+
+    pin_state_label = lv_label_create(scr_pin_detail);
+    lv_label_set_text(pin_state_label, "State: --");
+    lv_obj_set_style_text_color(pin_state_label, lv_color_white(), 0);
+    lv_obj_align(pin_state_label, LV_ALIGN_TOP_LEFT, 20, 150);
+
+    lv_obj_t *btn_back = lv_btn_create(scr_pin_detail);
+    lv_obj_set_size(btn_back, 60, 35);
+    lv_obj_align(btn_back, LV_ALIGN_TOP_LEFT, 5, 5);
+    lv_obj_set_style_bg_color(btn_back, lv_color_hex(0x5f6368), 0);
+    btn_pin_detail_back = btn_back;
 
     lv_obj_t *lbl_back = lv_label_create(btn_back);
     lv_label_set_text(lbl_back, LV_SYMBOL_LEFT " Back");
@@ -439,6 +715,8 @@ void LVGL_App_Init(void)
     create_sensor_screen();
     create_settings_screen();
     create_info_screen();
+    create_pins_screen();
+    create_pin_detail_screen();
     create_home_screen();
 
     /* Register navigation callbacks now that all screen objects exist */
@@ -459,6 +737,15 @@ void LVGL_App_Init(void)
     }
     if (btn_info_back) {
         lv_obj_add_event_cb(btn_info_back, nav_event_handler, LV_EVENT_CLICKED, scr_settings);
+    }
+    if (btn_home_pins) {
+        lv_obj_add_event_cb(btn_home_pins, nav_event_handler, LV_EVENT_CLICKED, scr_pins);
+    }
+    if (btn_pins_back) {
+        lv_obj_add_event_cb(btn_pins_back, nav_event_handler, LV_EVENT_CLICKED, scr_home);
+    }
+    if (btn_pin_detail_back) {
+        lv_obj_add_event_cb(btn_pin_detail_back, nav_event_handler, LV_EVENT_CLICKED, scr_pins);
     }
 
     /* Step 4: Load home screen as default */

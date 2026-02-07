@@ -169,8 +169,8 @@ const char* SPI_GetStatusString(SPI_StatusTypeDef status);
 /* Exported variables ---------------------------------------------------------*/
 
 /**
- * @brief   SPI5 handle structure
- * @details Used by HAL functions to manage SPI5 operations
+ * @brief   SPI handle structure
+ * @details Used by HAL functions to manage SPI4 operations
  *          typically used for display or external sensor communication
  */
 extern SPI_HandleTypeDef hspi5;

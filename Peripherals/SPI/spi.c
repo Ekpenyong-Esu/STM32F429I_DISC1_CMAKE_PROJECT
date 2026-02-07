@@ -18,8 +18,8 @@
 
 /* Private variables ---------------------------------------------------------*/
 /**
- * @brief   SPI5 handle structure
- * @details Used by HAL functions for SPI5 peripheral operations
+ * @brief   SPI handle structure
+ * @details Used by HAL functions for SPI4 peripheral operations
  */
 SPI_HandleTypeDef hspi5;
 
@@ -68,7 +68,7 @@ static void SPIx_Error(void)
 
 /**
   * @brief  SPI Initialization Function
-  * @details Configures the SPI5 peripheral with the following settings:
+  * @details Configures the SPI4 peripheral with the following settings:
   *          - Master mode operation
   *          - Full-duplex (2 lines) communication
   *          - 8-bit data size
@@ -80,16 +80,16 @@ static void SPIx_Error(void)
   *          - TI mode disabled
   *          - CRC calculation disabled
   *
-  * @note   SPI5 is used for ILI9341 LCD display communication (SPI Mode 0)
+  * @note   SPI4 is used for LCD/touch SPI communication (SPI Mode 0)
   *         ILI9341 requires CPOL=0, CPHA=0 (clock idle LOW, sample on rising edge)
   * @param  None
   * @retval None
   */
 void SPI_Init(void)
 {
-    log_debug("SPI: Initializing SPI5");
-  /* SPI5 parameter configuration*/
-  hspi5.Instance = SPI5;                                /* Select SPI5 peripheral */
+    log_debug("SPI: Initializing SPI4");
+  /* SPI4 parameter configuration*/
+  hspi5.Instance = SPI4;                                /* Select SPI4 peripheral */
   hspi5.Init.Mode = SPI_MODE_MASTER;                    /* Configure as master */
   hspi5.Init.Direction = SPI_DIRECTION_2LINES;          /* Full-duplex mode */
   hspi5.Init.DataSize = SPI_DATASIZE_8BIT;              /* 8-bit data size */
@@ -109,7 +109,7 @@ void SPI_Init(void)
 
   /* Initialize the SPI peripheral with the specified parameters */
    HAL_SPI_Init(&hspi5);
-   log_debug("SPI: SPI5 initialized successfully");
+  log_debug("SPI: SPI4 initialized successfully");
 }
 
 /**
@@ -126,7 +126,7 @@ SPI_StatusTypeDef SPI_Init_Custom(const SPI_ConfigTypeDef* config)
   }
 
   /* Configure SPI with custom parameters */
-  hspi5.Instance = SPI5;
+  hspi5.Instance = SPI4;
   hspi5.Init.Mode = config->Mode;
   hspi5.Init.Direction = config->Direction;
   hspi5.Init.DataSize = config->DataSize;
