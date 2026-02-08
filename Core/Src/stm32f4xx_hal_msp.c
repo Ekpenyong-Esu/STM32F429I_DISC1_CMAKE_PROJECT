@@ -44,6 +44,9 @@
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
 
+/* DMA handle for SPI4 TX (used for LCD transfers) */
+DMA_HandleTypeDef hdma_spi4_tx; /* made non-static so ISR can reference it */
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -490,11 +493,36 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef* hspi)
     GPIO_InitStruct.Pin = SPI4_SCK_Pin|SPI4_MISO_Pin|SPI4_MOSI_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_PULLDOWN;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_MEDIUM;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH; /* needed for ~40 MHz SCK */
     GPIO_InitStruct.Alternate = GPIO_AF5_SPI4;
     HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
     /* USER CODE BEGIN SPI4_MspInit 1 */
+
+    /* Configure DMA for SPI4 TX */
+    __HAL_RCC_DMA2_CLK_ENABLE();
+    hdma_spi4_tx.Instance = DMA2_Stream1;
+    hdma_spi4_tx.Init.Channel = DMA_CHANNEL_4;
+    hdma_spi4_tx.Init.Direction = DMA_MEMORY_TO_PERIPH;
+    hdma_spi4_tx.Init.PeriphInc = DMA_PINC_DISABLE;
+    hdma_spi4_tx.Init.MemInc = DMA_MINC_ENABLE;
+    hdma_spi4_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+    hdma_spi4_tx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+    hdma_spi4_tx.Init.Mode = DMA_NORMAL;
+    hdma_spi4_tx.Init.Priority = DMA_PRIORITY_HIGH;
+    hdma_spi4_tx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
+    if (HAL_DMA_Init(&hdma_spi4_tx) != HAL_OK)
+    {
+        /* Initialization Error */
+        Error_Handler();
+    }
+
+    /* Link DMA handle to SPI handle */
+    __HAL_LINKDMA(hspi, hdmatx, hdma_spi4_tx);
+
+    /* Configure NVIC for DMA stream */
+    HAL_NVIC_SetPriority(DMA2_Stream1_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(DMA2_Stream1_IRQn);
 
     /* USER CODE END SPI4_MspInit 1 */
 

@@ -82,12 +82,17 @@ typedef struct {
 /**
  * @brief ILI9488 Handle structure
  */
+/** Pixel format constants */
+#define ILI9488_PIXEL_FMT_RGB565   0x55  /* 16-bit RGB565 */
+#define ILI9488_PIXEL_FMT_RGB666   0x66  /* 18-bit RGB666 (3 bytes/pixel) */
+
 typedef struct {
     ILI9488_Config_t config;        /**< Display configuration */
     uint16_t currentX;              /**< Current X position */
     uint16_t currentY;              /**< Current Y position */
     uint16_t width;                 /**< Display width */
     uint16_t height;                /**< Display height */
+    uint8_t pixel_format;           /**< Current pixel format (0x55=RGB565,0x66=RGB666) */
     bool initialized;               /**< Initialization status */
 } ILI9488_Handle_t;
 
@@ -188,6 +193,12 @@ ILI9488_StatusTypeDef ILI9488_WritePixels(ILI9488_Handle_t *hili,
                                          uint16_t x1, uint16_t y1,
                                          const uint16_t *data,
                                          uint32_t size);
+
+/* Read device identification (returns first ID byte) */
+ILI9488_StatusTypeDef ILI9488_ReadID(ILI9488_Handle_t *hili, uint8_t *id_buf, uint32_t len);
+
+/* Set pixel format manually */
+ILI9488_StatusTypeDef ILI9488_SetPixelFormat(ILI9488_Handle_t *hili, uint8_t pixel_fmt);
 
 /** @} */
 

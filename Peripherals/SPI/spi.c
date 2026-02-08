@@ -96,11 +96,13 @@ void SPI_Init(void)
   hspi5.Init.CLKPolarity = SPI_POLARITY_LOW;            /* Clock polarity low (CPOL=0) for ILI9341 */
   hspi5.Init.CLKPhase = SPI_PHASE_1EDGE;                /* Clock phase 1st edge (CPHA=0) for ILI9341 */
   hspi5.Init.NSS = SPI_NSS_SOFT;                        /* Software NSS management */
-  /* Choose prescaler to match ST BSP recommended SPI clock (~5.6 - 10 MHz).
-   * With current SystemClock (APB2 = 84 MHz) using prescaler 8 yields SCLK = 84/8 = 10.5 MHz
-   * which is slightly above the 10 MHz upper recommendation but closer to BSP range
-   * than the previous value (prescaler 16 => 5.25 MHz which is below 5.6 MHz).
+  /* Choose prescaler to reach ~40 MHz SPI SCLK for display/touch.
+   * With SystemClock = 168 MHz, APB2 runs at 84 MHz; using prescaler 2 yields SCLK = 84/2 = 42 MHz (~40 MHz target).
+   * Use the smallest prescaler (2) that keeps SCLK within tolerable range for the display.
    */
+  /* Use a safer default SPI speed for troubleshooting. Lowering from prescaler 2 (~42 MHz)
+   * to prescaler 8 (~10.5 MHz) to ensure signal integrity during bring-up. Change back to a
+   * faster prescaler after the display is verified. */
   hspi5.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8; /* SPI clock = APB2 clock / 8 (≈10.5 MHz) */
   hspi5.Init.FirstBit = SPI_FIRSTBIT_MSB;               /* MSB transmitted first */
   hspi5.Init.TIMode = SPI_TIMODE_DISABLE;               /* TI mode disabled */
@@ -241,6 +243,62 @@ SPI_StatusTypeDef SPI_TransmitReceive(uint8_t* pTxData, uint8_t* pRxData, uint16
   }
 
   return SPI_OK;
+}
+
+/* --- DMA-based helper functions --- */
+static volatile uint8_t spi_dma_tx_done = 0;
+
+SPI_StatusTypeDef SPI_Transmit_DMA(uint8_t* pData, uint16_t Size)
+{
+  if (pData == NULL || Size == 0)
+  {
+    return SPI_INVALID_PARAM;
+  }
+
+  spi_dma_tx_done = 0;
+  if (HAL_SPI_Transmit_DMA(&hspi5, pData, Size) != HAL_OK)
+  {
+    /* Re-Initialize the BUS on error for automatic recovery */
+    SPIx_Error();
+    return SPI_ERROR;
+  }
+
+  /* Wait for DMA completion (blocking). Caller can use SPI_WaitReady for non-blocking behavior) */
+  if (SPI_WaitReady(SPI_TIMEOUT_LONG) != SPI_OK) {
+      return SPI_TIMEOUT;
+  }
+
+  return SPI_OK;
+}
+
+SPI_StatusTypeDef SPI_WaitReady(uint32_t Timeout)
+{
+  uint32_t start = HAL_GetTick();
+  while (!spi_dma_tx_done)
+  {
+    if ((HAL_GetTick() - start) > Timeout)
+    {
+      return SPI_TIMEOUT;
+    }
+  }
+  return SPI_OK;
+}
+
+/* HAL callbacks to set DMA completion flag and handle errors */
+void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
+{
+  if (hspi == &hspi5) {
+    spi_dma_tx_done = 1;
+  }
+}
+
+void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
+{
+  if (hspi == &hspi5) {
+    /* Attempt recovery on error */
+    SPIx_Error();
+    spi_dma_tx_done = 1;
+  }
 }
 
 /**

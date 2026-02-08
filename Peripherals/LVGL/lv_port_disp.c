@@ -104,6 +104,25 @@ void lv_port_disp_init(void)
         while (1) { }
     }
 
+    /* Read controller ID bytes (if supported) and log them */
+    uint8_t id[3] = {0};
+    if (ILI9488_ReadID(&s_lcd, id, sizeof(id)) == ILI9488_OK) {
+        log_debug("LVGL: ILI9488 ID bytes: 0x%02X 0x%02X 0x%02X", id[0], id[1], id[2]);
+    } else {
+        log_debug("LVGL: ILI9488 ReadID failed or not supported");
+    }
+
+    /* Quick sanity test: fill screen with magenta briefly then black so we can verify
+     * the controller and SPI bus are functional at startup. If the screen stays white
+     * after this test, the issue is likely hardware (backlight, wiring) or the controller
+     * isn't accepting commands.
+     */
+    log_debug("LVGL: Running LCD sanity clear test (magenta->black)");
+    ILI9488_Clear(&s_lcd, ILI9488_COLOR_MAGENTA);
+    HAL_Delay(100);
+    ILI9488_Clear(&s_lcd, ILI9488_COLOR_BLACK);
+
+
     /* Create LVGL display (v9 API) */
     lv_display_t *disp = lv_display_create(DISP_HOR_RES, DISP_VER_RES);
     if (!disp) {

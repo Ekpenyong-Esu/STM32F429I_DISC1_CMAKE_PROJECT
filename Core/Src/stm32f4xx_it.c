@@ -265,5 +265,13 @@ void EXTI0_IRQHandler(void)
 
 /* USER CODE BEGIN 1 */
 
+/* DMA IRQ handler for SPI4 TX (LCD) */
+extern DMA_HandleTypeDef hdma_spi4_tx;
+
+void DMA2_Stream1_IRQHandler(void)
+{
+  /* Forward interrupt to HAL DMA handler for SPI4 TX */
+  HAL_DMA_IRQHandler(&hdma_spi4_tx);
+}
 
 /* USER CODE END 1 */

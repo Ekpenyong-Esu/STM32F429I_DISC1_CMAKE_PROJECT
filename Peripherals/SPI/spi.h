@@ -142,6 +142,12 @@ SPI_StatusTypeDef SPI_Receive(uint8_t* pData, uint16_t Size, uint32_t Timeout);
  */
 SPI_StatusTypeDef SPI_TransmitReceive(uint8_t* pTxData, uint8_t* pRxData, uint16_t Size, uint32_t Timeout);
 
+/** DMA-based transmit (blocking until complete). */
+SPI_StatusTypeDef SPI_Transmit_DMA(uint8_t* pData, uint16_t Size);
+
+/** Wait until SPI/DMA transfers are complete (returns SPI_TIMEOUT on timeout). */
+SPI_StatusTypeDef SPI_WaitReady(uint32_t Timeout);
+
 /** @} */ /* End of SPI_Data_Operations */
 
 /** @defgroup SPI_Utility_Functions Utility Functions
