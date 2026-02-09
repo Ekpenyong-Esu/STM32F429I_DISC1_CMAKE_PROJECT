@@ -179,7 +179,7 @@ const char* SPI_GetStatusString(SPI_StatusTypeDef status);
  * @details Used by HAL functions to manage SPI4 operations
  *          typically used for display or external sensor communication
  */
-extern SPI_HandleTypeDef hspi5;
+extern SPI_HandleTypeDef hspi4;
 
 #ifdef __cplusplus
 }

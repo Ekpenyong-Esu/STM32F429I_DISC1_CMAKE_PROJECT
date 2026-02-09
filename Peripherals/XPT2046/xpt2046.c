@@ -127,22 +127,6 @@ XPT2046_StatusTypeDef XPT2046_Init(XPT2046_Handle_t *hxpt,
     hxpt->cal.y_max = 3700;
     hxpt->cal.pressure_threshold = XPT2046_TOUCH_THRESHOLD;
 
-    /* Configure CS pin as output */
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
-    GPIO_InitStruct.Pin = cs_pin;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-    HAL_GPIO_Init(cs_port, &GPIO_InitStruct);
-    HAL_GPIO_WritePin(cs_port, cs_pin, GPIO_PIN_SET); // Deselect
-
-    /* Configure IRQ pin as input with pull-up */
-    GPIO_InitStruct.Pin = irq_pin;
-    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-    GPIO_InitStruct.Pull = GPIO_PULLUP;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-    HAL_GPIO_Init(irq_port, &GPIO_InitStruct);
-
     /* Test communication by reading a value */
     uint16_t test_val = 0;
     if (XPT2046_ReadADC(hxpt, XPT2046_CMD_X_POS, &test_val) != XPT2046_OK) {
@@ -200,7 +184,9 @@ XPT2046_StatusTypeDef XPT2046_ReadTouch(XPT2046_Handle_t *hxpt, XPT2046_TouchPoi
     uint16_t pressure_samples[XPT2046_DEBOUNCE_SAMPLES];
 
     for (uint8_t i = 0; i < XPT2046_DEBOUNCE_SAMPLES; i++) {
-        uint16_t x_raw, y_raw, pressure;
+        uint16_t x_raw;
+        uint16_t y_raw;
+        uint16_t pressure;
 
         XPT2046_StatusTypeDef status = XPT2046_ReadCoordinatesRaw(hxpt, &x_raw, &y_raw, &pressure);
         if (status != XPT2046_OK) {
@@ -233,7 +219,8 @@ XPT2046_StatusTypeDef XPT2046_ReadTouch(XPT2046_Handle_t *hxpt, XPT2046_TouchPoi
     }
 
     /* Apply calibration to get screen coordinates */
-    uint16_t x_cal, y_cal;
+    uint16_t x_cal;
+    uint16_t y_cal;
     XPT2046_ApplyCalibration(hxpt, x_raw, y_raw, &x_cal, &y_cal);
 
     /* Apply transformations (swap/flip) if configured */
@@ -424,7 +411,10 @@ static XPT2046_StatusTypeDef XPT2046_ReadCoordinatesRaw(XPT2046_Handle_t *hxpt,
                                                         uint16_t *y_raw,
                                                         uint16_t *pressure)
 {
-    uint16_t x, y, z1, z2;
+    uint16_t x;
+    uint16_t y;
+    uint16_t z1;
+    uint16_t z2;
 
     /* Read X position */
     if (XPT2046_ReadADC(hxpt, XPT2046_CMD_X_POS, &x) != XPT2046_OK) {
@@ -556,8 +546,12 @@ static void XPT2046_DelayUs(uint32_t us)
  * @param   GPIO_Pin Pin that triggered interrupt
  * @note    Implement this if using interrupt mode instead of polling
  */
-__weak void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
-    /* User can implement touch interrupt handling here */
-    (void)GPIO_Pin;
+    if (GPIO_Pin == GPIO_PIN_15) {
+        /* Touch interrupt on PA15 */
+        log_debug("Touch interrupt detected");
+        /* In interrupt-driven mode, you could set a flag here to read touch in main loop */
+        /* For now, just log the event */
+    }
 }

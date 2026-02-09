@@ -43,11 +43,16 @@ void XPT2046_MspInit(GPIO_TypeDef *cs_port, uint16_t cs_pin,
         HAL_GPIO_Init(cs_port, &GPIO_InitStruct);
         HAL_GPIO_WritePin(cs_port, cs_pin, GPIO_PIN_SET);
 
-        /* IRQ pin - input pull-up */
+
         GPIO_InitStruct.Pin = irq_pin;
-        GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+        GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;  /* Falling edge for touch detection */
         GPIO_InitStruct.Pull = GPIO_PULLUP;
+        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
         HAL_GPIO_Init(irq_port, &GPIO_InitStruct);
+
+        /* Configure and enable EXTI interrupt */
+        HAL_NVIC_SetPriority(EXTI15_10_IRQn, 5, 0);
+        HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
     }
 }
 

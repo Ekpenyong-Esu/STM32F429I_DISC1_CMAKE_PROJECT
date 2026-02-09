@@ -21,7 +21,7 @@
  * @brief   SPI handle structure
  * @details Used by HAL functions for SPI4 peripheral operations
  */
-SPI_HandleTypeDef hspi5;
+SPI_HandleTypeDef hspi4;
 
 /* Private function prototypes -----------------------------------------------*/
 static SPI_StatusTypeDef SPI_ConvertHALStatus(HAL_StatusTypeDef halStatus);
@@ -89,13 +89,13 @@ void SPI_Init(void)
 {
     log_debug("SPI: Initializing SPI4");
   /* SPI4 parameter configuration*/
-  hspi5.Instance = SPI4;                                /* Select SPI4 peripheral */
-  hspi5.Init.Mode = SPI_MODE_MASTER;                    /* Configure as master */
-  hspi5.Init.Direction = SPI_DIRECTION_2LINES;          /* Full-duplex mode */
-  hspi5.Init.DataSize = SPI_DATASIZE_8BIT;              /* 8-bit data size */
-  hspi5.Init.CLKPolarity = SPI_POLARITY_LOW;            /* Clock polarity low (CPOL=0) for ILI9341 */
-  hspi5.Init.CLKPhase = SPI_PHASE_1EDGE;                /* Clock phase 1st edge (CPHA=0) for ILI9341 */
-  hspi5.Init.NSS = SPI_NSS_SOFT;                        /* Software NSS management */
+  hspi4.Instance = SPI4;                                /* Select SPI4 peripheral */
+  hspi4.Init.Mode = SPI_MODE_MASTER;                    /* Configure as master */
+  hspi4.Init.Direction = SPI_DIRECTION_2LINES;          /* Full-duplex mode */
+  hspi4.Init.DataSize = SPI_DATASIZE_8BIT;              /* 8-bit data size */
+  hspi4.Init.CLKPolarity = SPI_POLARITY_LOW;            /* Clock polarity low (CPOL=0) for ILI9341 */
+  hspi4.Init.CLKPhase = SPI_PHASE_1EDGE;                /* Clock phase 1st edge (CPHA=0) for ILI9341 */
+  hspi4.Init.NSS = SPI_NSS_SOFT;                        /* Software NSS management */
   /* Choose prescaler to reach ~40 MHz SPI SCLK for display/touch.
    * With SystemClock = 168 MHz, APB2 runs at 84 MHz; using prescaler 2 yields SCLK = 84/2 = 42 MHz (~40 MHz target).
    * Use the smallest prescaler (2) that keeps SCLK within tolerable range for the display.
@@ -103,14 +103,14 @@ void SPI_Init(void)
   /* Use a safer default SPI speed for troubleshooting. Lowering from prescaler 2 (~42 MHz)
    * to prescaler 8 (~10.5 MHz) to ensure signal integrity during bring-up. Change back to a
    * faster prescaler after the display is verified. */
-  hspi5.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8; /* SPI clock = APB2 clock / 8 (≈10.5 MHz) */
-  hspi5.Init.FirstBit = SPI_FIRSTBIT_MSB;               /* MSB transmitted first */
-  hspi5.Init.TIMode = SPI_TIMODE_DISABLE;               /* TI mode disabled */
-  hspi5.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE; /* CRC calculation disabled */
-  hspi5.Init.CRCPolynomial = SPI_CRC_POLYNOMIAL_DEFAULT;                        /* CRC polynomial (not used) */
+  hspi4.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8; /* SPI clock = APB2 clock / 8 (≈10.5 MHz) */
+  hspi4.Init.FirstBit = SPI_FIRSTBIT_MSB;               /* MSB transmitted first */
+  hspi4.Init.TIMode = SPI_TIMODE_DISABLE;               /* TI mode disabled */
+  hspi4.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE; /* CRC calculation disabled */
+  hspi4.Init.CRCPolynomial = SPI_CRC_POLYNOMIAL_DEFAULT;                        /* CRC polynomial (not used) */
 
   /* Initialize the SPI peripheral with the specified parameters */
-   HAL_SPI_Init(&hspi5);
+   HAL_SPI_Init(&hspi4);
   log_debug("SPI: SPI4 initialized successfully");
 }
 
@@ -128,21 +128,21 @@ SPI_StatusTypeDef SPI_Init_Custom(const SPI_ConfigTypeDef* config)
   }
 
   /* Configure SPI with custom parameters */
-  hspi5.Instance = SPI4;
-  hspi5.Init.Mode = config->Mode;
-  hspi5.Init.Direction = config->Direction;
-  hspi5.Init.DataSize = config->DataSize;
-  hspi5.Init.CLKPolarity = config->CLKPolarity;
-  hspi5.Init.CLKPhase = config->CLKPhase;
-  hspi5.Init.NSS = config->NSS;
-  hspi5.Init.BaudRatePrescaler = config->BaudRatePrescaler;
-  hspi5.Init.FirstBit = config->FirstBit;
-  hspi5.Init.TIMode = config->TIMode;
-  hspi5.Init.CRCCalculation = config->CRCCalculation;
-  hspi5.Init.CRCPolynomial = config->CRCPolynomial;
+  hspi4.Instance = SPI4;
+  hspi4.Init.Mode = config->Mode;
+  hspi4.Init.Direction = config->Direction;
+  hspi4.Init.DataSize = config->DataSize;
+  hspi4.Init.CLKPolarity = config->CLKPolarity;
+  hspi4.Init.CLKPhase = config->CLKPhase;
+  hspi4.Init.NSS = config->NSS;
+  hspi4.Init.BaudRatePrescaler = config->BaudRatePrescaler;
+  hspi4.Init.FirstBit = config->FirstBit;
+  hspi4.Init.TIMode = config->TIMode;
+  hspi4.Init.CRCCalculation = config->CRCCalculation;
+  hspi4.Init.CRCPolynomial = config->CRCPolynomial;
 
   /* Initialize the SPI peripheral with the specified parameters */
-   HAL_SPI_Init(&hspi5);
+   HAL_SPI_Init(&hspi4);
    return SPI_OK;
 }
 
@@ -155,7 +155,7 @@ SPI_StatusTypeDef SPI_Init_Custom(const SPI_ConfigTypeDef* config)
  */
 SPI_StatusTypeDef SPI_DeInit(void)
 {
-  if (HAL_SPI_DeInit(&hspi5) != HAL_OK)
+  if (HAL_SPI_DeInit(&hspi4) != HAL_OK)
   {
     return SPI_ERROR;
   }
@@ -179,7 +179,7 @@ SPI_StatusTypeDef SPI_Transmit(uint8_t* pData, uint16_t Size, uint32_t Timeout)
     return SPI_INVALID_PARAM;
   }
 
-  HAL_StatusTypeDef halStatus = HAL_SPI_Transmit(&hspi5, pData, Size, Timeout);
+  HAL_StatusTypeDef halStatus = HAL_SPI_Transmit(&hspi4, pData, Size, Timeout);
   if (halStatus != HAL_OK)
   {
     /* Re-Initialize the BUS on error for automatic recovery */
@@ -206,7 +206,7 @@ SPI_StatusTypeDef SPI_Receive(uint8_t* pData, uint16_t Size, uint32_t Timeout)
     return SPI_INVALID_PARAM;
   }
 
-  HAL_StatusTypeDef halStatus = HAL_SPI_Receive(&hspi5, pData, Size, Timeout);
+  HAL_StatusTypeDef halStatus = HAL_SPI_Receive(&hspi4, pData, Size, Timeout);
   if (halStatus != HAL_OK)
   {
     /* Re-Initialize the BUS on error for automatic recovery */
@@ -234,7 +234,7 @@ SPI_StatusTypeDef SPI_TransmitReceive(uint8_t* pTxData, uint8_t* pRxData, uint16
     return SPI_INVALID_PARAM;
   }
 
-  HAL_StatusTypeDef halStatus = HAL_SPI_TransmitReceive(&hspi5, pTxData, pRxData, Size, Timeout);
+  HAL_StatusTypeDef halStatus = HAL_SPI_TransmitReceive(&hspi4, pTxData, pRxData, Size, Timeout);
   if (halStatus != HAL_OK)
   {
     /* Re-Initialize the BUS on error for automatic recovery */
@@ -256,7 +256,7 @@ SPI_StatusTypeDef SPI_Transmit_DMA(uint8_t* pData, uint16_t Size)
   }
 
   spi_dma_tx_done = 0;
-  if (HAL_SPI_Transmit_DMA(&hspi5, pData, Size) != HAL_OK)
+  if (HAL_SPI_Transmit_DMA(&hspi4, pData, Size) != HAL_OK)
   {
     /* Re-Initialize the BUS on error for automatic recovery */
     SPIx_Error();
@@ -287,14 +287,14 @@ SPI_StatusTypeDef SPI_WaitReady(uint32_t Timeout)
 /* HAL callbacks to set DMA completion flag and handle errors */
 void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
 {
-  if (hspi == &hspi5) {
+  if (hspi == &hspi4) {
     spi_dma_tx_done = 1;
   }
 }
 
 void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
 {
-  if (hspi == &hspi5) {
+  if (hspi == &hspi4) {
     /* Attempt recovery on error */
     SPIx_Error();
     spi_dma_tx_done = 1;
@@ -309,7 +309,7 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
  */
 uint32_t SPI_GetError(void)
 {
-  return HAL_SPI_GetError(&hspi5);
+  return HAL_SPI_GetError(&hspi4);
 }
 
 /**
