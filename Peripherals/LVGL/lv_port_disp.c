@@ -23,6 +23,9 @@
 #define DISP_HOR_RES    320
 #define DISP_VER_RES    480
 
+/** Display orientation: ILI9488_ORIENTATION_PORTRAIT or ILI9488_ORIENTATION_LANDSCAPE */
+#define DISP_ORIENTATION ILI9488_ORIENTATION_LANDSCAPE
+
 /** Bytes per pixel (RGB565 = 16-bit = 2 bytes) */
 #define DISP_BPP        2
 
@@ -49,6 +52,10 @@ static lv_color_t draw_buf[DRAW_BUF_SIZE] __attribute__((aligned(4)));
 
 static ILI9488_Handle_t s_lcd;
 
+/* Logical display dimensions (adjusted for orientation) */
+static uint16_t lvgl_disp_width;
+static uint16_t lvgl_disp_height;
+
 /*-----------------------------------------------------------------------------
  * Private Variables
  *---------------------------------------------------------------------------*/
@@ -61,15 +68,15 @@ static ILI9488_Handle_t s_lcd;
  */
 static void disp_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map)
 {
-    if (area->x2 < 0 || area->y2 < 0 || area->x1 > DISP_HOR_RES - 1 || area->y1 > DISP_VER_RES - 1) {
+    if (area->x2 < 0 || area->y2 < 0 || area->x1 > lvgl_disp_width - 1 || area->y1 > lvgl_disp_height - 1) {
         lv_display_flush_ready(disp);
         return;
     }
 
     int32_t act_x1 = area->x1 < 0 ? 0 : area->x1;
     int32_t act_y1 = area->y1 < 0 ? 0 : area->y1;
-    int32_t act_x2 = area->x2 > DISP_HOR_RES - 1 ? DISP_HOR_RES - 1 : area->x2;
-    int32_t act_y2 = area->y2 > DISP_VER_RES - 1 ? DISP_VER_RES - 1 : area->y2;
+    int32_t act_x2 = area->x2 > lvgl_disp_width - 1 ? lvgl_disp_width - 1 : area->x2;
+    int32_t act_y2 = area->y2 > lvgl_disp_height - 1 ? lvgl_disp_height - 1 : area->y2;
 
     int32_t w = act_x2 - act_x1 + 1;
     int32_t h = act_y2 - act_y1 + 1;
@@ -99,9 +106,26 @@ void lv_port_disp_init(void)
 {
     log_debug("LVGL: Initializing display port");
 
-    if (ILI9488_Init(&s_lcd, LCD_CS_PORT, LCD_CS_PIN, LCD_DC_PORT, LCD_DC_PIN, LCD_RST_PORT, LCD_RST_PIN) != ILI9488_OK) {
+    /* Initialize ILI9488 with display dimensions */
+    if (ILI9488_Init(&s_lcd, LCD_CS_PORT, LCD_CS_PIN, LCD_DC_PORT, LCD_DC_PIN, LCD_RST_PORT, LCD_RST_PIN,
+                     DISP_HOR_RES, DISP_VER_RES) != ILI9488_OK) {
         log_error("LVGL: ILI9488 init failed");
         while (1) { }
+    }
+
+    ILI9488_SetOrientation(&s_lcd, DISP_ORIENTATION);
+
+    /* Set logical display dimensions based on orientation */
+    if (DISP_ORIENTATION == ILI9488_ORIENTATION_PORTRAIT) {
+        lvgl_disp_width = DISP_HOR_RES;
+        lvgl_disp_height = DISP_VER_RES;
+    } else if (DISP_ORIENTATION == ILI9488_ORIENTATION_LANDSCAPE) {
+        lvgl_disp_width = DISP_VER_RES;
+        lvgl_disp_height = DISP_HOR_RES;
+    } else {
+        // Default to portrait
+        lvgl_disp_width = DISP_HOR_RES;
+        lvgl_disp_height = DISP_VER_RES;
     }
 
     /* Read controller ID bytes (if supported) and log them */
@@ -112,19 +136,19 @@ void lv_port_disp_init(void)
         log_debug("LVGL: ILI9488 ReadID failed or not supported");
     }
 
-    /* Quick sanity test: fill screen with magenta briefly then black so we can verify
-     * the controller and SPI bus are functional at startup. If the screen stays white
-     * after this test, the issue is likely hardware (backlight, wiring) or the controller
-     * isn't accepting commands.
-     */
-    log_debug("LVGL: Running LCD sanity clear test (magenta->black)");
-    ILI9488_Clear(&s_lcd, ILI9488_COLOR_MAGENTA);
-    HAL_Delay(100);
-    ILI9488_Clear(&s_lcd, ILI9488_COLOR_BLACK);
+    // /* Quick sanity test: fill screen with magenta briefly then black so we can verify
+    //  * the controller and SPI bus are functional at startup. If the screen stays white
+    //  * after this test, the issue is likely hardware (backlight, wiring) or the controller
+    //  * isn't accepting commands.
+    //  */
+    // log_debug("LVGL: Running LCD sanity clear test (magenta->black)");
+    // ILI9488_Clear(&s_lcd, ILI9488_COLOR_MAGENTA);
+    // HAL_Delay(100);
+    // ILI9488_Clear(&s_lcd, ILI9488_COLOR_BLACK);
 
 
     /* Create LVGL display (v9 API) */
-    lv_display_t *disp = lv_display_create(DISP_HOR_RES, DISP_VER_RES);
+    lv_display_t *disp = lv_display_create(lvgl_disp_width, lvgl_disp_height);
     if (!disp) {
         log_error("LVGL: Failed to create display");
         while (1);

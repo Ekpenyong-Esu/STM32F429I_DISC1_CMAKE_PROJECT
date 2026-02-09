@@ -258,7 +258,8 @@ static void ILI9488_Delay(uint32_t delay);
 ILI9488_StatusTypeDef ILI9488_Init(ILI9488_Handle_t *hili,
                                   GPIO_TypeDef *cs_port, uint16_t cs_pin,
                                   GPIO_TypeDef *dc_port, uint16_t dc_pin,
-                                  GPIO_TypeDef *rst_port, uint16_t rst_pin)
+                                  GPIO_TypeDef *rst_port, uint16_t rst_pin,
+                                  uint16_t width, uint16_t height)
 {
     if (hili == NULL) {
         return ILI9488_INVALID_PARAM;
@@ -278,8 +279,11 @@ ILI9488_StatusTypeDef ILI9488_Init(ILI9488_Handle_t *hili,
     hili->config.rst_pin = rst_pin;
     hili->config.orientation = ILI9488_ORIENTATION_PORTRAIT; // Default to portrait, will switch to landscape in init
 
-    hili->width = ILI9488_WIDTH;
-    hili->height = ILI9488_HEIGHT;
+    /* Store base dimensions (portrait mode) */
+    hili->base_width = width;
+    hili->base_height = height;
+    hili->width = width;
+    hili->height = height;
 
     /* Hardware reset */
     HAL_GPIO_WritePin(rst_port, rst_pin, GPIO_PIN_RESET);
@@ -330,9 +334,9 @@ ILI9488_StatusTypeDef ILI9488_Init(ILI9488_Handle_t *hili,
     ILI9488_WriteCommand(hili, ILI9488_CMD_MEMORY_ACCESS_CTL);
     ILI9488_WriteData(hili, (uint8_t[]){0x48}, 1); // Portrait: MY=0, MX=1, MV=0, ML=0, BGR=1
 
-    /* Ensure driver dimensions match portrait orientation (LVGL uses 320x480) */
-    hili->width = ILI9488_WIDTH;
-    hili->height = ILI9488_HEIGHT;
+    /* Ensure driver dimensions match portrait orientation */
+    hili->width = hili->base_width;
+    hili->height = hili->base_height;
     hili->config.orientation = ILI9488_ORIENTATION_PORTRAIT;
 
     log_debug("ILI9488: Orientation set to PORTRAIT (width=%u height=%u)", hili->width, hili->height);
@@ -402,23 +406,23 @@ ILI9488_StatusTypeDef ILI9488_SetOrientation(ILI9488_Handle_t *hili, ILI9488_Ori
     switch (orientation) {
         case ILI9488_ORIENTATION_PORTRAIT:
             madctl = 0x48; // MY=0, MX=1, MV=0, ML=0, BGR=1
-            hili->width = ILI9488_WIDTH;
-            hili->height = ILI9488_HEIGHT;
+            hili->width = hili->base_width;
+            hili->height = hili->base_height;
             break;
         case ILI9488_ORIENTATION_LANDSCAPE:
             madctl = 0x28; // MY=0, MX=0, MV=1, ML=0, BGR=1
-            hili->width = ILI9488_HEIGHT;
-            hili->height = ILI9488_WIDTH;
+            hili->width = hili->base_height;
+            hili->height = hili->base_width;
             break;
         case ILI9488_ORIENTATION_PORTRAIT_REV:
             madctl = 0x88; // MY=1, MX=0, MV=0, ML=0, BGR=1
-            hili->width = ILI9488_WIDTH;
-            hili->height = ILI9488_HEIGHT;
+            hili->width = hili->base_width;
+            hili->height = hili->base_height;
             break;
         case ILI9488_ORIENTATION_LANDSCAPE_REV:
             madctl = 0xE8; // MY=1, MX=1, MV=1, ML=0, BGR=1
-            hili->width = ILI9488_HEIGHT;
-            hili->height = ILI9488_WIDTH;
+            hili->width = hili->base_height;
+            hili->height = hili->base_width;
             break;
     }
 

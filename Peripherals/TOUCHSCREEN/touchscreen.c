@@ -1024,17 +1024,17 @@ static TS_GestureTypeDef TS_AnalyzeGesture(TS_HandleTypeDef *hts)
 
  */
 
- void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
-{
-   if(GPIO_Pin == TS_INT_PIN)
-    {
-         /* Clear Wakeup flag */
-        __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);
+//  void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+// {
+// //    if(GPIO_Pin == TS_INT_PIN)
+// //     {
+// //          /* Clear Wakeup flag */
+// //         __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);
 
-        /* Always update touch activity for low power management */
-        APP_TouchActivity();
+// //         /* Always update touch activity for low power management */
+// //         APP_TouchActivity();
 
-        /* Defer I2C-based interrupt handling to thread context */
-        s_ts_irq_pending = true;
-    }
-}
+// //         /* Defer I2C-based interrupt handling to thread context */
+// //         s_ts_irq_pending = true;
+// //     }
+// }

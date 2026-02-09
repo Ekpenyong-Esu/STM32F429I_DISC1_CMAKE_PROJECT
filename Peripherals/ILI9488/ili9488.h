@@ -90,8 +90,10 @@ typedef struct {
     ILI9488_Config_t config;        /**< Display configuration */
     uint16_t currentX;              /**< Current X position */
     uint16_t currentY;              /**< Current Y position */
-    uint16_t width;                 /**< Display width */
-    uint16_t height;                /**< Display height */
+    uint16_t width;                 /**< Current display width (adjusted for orientation) */
+    uint16_t height;                /**< Current display height (adjusted for orientation) */
+    uint16_t base_width;            /**< Base width in portrait mode */
+    uint16_t base_height;           /**< Base height in portrait mode */
     uint8_t pixel_format;           /**< Current pixel format (0x55=RGB565,0x66=RGB666) */
     bool initialized;               /**< Initialization status */
 } ILI9488_Handle_t;
@@ -120,12 +122,15 @@ void ILI9488_MspDeInit(void);
  * @param   dc_pin Data/command pin
  * @param   rst_port Reset port
  * @param   rst_pin Reset pin
+ * @param   width Display width in portrait mode (e.g., 320)
+ * @param   height Display height in portrait mode (e.g., 480)
  * @retval  ILI9488_StatusTypeDef Operation status
  */
 ILI9488_StatusTypeDef ILI9488_Init(ILI9488_Handle_t *hili,
                                   GPIO_TypeDef *cs_port, uint16_t cs_pin,
                                   GPIO_TypeDef *dc_port, uint16_t dc_pin,
-                                  GPIO_TypeDef *rst_port, uint16_t rst_pin);
+                                  GPIO_TypeDef *rst_port, uint16_t rst_pin,
+                                  uint16_t width, uint16_t height);
 
 /**
  * @brief   Deinitialize ILI9488 TFT display
