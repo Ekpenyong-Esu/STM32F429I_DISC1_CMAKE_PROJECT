@@ -2,8 +2,19 @@
   ******************************************************************************
   * @file    xpt2046.h
   * @brief   XPT2046 Resistive Touchscreen Controller Driver Header
-  * @version 1.1
-  * @date    2025-02-08
+  * @details Compatible with ILI9488 4.0" TFT LCD Touch Screen Module
+  *          Implements proper SPI communication protocol per XPT2046 datasheet
+  * @version 2.0
+  * @date    2025-02-10
+  * @author  Rewritten for STM32F429I with proper datasheet compliance
+  ******************************************************************************
+  * @note    XPT2046 Specifications:
+  *          - 12-bit ADC resolution (4096 levels)
+  *          - SPI Mode 0 (CPOL=0, CPHA=0) or Mode 3 (CPOL=1, CPHA=1)
+  *          - Max SPI clock: 2.5 MHz (conservative: 2 MHz recommended)
+  *          - Supply voltage: 2.4V to 5.25V
+  *          - Touch detection via IRQ pin (active low)
+  *          - Integrated with ILI9488 LCD on 14-pin modules
   ******************************************************************************
   */
 
@@ -44,13 +55,14 @@ typedef enum {
 
 /**
  * @brief Calibration parameters
+ * @note  Default values work for most ILI9488 4.0" modules but may need tuning
  */
 typedef struct {
-    uint16_t x_min;                 /**< Minimum X ADC value */
-    uint16_t x_max;                 /**< Maximum X ADC value */
-    uint16_t y_min;                 /**< Minimum Y ADC value */
-    uint16_t y_max;                 /**< Maximum Y ADC value */
-    uint16_t pressure_threshold;    /**< Minimum pressure to register touch */
+    uint16_t x_min;                 /**< Minimum X ADC value (typical: 200-400) */
+    uint16_t x_max;                 /**< Maximum X ADC value (typical: 3700-3900) */
+    uint16_t y_min;                 /**< Minimum Y ADC value (typical: 200-400) */
+    uint16_t y_max;                 /**< Maximum Y ADC value (typical: 3700-3900) */
+    uint16_t pressure_threshold;    /**< Minimum pressure to register touch (typical: 200) */
 } XPT2046_Calibration_t;
 
 /**
@@ -95,9 +107,21 @@ typedef struct {
  * @{
  */
 
+/* XPT2046 Hardware Limits */
 #define XPT2046_MAX_X           4095    /**< Maximum X ADC value (12-bit) */
 #define XPT2046_MAX_Y           4095    /**< Maximum Y ADC value (12-bit) */
-#define XPT2046_MAX_PRESSURE    1000    /**< Maximum pressure value */
+#define XPT2046_MAX_PRESSURE    4095    /**< Maximum pressure value (12-bit) */
+
+/* XPT2046 Default Calibration for ILI9488 4.0" LCD (480x320) */
+#define XPT2046_DEFAULT_X_MIN   300     /**< Default X minimum raw value */
+#define XPT2046_DEFAULT_X_MAX   3800    /**< Default X maximum raw value */
+#define XPT2046_DEFAULT_Y_MIN   300     /**< Default Y minimum raw value */
+#define XPT2046_DEFAULT_Y_MAX   3800    /**< Default Y maximum raw value */
+#define XPT2046_DEFAULT_PRESSURE_THRESHOLD  250  /**< Default pressure threshold */
+
+/* XPT2046 Timing Constants */
+#define XPT2046_SETTLE_TIME_US  10      /**< ADC settling time after command (μs) */
+#define XPT2046_MAX_SPI_FREQ    2000000 /**< Maximum SPI frequency (2 MHz recommended) */
 
 /**
  * @}

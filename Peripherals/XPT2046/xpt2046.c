@@ -174,9 +174,11 @@ XPT2046_StatusTypeDef XPT2046_ReadTouch(XPT2046_Handle_t *hxpt, XPT2046_TouchPoi
     touch->pressure = 0;
 
     /* Quick check - if not touched, return early */
-    if (!XPT2046_IsTouched(hxpt)) {
-        return XPT2046_NO_TOUCH;
-    }
+    // Commented out to allow touch detection even if IRQ pin is not working
+    // if (!XPT2046_IsTouched(hxpt)) {
+    //     log_debug("XPT2046: No touch detected");
+    //     return XPT2046_NO_TOUCH;
+    // }
 
     /* Read raw coordinates with averaging */
     uint16_t x_samples[XPT2046_DEBOUNCE_SAMPLES];
