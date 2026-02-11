@@ -382,7 +382,7 @@ static XPT2046_StatusTypeDef XPT2046_ReadADC(XPT2046_Handle_t *hxpt,
     /* Perform SPI transaction using the SPI module API */
     SPI_StatusTypeDef spi_status = SPI_TransmitReceive(tx_data, rx_data, 3, SPI_TIMEOUT_SHORT);
     
-    /* Deselect chip */
+    /* Deselect chip - always release CS regardless of SPI status to prevent bus lockup */
     HAL_GPIO_WritePin(hxpt->config.cs_port, hxpt->config.cs_pin, GPIO_PIN_SET);
 
     if (spi_status != SPI_OK) {
