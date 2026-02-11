@@ -379,15 +379,16 @@ static XPT2046_StatusTypeDef XPT2046_ReadADC(XPT2046_Handle_t *hxpt,
     /* Wait for ADC to settle */
     XPT2046_DelayUs(XPT2046_SETTLE_DELAY_US);
 
-    /* Perform SPI transaction */
-    if (SPI_TransmitReceive(tx_data, rx_data, 3, SPI_TIMEOUT_SHORT) != SPI_OK) {
-        HAL_GPIO_WritePin(hxpt->config.cs_port, hxpt->config.cs_pin, GPIO_PIN_SET);
-        log_error("XPT2046: SPI transfer failed");
-        return XPT2046_ERROR;
-    }
-
+    /* Perform SPI transaction using the SPI module API */
+    SPI_StatusTypeDef spi_status = SPI_TransmitReceive(tx_data, rx_data, 3, SPI_TIMEOUT_SHORT);
+    
     /* Deselect chip */
     HAL_GPIO_WritePin(hxpt->config.cs_port, hxpt->config.cs_pin, GPIO_PIN_SET);
+
+    if (spi_status != SPI_OK) {
+        log_error("XPT2046: SPI transfer failed (status=%d)", spi_status);
+        return XPT2046_ERROR;
+    }
 
     /*
      * XPT2046 returns 12-bit value in bits [14:3] of the 16-bit response
