@@ -12,6 +12,7 @@
 #include "lvgl.h"
 #include "xpt2046.h"
 #include "ili9488.h"
+#include "spi.h"
 #include "log.h"
 #include <stdint.h>
 
@@ -26,19 +27,20 @@
 #define TP_IRQ_PIN      GPIO_PIN_15
 
 /* Display orientation - MUST match lv_port_disp.c */
-#define DISP_ORIENTATION    ILI9488_ORIENTATION_LANDSCAPE
-#define DISP_WIDTH          480
-#define DISP_HEIGHT         320
+#define DISP_ORIENTATION    ILI9488_ORIENTATION_PORTRAIT
+#define DISP_WIDTH          320
+#define DISP_HEIGHT         480
 
 /*-----------------------------------------------------------------------------
  * Private Variables
  *---------------------------------------------------------------------------*/
 
 /** XPT2046 touch controller handle */
-static XPT2046_Handle_t hxpt;
+static XPT2046_HandleTypeDef hxpt;
 
 /** LVGL input device object */
 static lv_indev_t *s_indev = NULL;
+
 
 /** Last valid touch position (for reporting when released) */
 static int16_t last_x = 0;
@@ -69,59 +71,26 @@ static void touch_read_cb(lv_indev_t *indev, lv_indev_data_t *data)
     data->point.y = last_y;
 
     /* Check if touch controller is initialized */
-    if (!hxpt.initialized) {
+    if (!hxpt.IsInitialized) {
         return;
     }
 
-    /* Try to read touch */
-    XPT2046_TouchPoint_t touch;
-    XPT2046_StatusTypeDef status = XPT2046_ReadTouch(&hxpt, &touch);
+    /* Get touch state */
+    uint16_t x = 0;
+    uint16_t y = 0;
+    uint8_t pressed = 0;
 
-    if (status == XPT2046_OK && touch.state == XPT2046_STATE_PRESSED) {
+    XPT2046_StatusTypeDef status = XPT2046_GetTouchState(&hxpt, &x, &y, &pressed);
+
+    if (status == XPT2046_OK && pressed) {
         /* Valid touch detected */
-        uint16_t x = touch.x;
-        uint16_t y = touch.y;
 
         /*
-         * Coordinate transformation based on display orientation
-         * XPT2046 raw coordinates need to be mapped to match display orientation
+         * XPT2046 driver already handles calibration and orientation mapping
+         * based on the configuration set in lv_port_indev_init
          */
-        uint16_t logical_x = 0;
-        uint16_t logical_y = 0;
-
-        switch (DISP_ORIENTATION) {
-            case ILI9488_ORIENTATION_PORTRAIT:
-                /* Portrait: 320x480 */
-                logical_x = x;
-                logical_y = y;
-                break;
-
-            case ILI9488_ORIENTATION_LANDSCAPE:
-                /* Landscape: 480x320
-                 * Typically need to swap and flip for proper mapping
-                 * Adjust these based on your specific hardware
-                 */
-                logical_x = y;
-                logical_y = (DISP_WIDTH - 1) - x;
-                break;
-
-            case ILI9488_ORIENTATION_PORTRAIT_REV:
-                /* Portrait reversed: 320x480 */
-                logical_x = (DISP_WIDTH - 1) - x;
-                logical_y = (DISP_HEIGHT - 1) - y;
-                break;
-
-            case ILI9488_ORIENTATION_LANDSCAPE_REV:
-                /* Landscape reversed: 480x320 */
-                logical_x = (DISP_HEIGHT - 1) - y;
-                logical_y = x;
-                break;
-
-            default:
-                logical_x = x;
-                logical_y = y;
-                break;
-        }
+        uint16_t logical_x = x;
+        uint16_t logical_y = y;
 
         /* Clamp coordinates to screen bounds */
         if (logical_x >= DISP_WIDTH) logical_x = DISP_WIDTH - 1;
@@ -136,8 +105,8 @@ static void touch_read_cb(lv_indev_t *indev, lv_indev_data_t *data)
         last_x = logical_x;
         last_y = logical_y;
 
-        log_debug("Touch: (%d,%d) [raw: %u,%u] pressure=%u",
-                  logical_x, logical_y, x, y, touch.pressure);
+        log_debug("Touch: (%d,%d) [raw: %u,%u]",
+                  logical_x, logical_y, x, y);
     }
 }
 
@@ -157,9 +126,9 @@ int lv_port_indev_init(void)
     /* Initialize XPT2046 touch controller */
     XPT2046_StatusTypeDef status = XPT2046_Init(
         &hxpt,
+        &hspi4,
         TP_CS_PORT, TP_CS_PIN,
-        TP_IRQ_PORT, TP_IRQ_PIN,
-        DISP_WIDTH, DISP_HEIGHT
+        TP_IRQ_PORT, TP_IRQ_PIN
     );
 
     if (status != XPT2046_OK) {
@@ -170,39 +139,52 @@ int lv_port_indev_init(void)
     log_debug("LVGL: XPT2046 initialized");
 
     /*
-     * Set touch transformations based on orientation
-     * These values may need adjustment for your specific display/touch combo
+     * Set calibration values based on orientation
+     * These are approximate defaults - run calibration routine for accurate values
+     * Touch corners of screen and note ADC values, then update these
      */
+    XPT2046_CalibrationTypeDef cal = {
+        .MinX = 200,
+        .MaxX = 3900,
+        .MinY = 200,
+        .MaxY = 3900,
+        .ScaleX = (float)DISP_WIDTH / (float)(3900 - 200),
+        .ScaleY = (float)DISP_HEIGHT / (float)(3900 - 200),
+        .OffsetX = -200,
+        .OffsetY = -200,
+        .SwapXY = false,
+        .FlipX = false,
+        .FlipY = false,
+        .IsCalibrated = true
+    };
+
+    /* Adjust calibration based on display orientation */
     switch (DISP_ORIENTATION) {
         case ILI9488_ORIENTATION_PORTRAIT:
-            XPT2046_SetTransform(&hxpt, false, false, false);
+            /* Portrait: Y axis typically needs flipping for bottom-connector mounting */
+            cal.FlipY = true;
             break;
 
         case ILI9488_ORIENTATION_LANDSCAPE:
             /* Landscape typically needs swap_xy=true, adjust flip as needed */
-            XPT2046_SetTransform(&hxpt, true, false, true);
+            cal.SwapXY = true;
+            cal.FlipY = true;
             break;
 
         case ILI9488_ORIENTATION_PORTRAIT_REV:
-            XPT2046_SetTransform(&hxpt, false, true, true);
+            /* Portrait reversed */
+            cal.FlipX = true;
+            cal.FlipY = true;
             break;
 
         case ILI9488_ORIENTATION_LANDSCAPE_REV:
-            XPT2046_SetTransform(&hxpt, true, true, false);
+            /* Landscape reversed */
+            cal.SwapXY = true;
+            cal.FlipX = true;
             break;
     }
 
-    /*
-     * Set calibration values
-     * These are approximate defaults - run calibration routine for accurate values
-     * Touch corners of screen and note ADC values, then update these
-     */
-    XPT2046_SetCalibration(&hxpt,
-                          300,   // x_min (touch left edge)
-                          3700,  // x_max (touch right edge)
-                          300,   // y_min (touch top edge)
-                          3700); // y_max (touch bottom edge)
-
+    XPT2046_SetCalibration(&hxpt, &cal);
     log_debug("LVGL: Touch calibration set (using defaults - may need adjustment)");
 
     /* Create LVGL input device (v9 API) */
@@ -225,7 +207,7 @@ int lv_port_indev_init(void)
  * @brief   Get XPT2046 touch handle
  * @retval  Pointer to touch handle
  */
-XPT2046_Handle_t *lv_port_indev_get_xpt2046_handle(void)
+XPT2046_HandleTypeDef *lv_port_indev_get_xpt2046_handle(void)
 {
     return &hxpt;
 }
@@ -245,15 +227,19 @@ lv_indev_t *lv_port_indev_get_indev(void)
  */
 void lv_port_indev_test_touch(void)
 {
-    if (!hxpt.initialized) {
+    if (!hxpt.IsInitialized) {
         log_error("Touch not initialized");
         return;
     }
 
-    XPT2046_TouchPoint_t touch;
-    if (XPT2046_ReadTouch(&hxpt, &touch) == XPT2046_OK) {
-        log_info("Touch detected at (%u,%u) pressure=%u",
-                 touch.x, touch.y, touch.pressure);
+    uint16_t x = 0;
+    uint16_t y = 0;
+    uint8_t pressed = 0;
+
+    if (XPT2046_GetTouchState(&hxpt, &x, &y, &pressed) == XPT2046_OK && pressed) {
+        uint16_t pressure = 0;
+        XPT2046_GetPressure(&hxpt, &pressure);
+        log_info("Touch detected at (%u,%u) pressure=%u", x, y, pressure);
     } else if (XPT2046_IsTouched(&hxpt)) {
         log_warning("Touch IRQ active but read failed");
     }

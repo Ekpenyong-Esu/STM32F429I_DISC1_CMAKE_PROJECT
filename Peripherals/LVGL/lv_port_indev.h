@@ -32,7 +32,7 @@ int lv_port_indev_init(void);
  * @brief   Get XPT2046 touch handle
  * @retval  Pointer to touch handle
  */
-XPT2046_Handle_t *lv_port_indev_get_xpt2046_handle(void);
+XPT2046_HandleTypeDef *lv_port_indev_get_xpt2046_handle(void);
 
 /**
  * @brief   Get LVGL input device object
