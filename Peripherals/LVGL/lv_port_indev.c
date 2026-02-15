@@ -105,8 +105,8 @@ static void touch_read_cb(lv_indev_t *indev, lv_indev_data_t *data)
         last_x = logical_x;
         last_y = logical_y;
 
-        log_debug("Touch: (%d,%d) [raw: %u,%u]",
-                  logical_x, logical_y, x, y);
+        log_debug("Touch: screen=(%d,%d)",
+                  logical_x, logical_y);
     }
 }
 
@@ -148,10 +148,10 @@ int lv_port_indev_init(void)
         .MaxX = 3900,
         .MinY = 200,
         .MaxY = 3900,
-        .ScaleX = (float)DISP_WIDTH / (float)(3900 - 200),
-        .ScaleY = (float)DISP_HEIGHT / (float)(3900 - 200),
-        .OffsetX = -200,
-        .OffsetY = -200,
+        .ScaleX = 0.0f,   /* Unused - map() derives scaling from MinX/MaxX */
+        .ScaleY = 0.0f,   /* Unused - map() derives scaling from MinY/MaxY */
+        .OffsetX = 0,     /* Unused - map() derives offset from MinX/MinY */
+        .OffsetY = 0,     /* Unused */
         .SwapXY = false,
         .FlipX = false,
         .FlipY = false,
@@ -225,6 +225,28 @@ lv_indev_t *lv_port_indev_get_indev(void)
  * @brief   Test touch by printing coordinates to log
  * @note    Call in main loop to debug touch functionality
  */
+void lv_port_indev_calibrate(void)
+{
+    if (!hxpt.IsInitialized) {
+        log_error("Touch not initialized - cannot calibrate");
+        return;
+    }
+
+    /*
+     * TODO: Implement interactive 3-point calibration routine.
+     * 1. Display crosshair at known screen positions (e.g. corners)
+     * 2. Read raw ADC values when user touches each crosshair
+     * 3. Compute MinX/MaxX/MinY/MaxY from the raw readings
+     * 4. Apply with XPT2046_SetCalibration()
+     *
+     * For now, use XPT2046_PrintRawCoordinates() to manually read
+     * corner values and update the defaults in lv_port_indev_init().
+     */
+    log_warning("Calibration routine not yet implemented."
+                " Use XPT2046_PrintRawCoordinates() to read corner ADC values"
+                " and update cal.MinX/MaxX/MinY/MaxY in lv_port_indev_init().");
+}
+
 void lv_port_indev_test_touch(void)
 {
     if (!hxpt.IsInitialized) {
@@ -245,22 +267,4 @@ void lv_port_indev_test_touch(void)
     }
 }
 
-/**
- * @brief   Run touch calibration routine
- * @note    Touch corners in sequence to calibrate
- * @todo    Implement interactive calibration UI
- */
-void lv_port_indev_calibrate(void)
-{
-    log_info("Touch calibration routine");
-    log_info("Touch top-left corner and hold for 2 seconds...");
 
-    /* TODO: Implement full calibration routine
-     * 1. Show calibration screen with target points
-     * 2. Read raw ADC values at each corner
-     * 3. Calculate and store calibration parameters
-     * 4. Save to flash/EEPROM for persistence
-     */
-
-    log_warning("Calibration not fully implemented - using defaults");
-}

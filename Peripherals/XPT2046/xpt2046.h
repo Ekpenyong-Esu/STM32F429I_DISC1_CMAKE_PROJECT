@@ -30,7 +30,7 @@ extern "C" {
 /* XPT2046 Constants */
 #define XPT2046_MAX_X                   4095    /* 12-bit ADC resolution */
 #define XPT2046_MAX_Y                   4095    /* 12-bit ADC resolution */
-#define XPT2046_MIN_PRESSURE            10      /* Minimum pressure threshold */
+#define XPT2046_MIN_PRESSURE            5      /* Minimum pressure threshold */
 
 /* Display mapping constants - adjust to your display (Native resolution) */
 #define XPT2046_DISPLAY_WIDTH           320     /* Native Width (Portrait) */
@@ -70,11 +70,15 @@ extern "C" {
 #define XPT2046_GESTURE_THRESHOLD       20      /* Minimum movement for gesture */
 #define XPT2046_LONG_PRESS_TIME         1000    /* Minimum time for long press (ms) */
 
-/* Default calibration values (raw touch ranges) */
-#define XPT2046_RAW_X_MIN               200     /* Measured minimum X */
-#define XPT2046_RAW_X_MAX               3900    /* Measured maximum X */
-#define XPT2046_RAW_Y_MIN               200     /* Measured minimum Y */
-#define XPT2046_RAW_Y_MAX               3900    /* Measured maximum Y */
+/* Default calibration values (raw touch ranges)
+ * Updated to measured corner values (user-provided) for portrait orientation.
+ * Left/top raw values ~511..559, right/top raw values ~3136..3292,
+ * vertical raw min/max observed ~479..3784.
+ */
+#define XPT2046_RAW_X_MIN               200     /* Measured minimum X (left) */
+#define XPT2046_RAW_X_MAX               3900   /* Measured maximum X (right) */
+#define XPT2046_RAW_Y_MIN               200     /* Measured minimum Y (bottom) */
+#define XPT2046_RAW_Y_MAX               3900    /* Measured maximum Y (top) */
 
 /* Exported types ------------------------------------------------------------*/
 
@@ -207,6 +211,10 @@ XPT2046_StatusTypeDef XPT2046_Init(XPT2046_HandleTypeDef *hxpt,
                                   SPI_HandleTypeDef *hspi,
                                   GPIO_TypeDef *cs_port, uint16_t cs_pin,
                                   GPIO_TypeDef *irq_port, uint16_t irq_pin);
+
+
+void XPT2046_PrintRawCoordinates(XPT2046_HandleTypeDef *hxpt);
+
 
 /**
  * @brief   Deinitialize XPT2046 touchscreen controller

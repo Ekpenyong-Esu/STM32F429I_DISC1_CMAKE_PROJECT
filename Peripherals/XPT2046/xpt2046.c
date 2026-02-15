@@ -17,6 +17,7 @@
 #include <string.h>
 #include <math.h>
 #include <stdlib.h>
+#include "log.h"
 
 /* Private constants ---------------------------------------------------------*/
 #define XPT2046_DELAY_MS(x)             HAL_Delay(x)
@@ -275,6 +276,26 @@ XPT2046_StatusTypeDef XPT2046_GetTouchData(XPT2046_HandleTypeDef *hxpt,
 }
 
 /**
+ * @brief   Print raw ADC coordinates (helper for calibration)
+ * @param   hxpt Pointer to XPT2046 handle
+ * @note    Call from main loop to log raw ADC readings for calibration
+ */
+void XPT2046_PrintRawCoordinates(XPT2046_HandleTypeDef *hxpt)
+{
+    if (hxpt == NULL || !hxpt->IsInitialized) {
+        log_warning("XPT2046: not initialized - cannot print raw coordinates");
+        return;
+    }
+
+    uint16_t rawx = 0, rawy = 0, pressure = 0;
+    for (int i = 0; i < 5; ++i) {
+        XPT2046_ReadRawCoordinates(hxpt, &rawx, &rawy, &pressure);
+        log_info("XPT2046 Raw: X=%u Y=%u Pressure=%u", rawx, rawy, pressure);
+        HAL_Delay(100);
+    }
+}
+
+/**
  * @brief   Get single touch coordinates
  * @param   hxpt Pointer to XPT2046 handle structure
  * @param   xPos Pointer to store X coordinate
@@ -359,6 +380,7 @@ XPT2046_StatusTypeDef XPT2046_GetTouchState(XPT2046_HandleTypeDef *hxpt,
     if (!XPT2046_IsTouched(hxpt)) {
         return XPT2046_OK;  /* Not an error, just no touch */
     }
+
 
     /* Read raw coordinates */
     if (XPT2046_ReadRawCoordinates(hxpt, &raw_x, &raw_y, NULL) != XPT2046_OK) {
@@ -634,6 +656,18 @@ void XPT2046_ServiceIRQ(void)
 }
 
 /**
+ * @brief   HAL GPIO EXTI callback (captures touch IRQ)
+ * @note    Implemented here so XPT2046 driver can defer processing to main loop
+ */
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+    if (g_hxpt != NULL && GPIO_Pin == g_hxpt->IRQ_Pin) {
+        s_xpt_irq_pending = true;
+    }
+}
+
+
+/**
  * @brief   Register callback functions
  * @param   hxpt Pointer to XPT2046 handle structure
  * @param   touch_callback Touch detected callback
@@ -788,7 +822,16 @@ static uint16_t XPT2046_ReadChannel(XPT2046_HandleTypeDef *hxpt, uint8_t channel
 
     XPT2046_CS_Low(hxpt);
 
-    /* Transmit command and receive response */
+    /*
+     * First (dummy) transfer: some panels / first-conversion reads can be noisy or
+     * return the previous conversion result. Perform a dummy transfer and discard it,
+     * then perform the real measurement.
+     */
+    HAL_SPI_TransmitReceive(hxpt->hspi, tx_data, rx_data, 3, XPT2046_TIMEOUT);
+    XPT2046_DELAY_US(XPT2046_CONVERSION_DELAY_US);
+
+    /* Actual measurement */
+    memset(rx_data, 0, sizeof(rx_data));
     HAL_SPI_TransmitReceive(hxpt->hspi, tx_data, rx_data, 3, XPT2046_TIMEOUT);
 
     XPT2046_CS_High(hxpt);
@@ -852,6 +895,8 @@ static XPT2046_StatusTypeDef XPT2046_ReadRawCoordinates(XPT2046_HandleTypeDef *h
     *raw_y = XPT2046_ReadChannelFiltered(hxpt, XPT2046_CMD_READ_Y,
                                         hxpt->Config.Samples);
 
+    log_debug("Raw coordinates: X=%u, Y=%u", *raw_x, *raw_y);
+
     /* Read pressure if requested */
     if (pressure != NULL) {
         uint16_t z1 = XPT2046_ReadChannelFiltered(hxpt, XPT2046_CMD_READ_Z1, 3);
@@ -888,49 +933,45 @@ static XPT2046_StatusTypeDef XPT2046_ConvertCoordinates(XPT2046_HandleTypeDef *h
     }
 
     int32_t x, y;
-    int32_t width = XPT2046_DISPLAY_WIDTH;
-    int32_t height = XPT2046_DISPLAY_HEIGHT;
+    int32_t eff_w = XPT2046_DISPLAY_WIDTH;
+    int32_t eff_h = XPT2046_DISPLAY_HEIGHT;
 
-    /* Determine effective display dimensions based on SwapXY */
-    if (hxpt->Calibration.SwapXY) {
-        width = XPT2046_DISPLAY_HEIGHT;
-        height = XPT2046_DISPLAY_WIDTH;
-    }
-
-    /* Apply calibration mapping - Map raw to logical display limits */
+    /* Map raw values to native (portrait) display coordinates */
     x = map((int32_t)raw_x,
             (int32_t)hxpt->Calibration.MinX,
             (int32_t)hxpt->Calibration.MaxX,
             0,
-            (int32_t)(width - 1));
+            (int32_t)XPT2046_DISPLAY_WIDTH - 1);
 
     y = map((int32_t)raw_y,
             (int32_t)hxpt->Calibration.MinY,
             (int32_t)hxpt->Calibration.MaxY,
             0,
-            (int32_t)(height - 1));
+            (int32_t)XPT2046_DISPLAY_HEIGHT - 1);
 
-    /* Apply swap if configured */
+    /* Apply swap FIRST (if needed for landscape) */
     if (hxpt->Calibration.SwapXY) {
         int32_t temp = x;
         x = y;
         y = temp;
+        /* After swap, effective dimensions are also swapped */
+        eff_w = XPT2046_DISPLAY_HEIGHT;
+        eff_h = XPT2046_DISPLAY_WIDTH;
     }
 
-    /* Apply flip if configured - Use effective dimensions */
+    /* Then apply flips using effective (post-swap) dimensions */
     if (hxpt->Calibration.FlipX) {
-        x = (width - 1) - x;
+        x = (eff_w - 1) - x;
     }
     if (hxpt->Calibration.FlipY) {
-        y = (height - 1) - y;
+        y = (eff_h - 1) - y;
     }
 
-    /* Clamp to display bounds - Use effective dimensions */
+    /* Clamp to effective display bounds */
     if (x < 0) x = 0;
-    else if (x >= width) x = width - 1;
-
+    if (x >= eff_w) x = eff_w - 1;
     if (y < 0) y = 0;
-    else if (y >= height) y = height - 1;
+    if (y >= eff_h) y = eff_h - 1;
 
     *disp_x = (uint16_t)x;
     *disp_y = (uint16_t)y;
@@ -945,19 +986,34 @@ static XPT2046_StatusTypeDef XPT2046_ConvertCoordinates(XPT2046_HandleTypeDef *h
  */
 static void XPT2046_FilterCoordinates(uint16_t *x, uint16_t *y)
 {
-    static uint16_t _x = 0;
-    static uint16_t _y = 0;
+    static uint16_t _x = 0xFFFF;  // Use invalid value to detect first touch
+    static uint16_t _y = 0xFFFF;
 
-    int32_t x_raw = (int32_t)*x;
-    int32_t y_raw = (int32_t)*y;
+    uint16_t x_new = *x;
+    uint16_t y_new = *y;
 
-    int32_t xDiff = x_raw > _x ? (x_raw - _x) : (_x - x_raw);
-    int32_t yDiff = y_raw > _y ? (y_raw - _y) : (_y - y_raw);
+    /* First touch - no filter, just store */
+    if (_x == 0xFFFF || _y == 0xFFFF) {
+        _x = x_new;
+        _y = y_new;
+        *x = _x;
+        *y = _y;
+        return;
+    }
 
-    /* Threshold-based smoothing */
-    if ((xDiff + yDiff) > XPT2046_SMOOTHING_THRESHOLD) {
-        _x = (uint16_t)x_raw;
-        _y = (uint16_t)y_raw;
+    /* Calculate difference */
+    int32_t xDiff = abs((int32_t)x_new - (int32_t)_x);
+    int32_t yDiff = abs((int32_t)y_new - (int32_t)_y);
+
+    /* Large movement - update immediately */
+    if (xDiff > XPT2046_SMOOTHING_THRESHOLD || yDiff > XPT2046_SMOOTHING_THRESHOLD) {
+        _x = x_new;
+        _y = y_new;
+    }
+    /* Small movement - apply smoothing */
+    else {
+        _x = (_x * 3 + x_new) / 4;  // 75% old, 25% new
+        _y = (_y * 3 + y_new) / 4;
     }
 
     *x = _x;

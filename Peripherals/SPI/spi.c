@@ -101,9 +101,11 @@ void SPI_Init(void)
    * Use the smallest prescaler (2) that keeps SCLK within tolerable range for the display.
    */
   /* Use a safer default SPI speed for troubleshooting. Lowering from prescaler 2 (~42 MHz)
-   * to prescaler 8 (~10.5 MHz) to ensure signal integrity during bring-up. Change back to a
-   * faster prescaler after the display is verified. */
-  hspi4.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8; /* SPI clock = APB2 clock / 8 (≈10.5 MHz) */
+   * to prescaler 32 (~2.6 MHz) so the XPT2046 touch controller runs reliably at the same
+   * SPI bus used for the LCD. If you prefer full LCD throughput, switch SPI speed only
+   * for touch reads instead of changing the global prescaler.
+   */
+  hspi4.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_32; /* SPI clock = APB2 clock / 32 (≈2.6 MHz) */
   hspi4.Init.FirstBit = SPI_FIRSTBIT_MSB;               /* MSB transmitted first */
   hspi4.Init.TIMode = SPI_TIMODE_DISABLE;               /* TI mode disabled */
   hspi4.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE; /* CRC calculation disabled */
