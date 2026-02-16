@@ -98,6 +98,16 @@ void SPI_Init(void);
 SPI_StatusTypeDef SPI_Init_Custom(const SPI_ConfigTypeDef* config);
 
 /**
+ * @brief   Change SPI baud-rate prescaler at runtime
+ * @details Allows switching SPI clock speed without changing other settings.
+ *          Useful for boards where LCD needs high speed but shared touch
+ *          controller (XPT2046) requires a lower SPI clock.
+ * @param   BaudRatePrescaler One of HAL SPI_BAUDRATEPRESCALER_2.._256 constants
+ * @retval  SPI_StatusTypeDef Operation status
+ */
+SPI_StatusTypeDef SPI_SetBaudRatePrescaler(uint32_t BaudRatePrescaler);
+
+/**
  * @brief   Deinitializes SPI peripheral
  * @details Disables SPI peripheral and releases resources
  * @param   None

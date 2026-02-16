@@ -198,7 +198,10 @@ typedef struct {
 
 /**
  * @brief   Initialize XPT2046 touchscreen controller
- * @details Configures SPI and GPIO pins for the touchscreen
+ * @details Configures SPI and GPIO pins for the touchscreen. If the SPI
+ *          peripheral is shared with a faster device (for example ILI9488),
+ *          the driver will temporarily lower the SPI baud-rate prescaler to
+ *          a safe value during ADC reads and restore it afterwards.
  * @param   hxpt Pointer to XPT2046 handle structure
  * @param   hspi Pointer to SPI handle
  * @param   cs_port Chip select GPIO port

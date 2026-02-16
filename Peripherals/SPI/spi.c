@@ -12,6 +12,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "spi.h"
 #include "log.h"
+#include "stm32f4xx_hal_spi.h"
 
 /* Private defines -----------------------------------------------------------*/
 #define SPI_CRC_POLYNOMIAL_DEFAULT    10U     /**< Default CRC polynomial value */
@@ -105,7 +106,7 @@ void SPI_Init(void)
    * SPI bus used for the LCD. If you prefer full LCD throughput, switch SPI speed only
    * for touch reads instead of changing the global prescaler.
    */
-  hspi4.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_32; /* SPI clock = APB2 clock / 32 (≈2.6 MHz) */
+  hspi4.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_4; /* SPI clock = APB2 clock / 8 (≈10.5 MHz) */
   hspi4.Init.FirstBit = SPI_FIRSTBIT_MSB;               /* MSB transmitted first */
   hspi4.Init.TIMode = SPI_TIMODE_DISABLE;               /* TI mode disabled */
   hspi4.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE; /* CRC calculation disabled */
@@ -146,6 +147,46 @@ SPI_StatusTypeDef SPI_Init_Custom(const SPI_ConfigTypeDef* config)
   /* Initialize the SPI peripheral with the specified parameters */
    HAL_SPI_Init(&hspi4);
    return SPI_OK;
+}
+
+/**
+ * @brief   Change SPI baud-rate prescaler at runtime
+ * @details De-initializes and re-initializes SPI peripheral with the new
+ *          BaudRatePrescaler. Validates prescaler value before applying.
+ * @param   BaudRatePrescaler One of SPI_BAUDRATEPRESCALER_2 .. _256
+ * @retval  SPI_StatusTypeDef Operation status
+ */
+SPI_StatusTypeDef SPI_SetBaudRatePrescaler(uint32_t BaudRatePrescaler)
+{
+    /* Validate supported prescaler constants */
+    switch (BaudRatePrescaler) {
+        case SPI_BAUDRATEPRESCALER_2:
+        case SPI_BAUDRATEPRESCALER_4:
+        case SPI_BAUDRATEPRESCALER_8:
+        case SPI_BAUDRATEPRESCALER_16:
+        case SPI_BAUDRATEPRESCALER_32:
+        case SPI_BAUDRATEPRESCALER_64:
+        case SPI_BAUDRATEPRESCALER_128:
+        case SPI_BAUDRATEPRESCALER_256:
+            break;
+        default:
+            return SPI_INVALID_PARAM;
+    }
+
+    /* Nothing to do if already at requested speed */
+    if (hspi4.Init.BaudRatePrescaler == BaudRatePrescaler) {
+        return SPI_OK;
+    }
+
+    /* De-initialize and re-initialize the peripheral with new prescaler */
+    HAL_StatusTypeDef hal = HAL_SPI_DeInit(&hspi4);
+    if (hal != HAL_OK) {
+        return SPI_ConvertHALStatus(hal);
+    }
+
+    hspi4.Init.BaudRatePrescaler = BaudRatePrescaler;
+    hal = HAL_SPI_Init(&hspi4);
+    return SPI_ConvertHALStatus(hal);
 }
 
 

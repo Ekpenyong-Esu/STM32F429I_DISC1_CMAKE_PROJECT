@@ -52,6 +52,17 @@ SPI_ConfigTypeDef customConfig = {
 };
 
 SPI_Init_Custom(&customConfig);
+
+```c
+/* Runtime speed switching example (LCD fast, XPT2046 touch safe slow) */
+// set safe speed for touch
+SPI_SetBaudRatePrescaler(SPI_BAUDRATEPRESCALER_32);
+// perform touch read operation (XPT2046)
+// ...
+// restore high speed for display updates
+SPI_SetBaudRatePrescaler(SPI_BAUDRATEPRESCALER_8);
+```
+
 ```
 
 ### Communicating with Devices

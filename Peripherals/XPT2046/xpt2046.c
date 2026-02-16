@@ -32,6 +32,11 @@
 #define XPT2046_CONVERSION_DELAY_US     10      /* ADC conversion delay */
 #define XPT2046_SETTLING_DELAY_US       50      /* Settling time between reads */
 
+/* Safe SPI prescaler used by XPT2046 when sharing bus with faster devices (e.g. ILI9488).
+ * Driver will temporarily switch SPI to this prescaler during touch ADC reads and restore
+ * the previous prescaler afterwards. */
+#define XPT2046_SAFE_BAUD_PRESCALER     SPI_BAUDRATEPRESCALER_32
+
 /* Private variables ---------------------------------------------------------*/
 /* Global touchscreen handle */
 XPT2046_HandleTypeDef *g_hxpt = NULL;
@@ -287,7 +292,9 @@ void XPT2046_PrintRawCoordinates(XPT2046_HandleTypeDef *hxpt)
         return;
     }
 
-    uint16_t rawx = 0, rawy = 0, pressure = 0;
+    uint16_t rawx = 0;
+    uint16_t rawy = 0;
+    uint16_t pressure = 0;
     for (int i = 0; i < 5; ++i) {
         XPT2046_ReadRawCoordinates(hxpt, &rawx, &rawy, &pressure);
         log_info("XPT2046 Raw: X=%u Y=%u Pressure=%u", rawx, rawy, pressure);
@@ -799,7 +806,7 @@ XPT2046_ConfigTypeDef XPT2046_GetDefaultConfig(void)
     XPT2046_ConfigTypeDef config = {
         .Samples = XPT2046_SAMPLES,
         .PressureThreshold = XPT2046_MIN_PRESSURE,
-        .InterruptEnable = true,
+        .InterruptEnable = false,
         .DebounceCount = XPT2046_DEBOUNCE_COUNT,
         .Use12Bit = true
     };
@@ -862,10 +869,62 @@ static uint16_t XPT2046_ReadChannelFiltered(XPT2046_HandleTypeDef *hxpt,
     if (samples > 16) samples = 16;
     if (samples < 1) samples = 1;
 
+    /*
+     * Try to ensure SPI is running at a safe (low) speed for the XPT2046 ADC reads.
+     * Prefer using the public SPI helper when hxpt->hspi points to SPI4 (project default).
+     * If speed change fails, we log a warning and continue with the current speed.
+     */
+    uint32_t prev_prescaler = 0;
+    bool switched = false;
+
+    if (hxpt != NULL && hxpt->hspi != NULL) {
+        prev_prescaler = hxpt->hspi->Init.BaudRatePrescaler;
+
+        if (prev_prescaler != XPT2046_SAFE_BAUD_PRESCALER) {
+            if (hxpt->hspi->Instance == SPI4) {
+                if (SPI_SetBaudRatePrescaler(XPT2046_SAFE_BAUD_PRESCALER) == SPI_OK) {
+                    switched = true;
+                } else {
+                    log_warning("XPT2046: failed to set SPI prescaler via SPI_SetBaudRatePrescaler()");
+                }
+            } else {
+                /* Fallback: reconfigure the provided SPI handle directly */
+                if (HAL_SPI_DeInit(hxpt->hspi) == HAL_OK) {
+                    hxpt->hspi->Init.BaudRatePrescaler = XPT2046_SAFE_BAUD_PRESCALER;
+                    if (HAL_SPI_Init(hxpt->hspi) == HAL_OK) {
+                        switched = true;
+                    } else {
+                        log_warning("XPT2046: HAL_SPI_Init() failed when changing prescaler");
+                    }
+                } else {
+                    log_warning("XPT2046: HAL_SPI_DeInit() failed when changing prescaler");
+                }
+            }
+        }
+    }
+
     /* Read multiple samples */
     for (uint8_t i = 0; i < samples; i++) {
         values[i] = XPT2046_ReadChannel(hxpt, channel);
         sum += values[i];
+    }
+
+    /* Restore previous SPI prescaler if it was changed */
+    if (switched && hxpt != NULL && hxpt->hspi != NULL) {
+        if (hxpt->hspi->Instance == SPI4) {
+            if (SPI_SetBaudRatePrescaler(prev_prescaler) != SPI_OK) {
+                log_error("XPT2046: failed to restore SPI prescaler via SPI_SetBaudRatePrescaler()");
+            }
+        } else {
+            if (HAL_SPI_DeInit(hxpt->hspi) == HAL_OK) {
+                hxpt->hspi->Init.BaudRatePrescaler = prev_prescaler;
+                if (HAL_SPI_Init(hxpt->hspi) != HAL_OK) {
+                    log_error("XPT2046: HAL_SPI_Init() failed when restoring prescaler");
+                }
+            } else {
+                log_error("XPT2046: HAL_SPI_DeInit() failed when restoring prescaler");
+            }
+        }
     }
 
     /* Return average */
