@@ -438,9 +438,6 @@ static void create_home_screen(void)
     lv_obj_center(lbl_pins);
 }
 
-/*-----------------------------------------------------------------------------
-
-
 /* This screen shows live sensor data visualization.
  * Contains: Title, Line chart, 4 sensor value cards, Back button
  */

@@ -38,10 +38,8 @@
 #define XPT2046_SAFE_BAUD_PRESCALER     SPI_BAUDRATEPRESCALER_32
 
 /* Private variables ---------------------------------------------------------*/
-/* Global touchscreen handle */
-XPT2046_HandleTypeDef *g_hxpt = NULL;
-/* Deferred EXTI handling flag */
-static volatile bool s_xpt_irq_pending = false;
+/* Polling-only driver (IRQ removed). */
+/* Callbacks are invoked from the polling path in XPT2046_ReadTouchData(). */
 
 /* Private function prototypes -----------------------------------------------*/
 static XPT2046_StatusTypeDef XPT2046_ReadRawCoordinates(XPT2046_HandleTypeDef *hxpt,
@@ -54,7 +52,7 @@ static XPT2046_StatusTypeDef XPT2046_ConvertCoordinates(XPT2046_HandleTypeDef *h
                                                         uint16_t *disp_x,
                                                         uint16_t *disp_y);
 static void XPT2046_FilterCoordinates(uint16_t *x, uint16_t *y);
-static XPT2046_GestureTypeDef XPT2046_AnalyzeGesture(XPT2046_HandleTypeDef *hxpt);
+
 static uint16_t XPT2046_ReadChannel(XPT2046_HandleTypeDef *hxpt, uint8_t channel);
 static uint16_t XPT2046_ReadChannelFiltered(XPT2046_HandleTypeDef *hxpt,
                                             uint8_t channel,
@@ -63,6 +61,11 @@ static int32_t map(int32_t val, int32_t in_min, int32_t in_max,
                   int32_t out_min, int32_t out_max);
 static void XPT2046_CS_Low(XPT2046_HandleTypeDef *hxpt);
 static void XPT2046_CS_High(XPT2046_HandleTypeDef *hxpt);
+
+/* Internal helper: default configuration (static) - forward declare so callers above can use it */
+static XPT2046_ConfigTypeDef XPT2046_GetDefaultConfig(void);
+
+static XPT2046_ConfigTypeDef XPT2046_GetDefaultConfig(void);
 
 /* Private helper functions implementation -----------------------------------*/
 
@@ -126,13 +129,12 @@ static int32_t map(int32_t val, int32_t in_min, int32_t in_max,
  */
 XPT2046_StatusTypeDef XPT2046_Init(XPT2046_HandleTypeDef *hxpt,
                                   SPI_HandleTypeDef *hspi,
-                                  GPIO_TypeDef *cs_port, uint16_t cs_pin,
-                                  GPIO_TypeDef *irq_port, uint16_t irq_pin)
+                                  GPIO_TypeDef *cs_port, uint16_t cs_pin)
 {
     XPT2046_StatusTypeDef status = XPT2046_OK;
 
     /* Check parameters */
-    if (hxpt == NULL || hspi == NULL || cs_port == NULL || irq_port == NULL) {
+    if (hxpt == NULL || hspi == NULL || cs_port == NULL) {
         return XPT2046_INVALID_PARAM;
     }
 
@@ -141,17 +143,14 @@ XPT2046_StatusTypeDef XPT2046_Init(XPT2046_HandleTypeDef *hxpt,
     hxpt->hspi = hspi;
     hxpt->CS_Port = cs_port;
     hxpt->CS_Pin = cs_pin;
-    hxpt->IRQ_Port = irq_port;
-    hxpt->IRQ_Pin = irq_pin;
-    g_hxpt = hxpt;
 
-    /* SPI handingle must be pre-initialized by application (via SPI_Init() in main) */
-   if (hxpt->hspi->Instance == NULL) {
+    /* SPI handling must be pre-initialized by application (via SPI_Init() in main) */
+    if (hxpt->hspi->Instance == NULL) {
         return XPT2046_ERROR;  /* SPI not initialized */
     }
 
-    /* Initialize MSP (GPIO, ingclocks) */
-    XPT2046_MspInit(cs_port, cs_pin, irq_port, irq_pin);
+    /* Initialize MSP (GPIO, clocks) - board file provides CS pin setup */
+    XPT2046_MspInit(cs_port, cs_pin);
 
     /* Set CS high (inactive) */
     XPT2046_CS_High(hxpt);
@@ -180,12 +179,7 @@ XPT2046_StatusTypeDef XPT2046_Init(XPT2046_HandleTypeDef *hxpt,
     };
     XPT2046_SetCalibration(hxpt, &default_cal);
 
-    /* Configure interrupts if enabled */
-    if (hxpt->Config.InterruptEnable) {
-        XPT2046_EnableInterrupt(hxpt, true);
-        XPT2046_ITConfig(hxpt);
-    }
-
+    /* Driver is polling-only (interrupts removed) */
     hxpt->IsInitialized = true;
     return XPT2046_OK;
 }
@@ -201,16 +195,11 @@ XPT2046_StatusTypeDef XPT2046_DeInit(XPT2046_HandleTypeDef *hxpt)
         return XPT2046_INVALID_PARAM;
     }
 
-    /* Disable interrupts */
-    XPT2046_EnableInterrupt(hxpt, false);
-
-    /* Deinitialize MSP */
-    XPT2046_MspDeInit(hxpt->CS_Port, hxpt->CS_Pin,
-                     hxpt->IRQ_Port, hxpt->IRQ_Pin);
+    /* Deinitialize MSP (CS pin) */
+    XPT2046_MspDeInit(hxpt->CS_Port, hxpt->CS_Pin);
 
     /* Reset structure */
     hxpt->IsInitialized = false;
-    g_hxpt = NULL;
 
     return XPT2046_OK;
 }
@@ -240,7 +229,7 @@ XPT2046_StatusTypeDef XPT2046_Configure(XPT2046_HandleTypeDef *hxpt,
  * @retval  XPT2046_StatusTypeDef Status of the operation
  * @note    XPT2046 doesn't have software reset, this clears state
  */
-XPT2046_StatusTypeDef XPT2046_Reset(XPT2046_HandleTypeDef *hxpt)
+static XPT2046_StatusTypeDef XPT2046_Reset(XPT2046_HandleTypeDef *hxpt)
 {
     if (hxpt == NULL) {
         return XPT2046_INVALID_PARAM;
@@ -420,9 +409,15 @@ bool XPT2046_IsTouched(XPT2046_HandleTypeDef *hxpt)
         return false;
     }
 
-    /* Check interrupt pin - active low when touched */
-    GPIO_PinState irq_state = HAL_GPIO_ReadPin(hxpt->IRQ_Port, hxpt->IRQ_Pin);
-    return (irq_state == GPIO_PIN_RESET);
+    /* Polling-only: determine touch by measuring pressure (Z1/Z2).
+       This is slightly slower than a dedicated PENIRQ line but works
+       reliably in polling mode. */
+    uint16_t pressure = 0;
+    if (XPT2046_GetPressure(hxpt, &pressure) != XPT2046_OK) {
+        return false;
+    }
+
+    return (pressure >= hxpt->Config.PressureThreshold);
 }
 
 /**
@@ -430,7 +425,7 @@ bool XPT2046_IsTouched(XPT2046_HandleTypeDef *hxpt)
  * @param   hxpt Pointer to XPT2046 handle structure
  * @retval  uint8_t Number of touches (0 or 1)
  */
-uint8_t XPT2046_GetTouchCount(XPT2046_HandleTypeDef *hxpt)
+static uint8_t XPT2046_GetTouchCount(XPT2046_HandleTypeDef *hxpt)
 {
     if (hxpt == NULL) {
         return 0;
@@ -500,6 +495,13 @@ XPT2046_StatusTypeDef XPT2046_ReadTouchData(XPT2046_HandleTypeDef *hxpt)
         hxpt->TouchData.Points[0].State = XPT2046_TOUCH_PRESSED;
     } else {
         hxpt->TouchData.Points[0].State = XPT2046_TOUCH_MOVING;
+    }
+
+    /* Invoke registered callbacks on transitions (polling path) */
+    if (hxpt->PrevTouchData.TouchCount == 0 && hxpt->TouchData.TouchCount > 0) {
+        if (hxpt->TouchCallback) hxpt->TouchCallback();
+    } else if (hxpt->PrevTouchData.TouchCount > 0 && hxpt->TouchData.TouchCount == 0) {
+        if (hxpt->ReleaseCallback) hxpt->ReleaseCallback();
     }
 
     hxpt->LastTouchTime = HAL_GetTick();
@@ -572,131 +574,11 @@ XPT2046_StatusTypeDef XPT2046_GetCalibration(XPT2046_HandleTypeDef *hxpt,
     return XPT2046_OK;
 }
 
-/**
- * @brief   Enable/disable interrupt
- * @param   hxpt Pointer to XPT2046 handle structure
- * @param   enable Enable/disable flag
- * @retval  XPT2046_StatusTypeDef Status of the operation
- */
-XPT2046_StatusTypeDef XPT2046_EnableInterrupt(XPT2046_HandleTypeDef *hxpt,
-                                             bool enable)
-{
-    if (hxpt == NULL) {
-        return XPT2046_INVALID_PARAM;
-    }
+/* Interrupt-related APIs and EXTI handling removed — driver is polling-only.
+   Callbacks are invoked from XPT2046_ReadTouchData() on press/release transitions. */
 
-    hxpt->InterruptMode = enable;
-
-    /* Interrupt is configured in MSP init */
-    /* Enable/disable NVIC if needed */
-    if (enable) {
-        HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
-    } else {
-        HAL_NVIC_DisableIRQ(EXTI15_10_IRQn);
-    }
-
-    return XPT2046_OK;
-}
-
-/**
- * @brief   Configure interrupt
- * @param   hxpt Pointer to XPT2046 handle structure
- * @retval  XPT2046_StatusTypeDef Status of the operation
- * @note    GPIO configuration is done in XPT2046_MspInit
- */
-XPT2046_StatusTypeDef XPT2046_ITConfig(XPT2046_HandleTypeDef *hxpt)
-{
-    if (hxpt == NULL) {
-        return XPT2046_INVALID_PARAM;
-    }
-
-    /* NVIC configuration - already done in MspInit, but ensure enabled */
-    HAL_NVIC_SetPriority(EXTI15_10_IRQn, 5, 0);
-    HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
-
-    return XPT2046_OK;
-}
-
-/**
- * @brief   Interrupt handler
- * @param   hxpt Pointer to XPT2046 handle structure
- */
-void XPT2046_IRQHandler(XPT2046_HandleTypeDef *hxpt)
-{
-    if (hxpt == NULL) {
-        return;
-    }
-
-    /* Read touch data */
-    XPT2046_ReadTouchData(hxpt);
-
-    /* Call callbacks if registered */
-    if (hxpt->TouchData.TouchCount > 0) {
-        if (hxpt->TouchData.Points[0].State == XPT2046_TOUCH_PRESSED &&
-            hxpt->TouchCallback != NULL) {
-            hxpt->TouchCallback();
-        }
-    } else {
-        if (hxpt->PrevTouchData.TouchCount > 0 && hxpt->ReleaseCallback != NULL) {
-            hxpt->ReleaseCallback();
-        }
-    }
-
-    /* Detect gestures if needed */
-    XPT2046_GestureTypeDef gesture = XPT2046_AnalyzeGesture(hxpt);
-    if (gesture != XPT2046_GESTURE_NONE && hxpt->GestureCallback != NULL) {
-        hxpt->GestureCallback(gesture);
-    }
-}
-
-/**
- * @brief   Service pending touchscreen IRQ outside ISR context
- * @details Handles deferred interrupt processing
- */
-void XPT2046_ServiceIRQ(void)
-{
-    if (s_xpt_irq_pending && g_hxpt != NULL && g_hxpt->IsInitialized)
-    {
-        s_xpt_irq_pending = false;
-        XPT2046_IRQHandler(g_hxpt);
-    }
-}
-
-/**
- * @brief   HAL GPIO EXTI callback (captures touch IRQ)
- * @note    Implemented here so XPT2046 driver can defer processing to main loop
- */
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
-{
-    if (g_hxpt != NULL && GPIO_Pin == g_hxpt->IRQ_Pin) {
-        s_xpt_irq_pending = true;
-    }
-}
-
-
-/**
- * @brief   Register callback functions
- * @param   hxpt Pointer to XPT2046 handle structure
- * @param   touch_callback Touch detected callback
- * @param   release_callback Touch released callback
- * @param   gesture_callback Gesture detected callback
- * @retval  XPT2046_StatusTypeDef Status of the operation
- */
-XPT2046_StatusTypeDef XPT2046_RegisterCallbacks(XPT2046_HandleTypeDef *hxpt,
-                                               void (*touch_callback)(void),
-                                               void (*release_callback)(void),
-                                               void (*gesture_callback)(XPT2046_GestureTypeDef))
-{
-    if (hxpt == NULL) {
-        return XPT2046_INVALID_PARAM;
-    }
-
-    hxpt->TouchCallback = touch_callback;
-    hxpt->ReleaseCallback = release_callback;
-    hxpt->GestureCallback = gesture_callback;
-
-    return XPT2046_OK;
-}
+/* Callback registration helper removed — assign handlers directly to
+   `hxpt->TouchCallback` and `hxpt->ReleaseCallback` if needed. */
 
 /**
  * @brief   Get pressure value
@@ -735,7 +617,7 @@ XPT2046_StatusTypeDef XPT2046_GetPressure(XPT2046_HandleTypeDef *hxpt,
  * @param   threshold Pressure threshold value
  * @retval  XPT2046_StatusTypeDef Status of the operation
  */
-XPT2046_StatusTypeDef XPT2046_SetThreshold(XPT2046_HandleTypeDef *hxpt,
+static XPT2046_StatusTypeDef XPT2046_SetThreshold(XPT2046_HandleTypeDef *hxpt,
                                           uint16_t threshold)
 {
     if (hxpt == NULL) {
@@ -752,61 +634,16 @@ XPT2046_StatusTypeDef XPT2046_SetThreshold(XPT2046_HandleTypeDef *hxpt,
  * @param   hxpt Pointer to XPT2046 handle structure
  * @retval  XPT2046_StatusTypeDef Status of the operation
  */
-XPT2046_StatusTypeDef XPT2046_DetectGesture(XPT2046_HandleTypeDef *hxpt)
-{
-    if (hxpt == NULL) {
-        return XPT2046_INVALID_PARAM;
-    }
-
-    hxpt->TouchData.Gesture = XPT2046_AnalyzeGesture(hxpt);
-    hxpt->TouchData.GestureTimestamp = HAL_GetTick();
-
-    return XPT2046_OK;
-}
-
-/**
- * @brief   Get last detected gesture
- * @param   hxpt Pointer to XPT2046 handle structure
- * @retval  XPT2046_GestureTypeDef Last detected gesture
- */
-XPT2046_GestureTypeDef XPT2046_GetLastGesture(XPT2046_HandleTypeDef *hxpt)
-{
-    if (hxpt == NULL) {
-        return XPT2046_GESTURE_NONE;
-    }
-
-    return hxpt->TouchData.Gesture;
-}
-
-/**
- * @brief   Enable/disable gesture detection
- * @param   hxpt Pointer to XPT2046 handle structure
- * @param   enable Enable/disable flag
- * @retval  XPT2046_StatusTypeDef Status of the operation
- */
-XPT2046_StatusTypeDef XPT2046_EnableGestureDetection(XPT2046_HandleTypeDef *hxpt,
-                                                     bool enable)
-{
-    if (hxpt == NULL) {
-        return XPT2046_INVALID_PARAM;
-    }
-
-    /* Gesture detection state could be stored in Config if needed */
-    /* For now, gestures are always analyzed when touch data is read */
-
-    return XPT2046_OK;
-}
 
 /**
  * @brief   Get default configuration
  * @retval  XPT2046_ConfigTypeDef Default configuration structure
  */
-XPT2046_ConfigTypeDef XPT2046_GetDefaultConfig(void)
+static XPT2046_ConfigTypeDef XPT2046_GetDefaultConfig(void)
 {
     XPT2046_ConfigTypeDef config = {
         .Samples = XPT2046_SAMPLES,
         .PressureThreshold = XPT2046_MIN_PRESSURE,
-        .InterruptEnable = false,
         .DebounceCount = XPT2046_DEBOUNCE_COUNT,
         .Use12Bit = true
     };
@@ -1079,44 +916,3 @@ static void XPT2046_FilterCoordinates(uint16_t *x, uint16_t *y)
     *y = _y;
 }
 
-/**
- * @brief   Analyze gesture from touch data
- * @param   hxpt Pointer to XPT2046 handle structure
- * @retval  XPT2046_GestureTypeDef Detected gesture
- */
-static XPT2046_GestureTypeDef XPT2046_AnalyzeGesture(XPT2046_HandleTypeDef *hxpt)
-{
-    /* Basic gesture recognition */
-
-    if (hxpt->TouchData.TouchCount == 0 && hxpt->PrevTouchData.TouchCount > 0) {
-        /* Touch released */
-        uint32_t touch_duration = HAL_GetTick() -
-                                 hxpt->PrevTouchData.Points[0].Timestamp;
-
-        if (touch_duration > XPT2046_LONG_PRESS_TIME) {
-            return XPT2046_GESTURE_LONG_PRESS;
-        }
-        return XPT2046_GESTURE_TAP;
-    }
-
-    if (hxpt->TouchData.TouchCount > 0 && hxpt->PrevTouchData.TouchCount > 0) {
-        /* Calculate movement */
-        int16_t deltaX = (int16_t)(hxpt->TouchData.Points[0].X -
-                                   hxpt->PrevTouchData.Points[0].X);
-        int16_t deltaY = (int16_t)(hxpt->TouchData.Points[0].Y -
-                                   hxpt->PrevTouchData.Points[0].Y);
-        uint16_t distance = (uint16_t)sqrt((double)(deltaX * deltaX +
-                                                    deltaY * deltaY));
-
-        if (distance > XPT2046_GESTURE_THRESHOLD) {
-            if (abs(deltaX) > abs(deltaY)) {
-                return (deltaX > 0) ? XPT2046_GESTURE_SWIPE_RIGHT :
-                                     XPT2046_GESTURE_SWIPE_LEFT;
-            }
-            return (deltaY > 0) ? XPT2046_GESTURE_SWIPE_DOWN :
-                                 XPT2046_GESTURE_SWIPE_UP;
-        }
-    }
-
-    return XPT2046_GESTURE_NONE;
-}

@@ -67,8 +67,7 @@ extern "C" {
 #define XPT2046_SAMPLES                 8       /* Number of samples for averaging */
 #define XPT2046_DEBOUNCE_COUNT          3       /* Debounce count for stable reading */
 #define XPT2046_SMOOTHING_THRESHOLD     10      /* Coordinate smoothing threshold */
-#define XPT2046_GESTURE_THRESHOLD       20      /* Minimum movement for gesture */
-#define XPT2046_LONG_PRESS_TIME         1000    /* Minimum time for long press (ms) */
+
 
 /* Default calibration values (raw touch ranges)
  * Updated to measured corner values (user-provided) for portrait orientation.
@@ -105,19 +104,6 @@ typedef enum {
     XPT2046_TOUCH_MOVING                /**< Touch moving */
 } XPT2046_TouchStateTypeDef;
 
-/**
- * @brief Touch gesture enumeration
- */
-typedef enum {
-    XPT2046_GESTURE_NONE = 0,           /**< No gesture */
-    XPT2046_GESTURE_TAP,                /**< Single tap */
-    XPT2046_GESTURE_DOUBLE_TAP,         /**< Double tap */
-    XPT2046_GESTURE_LONG_PRESS,         /**< Long press */
-    XPT2046_GESTURE_SWIPE_UP,           /**< Swipe up */
-    XPT2046_GESTURE_SWIPE_DOWN,         /**< Swipe down */
-    XPT2046_GESTURE_SWIPE_LEFT,         /**< Swipe left */
-    XPT2046_GESTURE_SWIPE_RIGHT         /**< Swipe right */
-} XPT2046_GestureTypeDef;
 
 /**
  * @brief Touch point structure
@@ -138,8 +124,6 @@ typedef struct {
 typedef struct {
     uint8_t TouchCount;                 /**< Number of active touches */
     XPT2046_TouchPointTypeDef Points[XPT2046_MAX_TOUCHES]; /**< Touch points */
-    XPT2046_GestureTypeDef Gesture;     /**< Detected gesture */
-    uint32_t GestureTimestamp;          /**< Gesture timestamp */
 } XPT2046_TouchDataTypeDef;
 
 /**
@@ -178,18 +162,14 @@ typedef struct {
     SPI_HandleTypeDef *hspi;            /**< SPI handle */
     GPIO_TypeDef *CS_Port;              /**< Chip Select GPIO port */
     uint16_t CS_Pin;                    /**< Chip Select GPIO pin */
-    GPIO_TypeDef *IRQ_Port;             /**< Interrupt GPIO port */
-    uint16_t IRQ_Pin;                   /**< Interrupt GPIO pin */
     XPT2046_ConfigTypeDef Config;       /**< Configuration */
     XPT2046_CalibrationTypeDef Calibration; /**< Calibration data */
     XPT2046_TouchDataTypeDef TouchData; /**< Current touch data */
     XPT2046_TouchDataTypeDef PrevTouchData; /**< Previous touch data */
     bool IsInitialized;                 /**< Initialization status */
-    bool InterruptMode;                 /**< Interrupt mode status */
     uint32_t LastTouchTime;             /**< Last touch timestamp */
     void (*TouchCallback)(void);        /**< Touch detected callback */
     void (*ReleaseCallback)(void);      /**< Touch released callback */
-    void (*GestureCallback)(XPT2046_GestureTypeDef gesture); /**< Gesture callback */
 } XPT2046_HandleTypeDef;
 
 /* Exported function prototypes ---------------------------------------------*/
@@ -206,14 +186,11 @@ typedef struct {
  * @param   hspi Pointer to SPI handle
  * @param   cs_port Chip select GPIO port
  * @param   cs_pin Chip select GPIO pin
- * @param   irq_port Interrupt GPIO port
- * @param   irq_pin Interrupt GPIO pin
  * @retval  XPT2046_StatusTypeDef Status of the operation
  */
 XPT2046_StatusTypeDef XPT2046_Init(XPT2046_HandleTypeDef *hxpt,
                                   SPI_HandleTypeDef *hspi,
-                                  GPIO_TypeDef *cs_port, uint16_t cs_pin,
-                                  GPIO_TypeDef *irq_port, uint16_t irq_pin);
+                                  GPIO_TypeDef *cs_port, uint16_t cs_pin);
 
 
 void XPT2046_PrintRawCoordinates(XPT2046_HandleTypeDef *hxpt);
@@ -240,7 +217,6 @@ XPT2046_StatusTypeDef XPT2046_Configure(XPT2046_HandleTypeDef *hxpt,
  * @param   hxpt Pointer to XPT2046 handle structure
  * @retval  XPT2046_StatusTypeDef Status of the operation
  */
-XPT2046_StatusTypeDef XPT2046_Reset(XPT2046_HandleTypeDef *hxpt);
 
 /* Touch detection and reading functions */
 
@@ -296,7 +272,6 @@ bool XPT2046_IsTouched(XPT2046_HandleTypeDef *hxpt);
  * @param   hxpt Pointer to XPT2046 handle structure
  * @retval  uint8_t Number of touches (0 or 1 for single-touch)
  */
-uint8_t XPT2046_GetTouchCount(XPT2046_HandleTypeDef *hxpt);
 
 /* Calibration functions */
 
@@ -325,75 +300,15 @@ XPT2046_StatusTypeDef XPT2046_SetCalibration(XPT2046_HandleTypeDef *hxpt,
 XPT2046_StatusTypeDef XPT2046_GetCalibration(XPT2046_HandleTypeDef *hxpt,
                                             XPT2046_CalibrationTypeDef *calibration);
 
-/* Gesture recognition functions */
 
-/**
- * @brief   Detect gesture from touch data
- * @param   hxpt Pointer to XPT2046 handle structure
- * @retval  XPT2046_StatusTypeDef Status of the operation
- */
-XPT2046_StatusTypeDef XPT2046_DetectGesture(XPT2046_HandleTypeDef *hxpt);
+/* Polling-only driver: interrupt APIs removed. */
 
-/**
- * @brief   Get last detected gesture
- * @param   hxpt Pointer to XPT2046 handle structure
- * @retval  XPT2046_GestureTypeDef Last detected gesture
- */
-XPT2046_GestureTypeDef XPT2046_GetLastGesture(XPT2046_HandleTypeDef *hxpt);
+/* Callbacks remain supported and are invoked from the polling path
+   (e.g. XPT2046_ReadTouchData / XPT2046_GetTouchState). */
 
-/**
- * @brief   Enable/disable gesture detection
- * @param   hxpt Pointer to XPT2046 handle structure
- * @param   enable Enable/disable flag
- * @retval  XPT2046_StatusTypeDef Status of the operation
- */
-XPT2046_StatusTypeDef XPT2046_EnableGestureDetection(XPT2046_HandleTypeDef *hxpt,
-                                                     bool enable);
-
-/* Interrupt functions */
-
-/**
- * @brief   Enable/disable interrupt
- * @param   hxpt Pointer to XPT2046 handle structure
- * @param   enable Enable/disable flag
- * @retval  XPT2046_StatusTypeDef Status of the operation
- */
-XPT2046_StatusTypeDef XPT2046_EnableInterrupt(XPT2046_HandleTypeDef *hxpt,
-                                             bool enable);
-
-/**
- * @brief   Configure interrupt
- * @param   hxpt Pointer to XPT2046 handle structure
- * @retval  XPT2046_StatusTypeDef Status of the operation
- */
-XPT2046_StatusTypeDef XPT2046_ITConfig(XPT2046_HandleTypeDef *hxpt);
-
-/**
- * @brief   Interrupt handler
- * @param   hxpt Pointer to XPT2046 handle structure
- */
-void XPT2046_IRQHandler(XPT2046_HandleTypeDef *hxpt);
-
-/**
- * @brief   Service pending touchscreen IRQ (call from main loop)
- * @details Handles deferred interrupt processing outside ISR context
- */
-void XPT2046_ServiceIRQ(void);
-
-/* Callback registration functions */
-
-/**
- * @brief   Register callback functions
- * @param   hxpt Pointer to XPT2046 handle structure
- * @param   touch_callback Touch detected callback
- * @param   release_callback Touch released callback
- * @param   gesture_callback Gesture detected callback
- * @retval  XPT2046_StatusTypeDef Status of the operation
- */
-XPT2046_StatusTypeDef XPT2046_RegisterCallbacks(XPT2046_HandleTypeDef *hxpt,
-                                               void (*touch_callback)(void),
-                                               void (*release_callback)(void),
-                                               void (*gesture_callback)(XPT2046_GestureTypeDef));
+/* Callback registration API removed — assign callbacks directly to
+   the `XPT2046_HandleTypeDef` members `TouchCallback` and `ReleaseCallback`.
+   Callbacks are invoked from the polling path (e.g. XPT2046_ReadTouchData()). */
 
 /* Utility functions */
 
@@ -412,8 +327,6 @@ XPT2046_StatusTypeDef XPT2046_GetPressure(XPT2046_HandleTypeDef *hxpt,
  * @param   threshold Pressure threshold value
  * @retval  XPT2046_StatusTypeDef Status of the operation
  */
-XPT2046_StatusTypeDef XPT2046_SetThreshold(XPT2046_HandleTypeDef *hxpt,
-                                          uint16_t threshold);
 
 /* Configuration helpers */
 
@@ -421,7 +334,7 @@ XPT2046_StatusTypeDef XPT2046_SetThreshold(XPT2046_HandleTypeDef *hxpt,
  * @brief   Get default configuration
  * @retval  XPT2046_ConfigTypeDef Default configuration structure
  */
-XPT2046_ConfigTypeDef XPT2046_GetDefaultConfig(void);
+/* XPT2046_GetDefaultConfig() is internal to xpt2046.c (static) */
 
 /* Board-specific MSP functions (implemented in xpt2046_board.c) */
 
@@ -429,24 +342,15 @@ XPT2046_ConfigTypeDef XPT2046_GetDefaultConfig(void);
  * @brief   Initialize MSP (GPIO pins and clocks)
  * @param   cs_port Chip select port
  * @param   cs_pin Chip select pin
- * @param   irq_port Interrupt port
- * @param   irq_pin Interrupt pin
  */
-void XPT2046_MspInit(GPIO_TypeDef *cs_port, uint16_t cs_pin,
-                    GPIO_TypeDef *irq_port, uint16_t irq_pin);
+void XPT2046_MspInit(GPIO_TypeDef *cs_port, uint16_t cs_pin);
 
 /**
  * @brief   Deinitialize MSP
  * @param   cs_port Chip select port
  * @param   cs_pin Chip select pin
- * @param   irq_port Interrupt port
- * @param   irq_pin Interrupt pin
  */
-void XPT2046_MspDeInit(GPIO_TypeDef *cs_port, uint16_t cs_pin,
-                      GPIO_TypeDef *irq_port, uint16_t irq_pin);
-
-/* Global touchscreen handle for interrupt handling */
-extern XPT2046_HandleTypeDef *g_hxpt;
+void XPT2046_MspDeInit(GPIO_TypeDef *cs_port, uint16_t cs_pin);
 
 #ifdef __cplusplus
 }

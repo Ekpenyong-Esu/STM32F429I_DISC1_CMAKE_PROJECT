@@ -24,8 +24,6 @@
 /* Touch controller pins - adjust to match your hardware */
 #define TP_CS_PORT      GPIOC
 #define TP_CS_PIN       GPIO_PIN_3
-#define TP_IRQ_PORT     GPIOA
-#define TP_IRQ_PIN      GPIO_PIN_15
 
 /* Display orientation - MUST match lv_port_disp.c */
 #define DISP_ORIENTATION    ILI9488_ORIENTATION_LANDSCAPE
@@ -128,8 +126,7 @@ int lv_port_indev_init(void)
     XPT2046_StatusTypeDef status = XPT2046_Init(
         &hxpt,
         &hspi4,
-        TP_CS_PORT, TP_CS_PIN,
-        TP_IRQ_PORT, TP_IRQ_PIN
+        TP_CS_PORT, TP_CS_PIN
     );
 
     if (status != XPT2046_OK) {
