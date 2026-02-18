@@ -62,9 +62,6 @@ static int32_t map(int32_t val, int32_t in_min, int32_t in_max,
 static void XPT2046_CS_Low(XPT2046_HandleTypeDef *hxpt);
 static void XPT2046_CS_High(XPT2046_HandleTypeDef *hxpt);
 
-/* Internal helper: default configuration (static) - forward declare so callers above can use it */
-static XPT2046_ConfigTypeDef XPT2046_GetDefaultConfig(void);
-
 static XPT2046_ConfigTypeDef XPT2046_GetDefaultConfig(void);
 
 /* Private helper functions implementation -----------------------------------*/

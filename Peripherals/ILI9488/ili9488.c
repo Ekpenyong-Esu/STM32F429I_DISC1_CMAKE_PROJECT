@@ -234,6 +234,10 @@ static const uint8_t font6x8[96][6] = {
 
 /* Private variables ---------------------------------------------------------*/
 
+/* Static buffers -----------------------------------------------------------*/
+/* Buffer used by ILI9488_Clear to avoid heap allocations (max axis length) */
+static uint16_t s_clear_line_buf[ILI9488_HEIGHT];
+
 /* Private function prototypes -----------------------------------------------*/
 static ILI9488_StatusTypeDef ILI9488_WriteCommand(ILI9488_Handle_t *hili, uint8_t command);
 static ILI9488_StatusTypeDef ILI9488_WriteData(ILI9488_Handle_t *hili, uint8_t *data, uint16_t size);
@@ -453,14 +457,10 @@ ILI9488_StatusTypeDef ILI9488_Clear(ILI9488_Handle_t *hili, uint16_t color)
 
     ILI9488_WriteCommand(hili, ILI9488_CMD_MEMORY_WRITE);
 
-    /* Create a line buffer with the fill color */
+    /* Create a line buffer with the fill color using static buffer (no heap) */
     const uint16_t line_width = (hili->width > hili->height) ? hili->width : hili->height;
-    uint16_t *line_buffer = (uint16_t *)malloc(line_width * sizeof(uint16_t));
-
-    if (line_buffer == NULL) {
-        log_error("ILI9488: Failed to allocate line buffer for clear");
-        return ILI9488_ERROR;
-    }
+    uint16_t *line_buffer = s_clear_line_buf;
+    (void)line_width; /* buffer is statically allocated to max axis length */
 
     for (uint16_t i = 0; i < line_width; i++) {
         line_buffer[i] = color;
@@ -474,8 +474,6 @@ ILI9488_StatusTypeDef ILI9488_Clear(ILI9488_Handle_t *hili, uint16_t color)
     }
 
     HAL_GPIO_WritePin(hili->config.cs_port, hili->config.cs_pin, GPIO_PIN_SET);
-
-    free(line_buffer);
 
     return ILI9488_OK;
 }
@@ -545,7 +543,7 @@ ILI9488_StatusTypeDef ILI9488_WritePixels(ILI9488_Handle_t *hili,
  * @param   bgcolor Background color
  * @retval  ILI9488_StatusTypeDef Operation status
  */
-ILI9488_StatusTypeDef ILI9488_WriteChar(ILI9488_Handle_t *hili, char ch, uint16_t color, uint16_t bgcolor)
+static ILI9488_StatusTypeDef ILI9488_WriteChar(ILI9488_Handle_t *hili, char ch, uint16_t color, uint16_t bgcolor)
 {
     if (hili == NULL || !hili->initialized) {
         return ILI9488_NOT_INITIALIZED;
@@ -640,9 +638,9 @@ static ILI9488_StatusTypeDef ILI9488_WriteData16(ILI9488_Handle_t *hili, uint16_
      * for RGB666 (18-bit) we convert each 16-bit RGB565 pixel into a 3-byte
      * RGB666 stream (R6,G6,B6) left-aligned into the top bits of each byte.
      */
-    const uint32_t max_chunk_pixels = 2048; /* Reduced chunk size for stability */
-    static uint8_t txbuf_rgb565[2048 * 2]; /* 4 KB for RGB565 path */
-    static uint8_t txbuf_rgb666[2048 * 3]; /* 6 KB for RGB666 path */
+    const uint32_t max_chunk_pixels = 1024; /* Reduced chunk size for stability and lower RAM */
+    static uint8_t txbuf_rgb565[1024 * 2]; /* 2 KB for RGB565 path */
+    static uint8_t txbuf_rgb666[1024 * 3]; /* 3 KB for RGB666 path */
 
     uint32_t remaining = size;
     uint16_t const *p = data;

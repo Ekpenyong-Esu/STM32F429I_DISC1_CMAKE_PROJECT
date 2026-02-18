@@ -7,10 +7,12 @@ Minimal ILI9341 driver adapted from ST's BSP and adjusted to the repository conv
 - Uses the repository's central SPI driver (call `SPI_Init()` / `SPI_Transmit` / `SPI_TransmitReceive`).
 - Provides weak MSP hooks `ILI9341_MspInit()` and `ILI9341_MspDeInit()` for board-specific pin and bus configuration.
 - Keeps the ST init command sequence (trimmed) so behavior is compatible with ST examples.
+- Sets pixel format to RGB565 by default to match LVGL / 16-bit color configurations.
 
 Integration notes:
 - The driver expects the board to either provide `ILI9341_MspInit()` implementation or allow the default weak implementation to configure CS and WRX pins and call `SPI_Init()`.
 - This driver intentionally keeps the ST command/data bytes as literals in the init sequence (these are vendor-specified initialization values).
+- Low-level register/data helpers (`ili9341_WriteReg`, `ili9341_WriteData`, `ili9341_ReadData`) are internal implementation details and are no longer part of the public header. Use the public APIs or LVGL for drawing.
 
 Usage example:
 

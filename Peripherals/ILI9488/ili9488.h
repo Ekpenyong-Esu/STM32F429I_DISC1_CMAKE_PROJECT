@@ -186,13 +186,16 @@ ILI9488_StatusTypeDef ILI9488_DisplayOff(ILI9488_Handle_t *hili);
 ILI9488_StatusTypeDef ILI9488_Clear(ILI9488_Handle_t *hili, uint16_t color);
 
 /**
- * @brief   Update display with buffer content
+ * @brief   Write pixels to display (RGB565 buffer)
  * @param   hili Pointer to ILI9488 handle
- * @param   buffer Color buffer (RGB565 format)
- * @param   size Buffer size in bytes
+ * @param   x0 Start X coordinate
+ * @param   y0 Start Y coordinate
+ * @param   x1 End X coordinate
+ * @param   y1 End Y coordinate
+ * @param   data Pixel buffer (RGB565)
+ * @param   size Number of pixels in buffer
  * @retval  ILI9488_StatusTypeDef Operation status
  */
-ILI9488_StatusTypeDef ILI9488_UpdateScreen(ILI9488_Handle_t *hili, uint16_t *buffer, uint32_t size);
 ILI9488_StatusTypeDef ILI9488_WritePixels(ILI9488_Handle_t *hili,
                                          uint16_t x0, uint16_t y0,
                                          uint16_t x1, uint16_t y1,
@@ -222,116 +225,6 @@ ILI9488_StatusTypeDef ILI9488_SetPixelFormat(ILI9488_Handle_t *hili, uint8_t pix
 ILI9488_StatusTypeDef ILI9488_DrawPixel(ILI9488_Handle_t *hili,
                                        uint16_t x, uint16_t y,
                                        uint16_t color);
-
-/**
- * @brief   Draw line between two points
- * @param   hili Pointer to ILI9488 handle
- * @param   x1 Start X coordinate
- * @param   y1 Start Y coordinate
- * @param   x2 End X coordinate
- * @param   y2 End Y coordinate
- * @param   color Line color
- * @retval  ILI9488_StatusTypeDef Operation status
- */
-ILI9488_StatusTypeDef ILI9488_DrawLine(ILI9488_Handle_t *hili,
-                                     uint16_t x1, uint16_t y1,
-                                     uint16_t x2, uint16_t y2,
-                                     uint16_t color);
-
-/**
- * @brief   Draw rectangle
- * @param   hili Pointer to ILI9488 handle
- * @param   x X coordinate
- * @param   y Y coordinate
- * @param   width Rectangle width
- * @param   height Rectangle height
- * @param   color Rectangle color
- * @retval  ILI9488_StatusTypeDef Operation status
- */
-ILI9488_StatusTypeDef ILI9488_DrawRectangle(ILI9488_Handle_t *hili,
-                                           uint16_t x, uint16_t y,
-                                           uint16_t width, uint16_t height,
-                                           uint16_t color);
-
-/**
- * @brief   Draw filled rectangle
- * @param   hili Pointer to ILI9488 handle
- * @param   x X coordinate
- * @param   y Y coordinate
- * @param   width Rectangle width
- * @param   height Rectangle height
- * @param   color Fill color
- * @retval  ILI9488_StatusTypeDef Operation status
- */
-ILI9488_StatusTypeDef ILI9488_DrawFilledRectangle(ILI9488_Handle_t *hili,
-                                                 uint16_t x, uint16_t y,
-                                                 uint16_t width, uint16_t height,
-                                                 uint16_t color);
-
-/**
- * @brief   Draw circle
- * @param   hili Pointer to ILI9488 handle
- * @param   x Center X coordinate
- * @param   y Center Y coordinate
- * @param   radius Circle radius
- * @param   color Circle color
- * @retval  ILI9488_StatusTypeDef Operation status
- */
-ILI9488_StatusTypeDef ILI9488_DrawCircle(ILI9488_Handle_t *hili,
-                                        uint16_t x, uint16_t y,
-                                        uint16_t radius,
-                                        uint16_t color);
-
-/**
- * @brief   Draw filled circle
- * @param   hili Pointer to ILI9488 handle
- * @param   x Center X coordinate
- * @param   y Center Y coordinate
- * @param   radius Circle radius
- * @param   color Fill color
- * @retval  ILI9488_StatusTypeDef Operation status
- */
-ILI9488_StatusTypeDef ILI9488_DrawFilledCircle(ILI9488_Handle_t *hili,
-                                              uint16_t x, uint16_t y,
-                                              uint16_t radius,
-                                              uint16_t color);
-
-/** @} */
-
-/** @defgroup ILI9488_Text Text Functions
- * @{
- */
-
-/**
- * @brief   Set cursor position
- * @param   hili Pointer to ILI9488 handle
- * @param   x X coordinate
- * @param   y Y coordinate
- * @retval  ILI9488_StatusTypeDef Operation status
- */
-ILI9488_StatusTypeDef ILI9488_SetCursor(ILI9488_Handle_t *hili, uint16_t x, uint16_t y);
-
-/**
- * @brief   Write character
- * @param   hili Pointer to ILI9488 handle
- * @param   ch Character to write
- * @param   color Character color
- * @param   bgcolor Background color
- * @retval  ILI9488_StatusTypeDef Operation status
- */
-ILI9488_StatusTypeDef ILI9488_WriteChar(ILI9488_Handle_t *hili, char ch, uint16_t color, uint16_t bgcolor);
-
-/**
- * @brief   Write string
- * @param   hili Pointer to ILI9488 handle
- * @param   str String to write
- * @param   color String color
- * @param   bgcolor Background color
- * @retval  ILI9488_StatusTypeDef Operation status
- */
-ILI9488_StatusTypeDef ILI9488_WriteString(ILI9488_Handle_t *hili, const char *str, uint16_t color, uint16_t bgcolor);
-
-/** @} */
 
 #ifdef __cplusplus
 }

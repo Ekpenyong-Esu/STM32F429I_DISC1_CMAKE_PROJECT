@@ -60,25 +60,29 @@ __weak void ILI9341_MspDeInit(void)
     /* Default no-op; boards can implement to deinit pins or SPI if desired */
 }
 
-void ili9341_WriteReg(uint8_t LCD_Reg)
+static void ili9341_WriteReg(uint8_t LCD_Reg)
 {
     ILI9341_SetCmdMode();
     ILI9341_Select();
-    SPI_Transmit((uint8_t*)&LCD_Reg, 1, SPI_TIMEOUT_LONG);
+    if (SPI_Transmit((uint8_t*)&LCD_Reg, 1, SPI_TIMEOUT_LONG) != SPI_OK) {
+        log_error("ILI9341: SPI_Transmit() failed while writing cmd 0x%02X", LCD_Reg);
+    }
     ILI9341_Deselect();
 }
 
-void ili9341_WriteData(uint8_t RegValue)
+static void ili9341_WriteData(uint8_t RegValue)
 {
     uint8_t byte = RegValue & ILI9341_BYTE_MASK;
 
     ILI9341_SetDataMode();
     ILI9341_Select();
-    SPI_Transmit(&byte, 1, SPI_TIMEOUT_LONG);
+    if (SPI_Transmit(&byte, 1, SPI_TIMEOUT_LONG) != SPI_OK) {
+        log_error("ILI9341: SPI_Transmit() failed while writing data 0x%02X", byte);
+    }
     ILI9341_Deselect();
 }
 
-uint32_t ili9341_ReadData(uint16_t RegValue, uint8_t ReadSize)
+static uint32_t ili9341_ReadData(uint16_t RegValue, uint8_t ReadSize)
 {
     /* Send command then read ReadSize bytes (max 4) */
     uint8_t cmd = (uint8_t)RegValue;
@@ -91,10 +95,14 @@ uint32_t ili9341_ReadData(uint16_t RegValue, uint8_t ReadSize)
 
     ILI9341_SetCmdMode();
     ILI9341_Select();
-    SPI_Transmit(&cmd, 1, SPI_TIMEOUT_LONG);
+    if (SPI_Transmit(&cmd, 1, SPI_TIMEOUT_LONG) != SPI_OK) {
+        log_error("ILI9341: SPI_Transmit() failed while sending read cmd 0x%02X", cmd);
+    }
 
     ILI9341_SetDataMode();
-    SPI_TransmitReceive(transmitBuffer, responseBuffer, ReadSize, SPI_TIMEOUT_LONG);
+    if (SPI_TransmitReceive(transmitBuffer, responseBuffer, ReadSize, SPI_TIMEOUT_LONG) != SPI_OK) {
+        log_error("ILI9341: SPI_TransmitReceive() failed while reading %u bytes", (unsigned)ReadSize);
+    }
 
     ILI9341_Deselect();
 
@@ -105,15 +113,8 @@ uint32_t ili9341_ReadData(uint16_t RegValue, uint8_t ReadSize)
     return value;
 }
 
-uint16_t ili9341_GetLcdPixelWidth(void)
-{
-    return ILI9341_LCD_PIXEL_WIDTH;
-}
-
-uint16_t ili9341_GetLcdPixelHeight(void)
-{
-    return ILI9341_LCD_PIXEL_HEIGHT;
-}
+/* Width/height accessors removed — use macros `ILI9341_LCD_PIXEL_WIDTH` /
+ * `ILI9341_LCD_PIXEL_HEIGHT` in application code. */
 
 uint16_t ili9341_ReadID(void)
 {
@@ -234,9 +235,9 @@ void ili9341_Init(void)
     ili9341_WriteData(0x00);
     ili9341_WriteData(0x06);
 
-    // /* in ili9341_Init(), after selecting RGB interface and before GRAM */
-    // ili9341_WriteReg(ILI9341_PIXEL_FORMAT);
-    // ili9341_WriteData(0x55); /* 0x55 = 16-bit/pixel (RGB565) on ILI9341 */
+    /* Ensure controller uses 16-bit RGB565 to match LVGL (if applicable) */
+    ili9341_WriteReg(ILI9341_PIXEL_FORMAT);
+    ili9341_WriteData(0x55); /* 0x55 = 16-bit/pixel (RGB565) on ILI9341 */
 
     ili9341_WriteReg(ILI9341_GRAM);
     HAL_Delay(ILI9341_INIT_DELAY_MS);

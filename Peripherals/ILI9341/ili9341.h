@@ -73,17 +73,18 @@ extern "C" {
 #define ILI9341_COL_END            0xEF
 #define ILI9341_PAGE_END           0x3F
 
-/* Public API (ST-like signatures kept) */
+/* Public API (kept small & stable) */
 void     ili9341_Init(void);
 uint16_t ili9341_ReadID(void);
-void     ili9341_WriteReg(uint8_t LCD_Reg);
-void     ili9341_WriteData(uint8_t RegValue);
-uint32_t ili9341_ReadData(uint16_t RegValue, uint8_t ReadSize);
 void     ili9341_DisplayOn(void);
 void     ili9341_DisplayOff(void);
-uint16_t ili9341_GetLcdPixelWidth(void);
-uint16_t ili9341_GetLcdPixelHeight(void);
 
+/* Use `ILI9341_LCD_PIXEL_WIDTH` / `ILI9341_LCD_PIXEL_HEIGHT` macros instead of
+ * the removed helper functions `ili9341_GetLcdPixelWidth` /
+ * `ili9341_GetLcdPixelHeight`. */
+/* Note: low-level register/data helpers and read helpers were made internal
+ * to reduce the public API surface. Use the public init/display APIs or
+ * a higher-level graphics layer (LVGL) for drawing operations. */
 /* Weak hook for board-specific GPIO/SPI configuration. Implement in board files to override. */
 void ILI9341_MspInit(void);
 void ILI9341_MspDeInit(void);
