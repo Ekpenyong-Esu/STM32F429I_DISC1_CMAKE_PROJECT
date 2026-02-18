@@ -10,6 +10,7 @@
 
 #include "lv_port_indev.h"
 #include "lvgl.h"
+#include "stdbool.h"
 #include "xpt2046.h"
 #include "ili9488.h"
 #include "spi.h"
@@ -27,9 +28,9 @@
 #define TP_IRQ_PIN      GPIO_PIN_15
 
 /* Display orientation - MUST match lv_port_disp.c */
-#define DISP_ORIENTATION    ILI9488_ORIENTATION_PORTRAIT
-#define DISP_WIDTH          320
-#define DISP_HEIGHT         480
+#define DISP_ORIENTATION    ILI9488_ORIENTATION_LANDSCAPE
+#define DISP_WIDTH          480
+#define DISP_HEIGHT         320
 
 /*-----------------------------------------------------------------------------
  * Private Variables
@@ -143,46 +144,57 @@ int lv_port_indev_init(void)
      * These are approximate defaults - run calibration routine for accurate values
      * Touch corners of screen and note ADC values, then update these
      */
+    /* Default raw ADC min/max (measured) */
     XPT2046_CalibrationTypeDef cal = {
         .MinX = 200,
         .MaxX = 3900,
         .MinY = 200,
         .MaxY = 3900,
-        .ScaleX = 0.0f,   /* Unused - map() derives scaling from MinX/MaxX */
-        .ScaleY = 0.0f,   /* Unused - map() derives scaling from MinY/MaxY */
-        .OffsetX = 0,     /* Unused - map() derives offset from MinX/MinY */
-        .OffsetY = 0,     /* Unused */
+        .ScaleX = 0.0f,   /* will be computed from LVGL display size */
+        .ScaleY = 0.0f,   /* will be computed from LVGL display size */
+        .OffsetX = 0,
+        .OffsetY = 0,
         .SwapXY = false,
         .FlipX = false,
         .FlipY = false,
-        .IsCalibrated = true
+        .IsCalibrated = false
     };
 
-    /* Adjust calibration based on display orientation */
+    /* Adjust calibration flags based on display orientation (preserve your FlipX change) */
     switch (DISP_ORIENTATION) {
         case ILI9488_ORIENTATION_PORTRAIT:
-            /* Portrait: Y axis typically needs flipping for bottom-connector mounting */
             cal.FlipY = true;
             break;
-
         case ILI9488_ORIENTATION_LANDSCAPE:
-            /* Landscape typically needs swap_xy=true, adjust flip as needed */
             cal.SwapXY = true;
             cal.FlipY = true;
+            /* preserve user-added FlipX for your panel wiring */
+            cal.FlipX = true;
             break;
-
         case ILI9488_ORIENTATION_PORTRAIT_REV:
-            /* Portrait reversed */
             cal.FlipX = true;
             cal.FlipY = true;
             break;
-
         case ILI9488_ORIENTATION_LANDSCAPE_REV:
-            /* Landscape reversed */
             cal.SwapXY = true;
             cal.FlipX = true;
             break;
     }
+
+    /* Compute Scale/Offset from the runtime LVGL display resolution so touch maps correctly */
+    lv_display_t *lv_disp = lv_display_get_default();
+    int32_t disp_w = lv_display_get_horizontal_resolution(lv_disp);
+    int32_t disp_h = lv_display_get_vertical_resolution(lv_disp);
+
+    /* Defensive: fall back to defaults if LVGL not yet initialized */
+    if (disp_w <= 0) disp_w = DISP_WIDTH;
+    if (disp_h <= 0) disp_h = DISP_HEIGHT;
+
+    cal.ScaleX = (float)disp_w / (float)(cal.MaxX - cal.MinX);
+    cal.ScaleY = (float)disp_h / (float)(cal.MaxY - cal.MinY);
+    cal.OffsetX = (int16_t)(- (int32_t)cal.MinX);
+    cal.OffsetY = (int16_t)(- (int32_t)cal.MinY);
+    cal.IsCalibrated = true;
 
     XPT2046_SetCalibration(&hxpt, &cal);
     log_debug("LVGL: Touch calibration set (using defaults - may need adjustment)");

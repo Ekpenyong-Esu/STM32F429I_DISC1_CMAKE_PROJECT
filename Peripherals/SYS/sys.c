@@ -35,6 +35,15 @@ void SYS_Init(void)
   /* Configure the system clock */
   SystemClock_Config();
 
+  /* Ensure DWT cycle counter is enabled so microsecond timing works
+   * even when no debugger is attached (used by drivers that rely on
+   * DWT->CYCCNT for short delays / timestamps). */
+  if (!(CoreDebug->DEMCR & CoreDebug_DEMCR_TRCENA_Msk)) {
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+  }
+  DWT->CYCCNT = 0;
+  DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+
   log_debug("SYS: System initialized successfully");
 }
 

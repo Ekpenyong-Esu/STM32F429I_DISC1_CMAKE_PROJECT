@@ -74,6 +74,10 @@ static lv_obj_t *pin_port_label;
 static lv_obj_t *pin_nature_label;
 static lv_obj_t *pin_state_label;
 
+/* Timer callback and back-button helper */
+static void pin_detail_timer_cb(lv_timer_t *timer);
+static void pin_detail_back_cb(lv_event_t *e);
+
 /* Forward declarations */
 static void create_home_screen(void);
 static void create_sensor_screen(void);
@@ -89,6 +93,10 @@ typedef struct {
     GPIO_TypeDef *port;
     uint16_t pin;
 } PinInfo;
+
+/* Auto-refresh timer for the Pin Detail screen (declared after PinInfo so type is known) */
+static const PinInfo *current_pin_info = NULL; /* pointer to currently displayed pin */
+static lv_timer_t *pin_detail_timer = NULL;
 
 #define PIN_ENTRY(name, port, pin) {name, port, pin}
 
@@ -253,6 +261,31 @@ static void nav_event_handler(lv_event_t *e)
     }
 }
 
+/*-----------------------------------------------------------------------------
+ * Pin-detail helpers
+ *---------------------------------------------------------------------------*/
+static void pin_detail_timer_cb(lv_timer_t *timer)
+{
+    (void)timer;
+    const PinInfo *info = (const PinInfo *)lv_timer_get_user_data(pin_detail_timer);
+    if (info == NULL) return;
+
+    GPIO_PinState state = HAL_GPIO_ReadPin(info->port, info->pin);
+    char buf[64];
+    lv_snprintf(buf, sizeof(buf), "State: %s", state == GPIO_PIN_SET ? "HIGH" : "LOW");
+    lv_label_set_text(pin_state_label, buf);
+}
+
+static void pin_detail_back_cb(lv_event_t *e)
+{
+    (void)e;
+    if (pin_detail_timer) {
+        lv_timer_pause(pin_detail_timer);
+        lv_timer_set_user_data(pin_detail_timer, NULL);
+    }
+    current_pin_info = NULL;
+}
+
 static void pin_item_event_handler(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
@@ -278,6 +311,13 @@ static void pin_item_event_handler(lv_event_t *e)
 
     lv_snprintf(buf, sizeof(buf), "State: %s", state == GPIO_PIN_SET ? "HIGH" : "LOW");
     lv_label_set_text(pin_state_label, buf);
+
+    /* Start auto-refresh for this pin detail (timer user_data set to the PinInfo) */
+    current_pin_info = info;
+    if (pin_detail_timer) {
+        lv_timer_set_user_data(pin_detail_timer, (void *)info);
+        lv_timer_resume(pin_detail_timer);
+    }
 
     lv_screen_load_anim(scr_pin_detail, LV_SCR_LOAD_ANIM_FADE_ON, 200, 0, false);
 }
@@ -399,8 +439,8 @@ static void create_home_screen(void)
 }
 
 /*-----------------------------------------------------------------------------
- * Create Sensor Monitoring Screen
- *---------------------------------------------------------------------------*/
+
+
 /* This screen shows live sensor data visualization.
  * Contains: Title, Line chart, 4 sensor value cards, Back button
  */
@@ -672,15 +712,23 @@ static void create_pin_detail_screen(void)
     lv_obj_set_style_text_color(pin_state_label, lv_color_white(), 0);
     lv_obj_align(pin_state_label, LV_ALIGN_TOP_LEFT, 20, 150);
 
+    /* Back button */
     lv_obj_t *btn_back = lv_btn_create(scr_pin_detail);
-    lv_obj_set_size(btn_back, 60, 35);
-    lv_obj_align(btn_back, LV_ALIGN_TOP_LEFT, 5, 5);
-    lv_obj_set_style_bg_color(btn_back, lv_color_hex(0x5f6368), 0);
+    lv_obj_set_size(btn_back, 80, 36);
+    lv_obj_align(btn_back, LV_ALIGN_BOTTOM_MID, 0, -10);
+    lv_obj_set_style_bg_color(btn_back, lv_color_hex(0x4ecdc4), 0);
     btn_pin_detail_back = btn_back;
 
     lv_obj_t *lbl_back = lv_label_create(btn_back);
     lv_label_set_text(lbl_back, LV_SYMBOL_LEFT " Back");
     lv_obj_center(lbl_back);
+
+    /* Create (paused) timer used to refresh the pin state while Pin Detail screen is visible */
+    pin_detail_timer = lv_timer_create(pin_detail_timer_cb, 500, NULL);
+    lv_timer_pause(pin_detail_timer);
+
+    /* Pause timer when backing out of the detail screen */
+    lv_obj_add_event_cb(btn_back, pin_detail_back_cb, LV_EVENT_CLICKED, NULL);
 }
 
 /*=============================================================================

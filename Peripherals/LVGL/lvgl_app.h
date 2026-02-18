@@ -28,6 +28,7 @@
 #ifndef LVGL_APP_H
 #define LVGL_APP_H
 
+#include <stdint.h>
 #ifdef __cplusplus
 extern "C" {
 #endif
