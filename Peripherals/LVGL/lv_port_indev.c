@@ -76,7 +76,10 @@ static void touch_read_cb(lv_indev_t *indev, lv_indev_data_t *data)
         return;
     }
 
-    /* Get touch state */
+    /* Service any pending IRQ (updates driver's cached TouchData) */
+    XPT2046_ServiceIRQ();
+
+    /* Get touch state (reads cached state populated by IRQ/service) */
     uint16_t x = 0;
     uint16_t y = 0;
     uint8_t pressed = 0;
@@ -137,7 +140,11 @@ int lv_port_indev_init(void)
         return -1;
     }
 
-    log_debug("LVGL: XPT2046 initialized");
+    /* Enable interrupt-driven operation and configure NVIC */
+    XPT2046_EnableInterrupt(&hxpt, true);
+    XPT2046_ITConfig(&hxpt);
+
+    log_debug("LVGL: XPT2046 initialized (interrupt mode)");
 
     /*
      * Set calibration values based on orientation

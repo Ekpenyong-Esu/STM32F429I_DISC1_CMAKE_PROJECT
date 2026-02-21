@@ -185,11 +185,8 @@ typedef struct {
     XPT2046_TouchDataTypeDef TouchData; /**< Current touch data */
     XPT2046_TouchDataTypeDef PrevTouchData; /**< Previous touch data */
     bool IsInitialized;                 /**< Initialization status */
-    bool InterruptMode;                 /**< Interrupt mode status */
+    bool InterruptMode;                 /**< Interrupt mode status (driver-managed) */
     uint32_t LastTouchTime;             /**< Last touch timestamp */
-    void (*TouchCallback)(void);        /**< Touch detected callback */
-    void (*ReleaseCallback)(void);      /**< Touch released callback */
-    void (*GestureCallback)(XPT2046_GestureTypeDef gesture); /**< Gesture callback */
 } XPT2046_HandleTypeDef;
 
 /* Exported function prototypes ---------------------------------------------*/
@@ -245,33 +242,6 @@ XPT2046_StatusTypeDef XPT2046_Reset(XPT2046_HandleTypeDef *hxpt);
 /* Touch detection and reading functions */
 
 /**
- * @brief   Read touch data from XPT2046
- * @param   hxpt Pointer to XPT2046 handle structure
- * @retval  XPT2046_StatusTypeDef Status of the operation
- */
-XPT2046_StatusTypeDef XPT2046_ReadTouchData(XPT2046_HandleTypeDef *hxpt);
-
-/**
- * @brief   Get current touch data
- * @param   hxpt Pointer to XPT2046 handle structure
- * @param   touch_data Pointer to store touch data
- * @retval  XPT2046_StatusTypeDef Status of the operation
- */
-XPT2046_StatusTypeDef XPT2046_GetTouchData(XPT2046_HandleTypeDef *hxpt,
-                                          XPT2046_TouchDataTypeDef *touch_data);
-
-/**
- * @brief   Get single touch coordinates
- * @param   hxpt Pointer to XPT2046 handle structure
- * @param   xPos Pointer to store X coordinate
- * @param   yPos Pointer to store Y coordinate
- * @retval  XPT2046_StatusTypeDef Status of the operation
- */
-XPT2046_StatusTypeDef XPT2046_GetSingleTouch(XPT2046_HandleTypeDef *hxpt,
-                                            uint16_t *xPos,
-                                            uint16_t *yPos);
-
-/**
  * @brief   Get touch state with coordinates and pressed status
  * @param   hxpt Pointer to XPT2046 handle structure
  * @param   x Pointer to store X coordinate
@@ -290,13 +260,6 @@ XPT2046_StatusTypeDef XPT2046_GetTouchState(XPT2046_HandleTypeDef *hxpt,
  * @retval  bool True if touched, false otherwise
  */
 bool XPT2046_IsTouched(XPT2046_HandleTypeDef *hxpt);
-
-/**
- * @brief   Get number of active touches
- * @param   hxpt Pointer to XPT2046 handle structure
- * @retval  uint8_t Number of touches (0 or 1 for single-touch)
- */
-uint8_t XPT2046_GetTouchCount(XPT2046_HandleTypeDef *hxpt);
 
 /* Calibration functions */
 
@@ -325,75 +288,35 @@ XPT2046_StatusTypeDef XPT2046_SetCalibration(XPT2046_HandleTypeDef *hxpt,
 XPT2046_StatusTypeDef XPT2046_GetCalibration(XPT2046_HandleTypeDef *hxpt,
                                             XPT2046_CalibrationTypeDef *calibration);
 
-/* Gesture recognition functions */
+/* Gesture recognition is handled internally by the driver when needed. */
+
+/* Interrupt functions (minimal) */
 
 /**
- * @brief   Detect gesture from touch data
- * @param   hxpt Pointer to XPT2046 handle structure
- * @retval  XPT2046_StatusTypeDef Status of the operation
- */
-XPT2046_StatusTypeDef XPT2046_DetectGesture(XPT2046_HandleTypeDef *hxpt);
-
-/**
- * @brief   Get last detected gesture
- * @param   hxpt Pointer to XPT2046 handle structure
- * @retval  XPT2046_GestureTypeDef Last detected gesture
- */
-XPT2046_GestureTypeDef XPT2046_GetLastGesture(XPT2046_HandleTypeDef *hxpt);
-
-/**
- * @brief   Enable/disable gesture detection
- * @param   hxpt Pointer to XPT2046 handle structure
+ * @brief   Enable/disable interrupt handling for the touch IRQ
+ * @param   hxpt Pointer to XPT2046 handle
  * @param   enable Enable/disable flag
- * @retval  XPT2046_StatusTypeDef Status of the operation
+ * @retval  XPT2046_StatusTypeDef
  */
-XPT2046_StatusTypeDef XPT2046_EnableGestureDetection(XPT2046_HandleTypeDef *hxpt,
-                                                     bool enable);
-
-/* Interrupt functions */
+XPT2046_StatusTypeDef XPT2046_EnableInterrupt(XPT2046_HandleTypeDef *hxpt, bool enable);
 
 /**
- * @brief   Enable/disable interrupt
- * @param   hxpt Pointer to XPT2046 handle structure
- * @param   enable Enable/disable flag
- * @retval  XPT2046_StatusTypeDef Status of the operation
- */
-XPT2046_StatusTypeDef XPT2046_EnableInterrupt(XPT2046_HandleTypeDef *hxpt,
-                                             bool enable);
-
-/**
- * @brief   Configure interrupt
- * @param   hxpt Pointer to XPT2046 handle structure
- * @retval  XPT2046_StatusTypeDef Status of the operation
+ * @brief   Ensure EXTI/NVIC is configured for touch IRQ
+ * @param   hxpt Pointer to XPT2046 handle
+ * @retval  XPT2046_StatusTypeDef
  */
 XPT2046_StatusTypeDef XPT2046_ITConfig(XPT2046_HandleTypeDef *hxpt);
 
 /**
- * @brief   Interrupt handler
- * @param   hxpt Pointer to XPT2046 handle structure
- */
-void XPT2046_IRQHandler(XPT2046_HandleTypeDef *hxpt);
-
-/**
- * @brief   Service pending touchscreen IRQ (call from main loop)
- * @details Handles deferred interrupt processing outside ISR context
+ * @brief   Service pending touch IRQs (call from main loop or LVGL task)
+ * @note    ISR only sets a pending flag; call this to perform SPI reads and
+ *          update driver's cached touch state.
  */
 void XPT2046_ServiceIRQ(void);
 
-/* Callback registration functions */
 
-/**
- * @brief   Register callback functions
- * @param   hxpt Pointer to XPT2046 handle structure
- * @param   touch_callback Touch detected callback
- * @param   release_callback Touch released callback
- * @param   gesture_callback Gesture detected callback
- * @retval  XPT2046_StatusTypeDef Status of the operation
- */
-XPT2046_StatusTypeDef XPT2046_RegisterCallbacks(XPT2046_HandleTypeDef *hxpt,
-                                               void (*touch_callback)(void),
-                                               void (*release_callback)(void),
-                                               void (*gesture_callback)(XPT2046_GestureTypeDef));
+
+/* Callbacks are not supported in the simplified driver. */
 
 /* Utility functions */
 
@@ -445,8 +368,7 @@ void XPT2046_MspInit(GPIO_TypeDef *cs_port, uint16_t cs_pin,
 void XPT2046_MspDeInit(GPIO_TypeDef *cs_port, uint16_t cs_pin,
                       GPIO_TypeDef *irq_port, uint16_t irq_pin);
 
-/* Global touchscreen handle for interrupt handling */
-extern XPT2046_HandleTypeDef *g_hxpt;
+/* Global touchscreen handle removed (no deferred IRQ handling) */
 
 #ifdef __cplusplus
 }
