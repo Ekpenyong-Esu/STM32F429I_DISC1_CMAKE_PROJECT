@@ -1,0 +1,28 @@
+CompileFlags:
+  Add:
+    - '-I/usr/lib/gcc/arm-none-eabi/13.2.1/include'
+    - '-I/usr/lib/gcc/arm-none-eabi/13.2.1/include-fixed'
+    - '-I/usr/lib/gcc/arm-none-eabi/13.2.1/../../../arm-none-eabi/include'
+    - '-I/home/mahonri/Desktop/BareMetal/Sensor_Cons/Drivers/CMSIS/Include'
+    - >-
+      -I/home/mahonri/Desktop/BareMetal/Sensor_Cons/Drivers/CMSIS/Device/ST/STM32F4xx/Include
+    - >-
+      -I/home/mahonri/Desktop/BareMetal/Sensor_Cons/Drivers/STM32F4xx_HAL_Driver/Inc/Legacy
+    - >-
+      -I/home/mahonri/Desktop/BareMetal/Sensor_Cons/Drivers/STM32F4xx_HAL_Driver/Inc
+    - '-I/home/mahonri/Desktop/BareMetal/Sensor_Cons/Drivers/CMSIS/Core/Include'
+    - >-
+      -I/home/mahonri/Desktop/BareMetal/Sensor_Cons/Middlewares/ST/STM32_USB_Device_Library/Core/Inc
+    - >-
+      -I/home/mahonri/Desktop/BareMetal/Sensor_Cons/Middlewares/ST/STM32_USB_Device_Library/Classes/CDC/Inc
+    - >-
+      -I/home/mahonri/Desktop/BareMetal/Sensor_Cons/Middlewares/Third_Party/FreeRTOS/Source/include
+    - >-
+      -I/home/mahonri/Desktop/BareMetal/Sensor_Cons/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F
+    - '-I/home/mahonri/Desktop/BareMetal/Sensor_Cons/Middlewares/SEGGER/OS'
+    - '-I/home/mahonri/Desktop/BareMetal/Sensor_Cons/Middlewares/SEGGER/Config'
+    - '-I/home/mahonri/Desktop/BareMetal/Sensor_Cons/Middlewares/SEGGER/SEGGER'
+    - '-I/home/mahonri/Desktop/BareMetal/Sensor_Cons/Core/Inc'
+    - '-I/home/mahonri/Desktop/BareMetal/Sensor_Cons/USB_HOST/App'
+    - '-I/home/mahonri/Desktop/BareMetal/Sensor_Cons/USB_HOST/Target'
+  CompilationDatabase: build/Debug

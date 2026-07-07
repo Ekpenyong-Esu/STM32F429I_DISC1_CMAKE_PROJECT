@@ -1,0 +1,131 @@
+/* USER CODE BEGIN Header */
+/**
+ ******************************************************************************
+ * @file           : main.c
+ * @brief          : Main program body
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2025 STMicroelectronics.
+ * All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
+/* USER CODE END Header */
+
+#include "SEGGER_SYSVIEW.h"
+#include "stm32f4xx_hal.h"
+#include "main.h"
+#include "led_example.h"
+#include "led.h"
+#include "sys.h"
+
+/* Private defines -----------------------------------------------------------*/
+#define LED_CONTROL_PERIOD_MS   2000  // LED control loop period in milliseconds
+#define LED_ON_TIME_MS          500   // Time to keep LED on
+#define LED_OFF_TIME_MS         500   // Time to keep LED off
+
+
+// Define SystemView events
+  #define SYSVIEW_EVT_GREEN_LED_ON      0x81
+  #define SYSVIEW_EVT_GREEN_LED_OFF     0x82
+  #define SYSVIEW_EVT_RED_LED_ON        0x83
+  #define SYSVIEW_EVT_RED_LED_OFF       0x84
+  #define SYSVIEW_EVT_MAIN_LOOP_START   0x85
+  #define SYSVIEW_EVT_DELAY_START       0x86
+
+
+int main(void){
+  /* USER CODE BEGIN 2 */
+
+  // Initialize peripherals and FreeRTOS here
+  SYS_Init();
+
+  // SEGGER RTT and SystemView initialization
+  SEGGER_RTT_Init();
+  SEGGER_SYSVIEW_Conf();
+  SEGGER_SYSVIEW_Start();
+
+  // Initialize LED system
+  LED_RunInitAll();
+
+  // Example RTT output
+  SEGGER_RTT_printf(0, "SEGGER RTT Initialized!\n");
+  SEGGER_RTT_printf(0, "Starting bare metal LED control loop...\n");
+
+
+
+  uint32_t loopCounter = 0;
+
+  // Get LED handles (assuming they're available from the LED_RunInitAll)
+  LED_Handle_t ledHandles[LED_COUNT];
+  LED_InitAll(ledHandles);  // Initialize LED handles
+
+  // Main application loop - no OS
+  while (1) {
+    // Mark loop iteration start
+    SEGGER_SYSVIEW_RecordU32(SYSVIEW_EVT_MAIN_LOOP_START, loopCounter);
+    SEGGER_RTT_printf(0, "Loop iteration: %lu\n", loopCounter);
+
+    // Turn on Green LED
+    SEGGER_SYSVIEW_RecordVoid(SYSVIEW_EVT_GREEN_LED_ON);
+    SEGGER_RTT_printf(0, "Green LED ON\n");
+    LED_On(&ledHandles[LED_GREEN]);
+
+    // Delay
+    SEGGER_SYSVIEW_RecordVoid(SYSVIEW_EVT_DELAY_START);
+    HAL_Delay(LED_ON_TIME_MS);
+
+    // Turn off Green LED
+    SEGGER_SYSVIEW_RecordVoid(SYSVIEW_EVT_GREEN_LED_OFF);
+    SEGGER_RTT_printf(0, "Green LED OFF\n");
+    LED_Off(&ledHandles[LED_GREEN]);
+
+    // Delay
+    HAL_Delay(LED_OFF_TIME_MS);
+
+    // Turn on Red LED
+    SEGGER_SYSVIEW_RecordVoid(SYSVIEW_EVT_RED_LED_ON);
+    SEGGER_RTT_printf(0, "Red LED ON\n");
+    LED_On(&ledHandles[LED_RED]);
+
+    // Delay
+    HAL_Delay(LED_ON_TIME_MS);
+
+    // Turn off Red LED
+    SEGGER_SYSVIEW_RecordVoid(SYSVIEW_EVT_RED_LED_OFF);
+    SEGGER_RTT_printf(0, "Red LED OFF\n");
+    LED_Off(&ledHandles[LED_RED]);
+
+    // End of loop delay
+    HAL_Delay(LED_OFF_TIME_MS);
+
+    loopCounter++;
+
+    __WFI();
+    // Call SystemView idle only briefly
+    SEGGER_SYSVIEW_OnIdle();
+  }
+  /* USER CODE END 2 */
+}
+
+
+#ifdef USE_FULL_ASSERT
+/**
+ * @brief  Reports the name of the source file and the source line number
+ *         where the assert_param error has occurred.
+ * @param  file: pointer to the source file name
+ * @param  line: assert_param error line source number
+ * @retval None
+ */
+void assert_failed(uint8_t *file, uint32_t line) {
+    /* USER CODE BEGIN 6 */
+    /* User can add his own implementation to report the file name and line number,*/
+    printf("Wrong parameters value: file %s on line %d\r\n", file, line);
+    /* USER CODE END 6 */
+}
+#endif /* USE_FULL_ASSERT */

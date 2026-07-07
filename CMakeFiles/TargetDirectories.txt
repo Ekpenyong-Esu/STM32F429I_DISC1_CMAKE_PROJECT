@@ -1,0 +1,8 @@
+/home/mahonri/Desktop/BareMetal/Sensor_Cons/CMakeFiles/Sensor_Console.dir
+/home/mahonri/Desktop/BareMetal/Sensor_Cons/CMakeFiles/edit_cache.dir
+/home/mahonri/Desktop/BareMetal/Sensor_Cons/CMakeFiles/rebuild_cache.dir
+/home/mahonri/Desktop/BareMetal/Sensor_Cons/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir
+/home/mahonri/Desktop/BareMetal/Sensor_Cons/cmake/stm32cubemx/CMakeFiles/FreeRTOS.dir
+/home/mahonri/Desktop/BareMetal/Sensor_Cons/cmake/stm32cubemx/CMakeFiles/USB_Host_Library.dir
+/home/mahonri/Desktop/BareMetal/Sensor_Cons/cmake/stm32cubemx/CMakeFiles/edit_cache.dir
+/home/mahonri/Desktop/BareMetal/Sensor_Cons/cmake/stm32cubemx/CMakeFiles/rebuild_cache.dir

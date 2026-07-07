@@ -1,0 +1,41 @@
+# Configuration for Doxygen for use with CMake
+# Only options that deviate from the default are included
+# To create a new Doxyfile containing all available options, call `doxygen -g`
+
+#---------------------------------------------------------------------------
+# Project related configuration options
+#---------------------------------------------------------------------------
+
+PROJECT_NAME            = "Sensor_Cons"
+PROJECT_NUMBER          = 1.0.0
+PROJECT_BRIEF           = "STM32F429 sensor project"
+
+INPUT                  = ../Core \
+                         ../Peripherals \
+                         ../Drivers \
+                         ../lvgl \
+                         ../Middlewares \
+                         ../USB_HOST \
+                         ../docs
+
+RECURSIVE               = YES
+EXCLUDE                 = ../build \
+
+
+FILE_PATTERNS           = *.c \
+                          *.h \
+                          *.S \
+                          *.s \
+                          *.md \
+                          *.txt
+
+INCLUDE_PATH            = ../Core/Inc
+
+
+
+ENABLE_PREPROCESSING    = YES
+MACRO_EXPANSION         = YES
+
+GENERATE_HTML           = YES
+GENERATE_LATEX          = NO
+GENERATE_TREEVIEW       = YES

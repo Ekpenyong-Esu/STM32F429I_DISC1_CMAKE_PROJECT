@@ -1,0 +1,3 @@
+[submodule "Middlewares/SEGGER/SystemView"]
+	path = Middlewares/SEGGER/SystemView
+	url = https://github.com/SEGGERMicro/SystemView.git
